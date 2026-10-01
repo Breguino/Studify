@@ -50,8 +50,11 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
    - **Modalità d'esame dalla scheda dell'insegnamento** (versione con server e chiave API): se la modalità di un insegnamento del
      piano non è nota, scegliendolo parte da sola una ricerca web sulla scheda/syllabus dell'ateneo. Vale solo con una frase copiata
      dalla pagina e un URL effettivamente visto nella ricerca; il risultato (anche «non trovata») resta nel piano, così non si ripete.
-     Per insegnamenti fuori dal piano c'è un bottone; un tipo scelto a mano non viene sovrascritto. Serve l'ateneo nel profilo. Nella
-     pagina Claude non c'è ricerca web: resta il suggerimento dalla materia.
+     Per insegnamenti fuori dal piano c'è un bottone; un tipo scelto a mano non viene sovrascritto. Serve l'ateneo nel profilo.
+   - **Scheda incollata** (ovunque, anche nella pagina Claude che non naviga): incolli la sezione «Modalità di verifica
+     dell'apprendimento» e Claude ne ricava il tipo di prova. La citazione deve comparire davvero nel testo incollato, altrimenti il
+     risultato è scartato; un orale facoltativo non rende l'esame «scritto + orale». Senza AI la lettura è a regole (dichiarata come
+     tale). Il risultato resta nel piano di studi.
    I dati trovati sul web sono sempre segnalati «da verificare» (a.a., fonti): la prova d'esame resta «Non indicato» se la scheda non la dichiara.
 0b. **Importa da CSV o Excel** (pulsante «Importa CSV / Excel»): tre tipi di file, riconosciuti dalle intestazioni (colonne correggibili a mano):
    - **appelli d'esame**: insegnamento, data, ora, aula, tipo di prova, CFU, anno. Più date per lo stesso insegnamento = più appelli (si sceglie

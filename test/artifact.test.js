@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { explain, extendModule, generateModule, generateNotes, gradeAnswer, parseCurriculum } from "../artifact/generate.js";
+import { examFormatFromText, explain, extendModule, generateModule, generateNotes, gradeAnswer, parseCurriculum } from "../artifact/generate.js";
 import { decodeState, encodeState, split } from "../artifact/backend.js";
 
 const demo = JSON.parse(readFileSync(new URL("../public/demo/module.json", import.meta.url), "utf8"));
@@ -164,4 +164,18 @@ test("pagina Claude: aggiornamento a due passi — argomenti nuovi/approfonditi,
   assert.deepEqual(r.delta.flashcards.map((c) => c.topicId), ["t1", "n1"]);
   assert.deepEqual(r.delta.gaps, ["lacuna aggiornata"]);
   await assert.rejects(extendModule({ exam, materials: [{ kind: "pdf", title: "p", data: "x" }], research: null, existing }, () => {}, sample), /PDF non sono supportati/);
+});
+
+test("pagina Claude: tipo di prova dalla scheda incollata, citazione verificata", async () => {
+  const prompts = [];
+  const sample = async () => ({ text: "" });
+  let reply = { found: true, format: "misto", evidence: "prova scritta e prova orale obbligatoria", details: "", url: "", academicYear: "2026-27", teacher: "Rossi", caveats: [] };
+  sample.json = async (p) => { prompts.push(p); return reply; };
+  const text = "Modalità d'esame: l'esame prevede una prova scritta e prova orale obbligatoria.";
+  const r = await examFormatFromText({ text, course: "Economia politica II" }, () => {}, sample);
+  assert.match(prompts[0], /<scheda_insegnamento>\nModalità d'esame/);
+  assert.match(prompts[0], /Insegnamento: Economia politica II/);
+  assert.deepEqual([r.found, r.format, r.teacher], [true, "misto", "Rossi"]);
+  reply = { ...reply, evidence: "esame solo orale" };
+  assert.equal((await examFormatFromText({ text, course: "x" }, () => {}, sample)).format, "sconosciuto");
 });

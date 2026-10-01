@@ -3,7 +3,7 @@ import { core } from "../core.js";
 import { go } from "../nav.js";
 import { coursesForYear, examDefaultsFromCourse, FORMAT_LABEL, findCourse, yearLabel } from "../curriculum.js";
 import { addDays, fmtDate, today } from "../dates.js";
-import { suggestExamType } from "../exam-type.js";
+import { formatFromSyllabus, suggestExamType } from "../exam-type.js";
 import { lastLessonOf, TENTATIVE_GAP_DAYS } from "../timetable.js";
 import { EXAM_TYPES, sessionAdvice } from "../methods.js";
 import * as store from "../store.js";
@@ -66,6 +66,13 @@ export function examFormView(exam) {
   const electiveNote = h("p", { class: "muted small", style: { margin: 0 } });
   const nameInput = h("input", { required: true, value: v.name, placeholder: "es. Microeconomia", list: "courses", autocomplete: "off" });
   const tentative = h("input", { type: "checkbox", id: "date-tentative", checked: !!v.dateTentative });
+  // modalità d'esame dal testo della scheda dell'insegnamento incollato (funziona anche senza ricerca web)
+  const syllabus = h("textarea", { id: "syllabus-text", placeholder: "Incolla qui la sezione «Modalità di verifica dell'apprendimento» (o tutta la scheda) dalla pagina dell'insegnamento…", style: { minHeight: "90px" } });
+  const syllabusMsg = h("span", { class: "hint", id: "syllabus-msg" });
+  const syllabusBox = h("details", { id: "syllabus-box" },
+    h("summary", { class: "small" }, "Incolla la scheda dell'insegnamento per ricavare il tipo di prova"),
+    h("div", { class: "stack", style: { gap: "6px", marginTop: "6px" } }, syllabus,
+      h("div", { class: "row" }, h("button", { type: "button", class: "btn small", onclick: () => readSyllabus() }, "Ricava il tipo di prova"), syllabusMsg)));
   const dateNote = h("span", { class: "hint" });
 
   const form = h(
@@ -116,7 +123,7 @@ export function examFormView(exam) {
           ? h("label", {}, "Appello", h("select", { id: "appello", onchange: (e) => { if (e.target.value) f.date.value = e.target.value; } },
               v.appelli.filter((a) => a.date >= today()).map((a) => h("option", { value: a.date, selected: a.date === v.date }, `${fmtDate(a.date)}${a.time ? ` ore ${a.time}` : ""}${a.room ? ` · ${a.room}` : ""}`))), h("span", { class: "hint" }, "Altri appelli importati: scegli quello a cui ti presenti."))
           : null),
-      field("type", "Tipo di prova", select(EXAM_TYPES, v.type)),
+      h("div", { class: "stack", style: { gap: "6px" } }, field("type", "Tipo di prova", select(EXAM_TYPES, v.type)), syllabusBox),
     ),
     h("div", { class: "cols" },
       field("level", "Quanto conosci già la materia?", select(LEVELS, v.level), "Non c'è una risposta giusta: serve per dosare spiegazioni e difficoltà."),
@@ -153,7 +160,7 @@ export function examFormView(exam) {
       formatSource = { text: d.evidence, url: d.url };
       const web = course.formatSearch?.found;
       hint.replaceChildren(...[
-        web ? `Dalla scheda dell'insegnamento${course.formatSearch.academicYear ? ` (a.a. ${course.formatSearch.academicYear}${course.formatSearch.teacher ? `, ${course.formatSearch.teacher}` : ""})` : ""}: ${FORMAT_LABEL[d.type]}. «${d.evidence}» ` : `Dal tuo piano di studi: ${FORMAT_LABEL[d.type]}${d.evidence && d.evidence !== "demo" ? ` (${d.evidence})` : ""}. `,
+        web ? `Dalla scheda dell'insegnamento${course.formatSearch.source === "incollata" ? " che hai incollato" : ""}${course.formatSearch.academicYear ? ` (a.a. ${course.formatSearch.academicYear}${course.formatSearch.teacher ? `, ${course.formatSearch.teacher}` : ""})` : ""}: ${FORMAT_LABEL[d.type]}. «${d.evidence}» ` : `Dal tuo piano di studi: ${FORMAT_LABEL[d.type]}${d.evidence && d.evidence !== "demo" ? ` (${d.evidence})` : ""}. `,
         web && course.formatSearch.details ? `${course.formatSearch.details} ` : null,
         d.url ? h("a", { href: d.url, target: "_blank", rel: "noopener noreferrer" }, "fonte") : null, d.url ? " · " : null,
         web ? "Le modalità cambiano tra docenti e anni: verifica." : "Verifica con il tuo docente.",
@@ -188,7 +195,7 @@ export function examFormView(exam) {
     const start = () => show(searchFormat({ university, degree, academicYear: prof?.academicYear ?? "", name, course }), name);
     if (pending) return show(pending, name);
     if (course?.formatSearch && !course.formatSearch.found)
-      return searchLine.replaceChildren(`Modalità d'esame non trovata sul sito (cercata il ${fmtDate(course.formatSearch.at)}): resta il suggerimento dalla materia. `, h("button", { type: "button", class: "btn small ghost", onclick: start }, "Cerca di nuovo"));
+      return searchLine.replaceChildren(`Modalità d'esame non trovata sul sito (cercata il ${fmtDate(course.formatSearch.at)}): resta il suggerimento dalla materia, oppure incolla la scheda qui sotto. `, h("button", { type: "button", class: "btn small ghost", onclick: start }, "Cerca di nuovo"));
     if (exact && auto) { timer = setTimeout(start, 600); return; }
     searchLine.replaceChildren(h("button", { type: "button", class: "btn small ghost", onclick: start }, `Cerca la modalità d'esame sul sito dell'ateneo`));
   }
@@ -210,6 +217,33 @@ export function examFormView(exam) {
     });
   }
   f.name.addEventListener("input", () => refreshSearch());
+
+  async function readSyllabus() {
+    const text = syllabus.value.trim();
+    if (text.length < 20) return syllabusMsg.replaceChildren("Incolla il testo della scheda.");
+    const name = f.name.value.trim();
+    syllabusMsg.replaceChildren(h("span", { class: "spinner" }), " Leggo la scheda…");
+    let r;
+    try {
+      r = core.ai?.ai ? await api.runJob("/api/exam-format-text", { text: text.slice(0, 40_000), course: name }, () => {}) : formatFromSyllabus(text);
+    } catch (e) {
+      return syllabusMsg.replaceChildren(`Non riuscito: ${e.message}`);
+    }
+    if (!r.found) return syllabusMsg.replaceChildren("Nel testo non trovo la modalità d'esame: incolla la sezione «Modalità di verifica dell'apprendimento».");
+    const course = findCourse(courses, name);
+    if (course) {
+      Object.assign(course, { format: r.format, formatEvidence: r.evidence, url: r.url || "" });
+      course.formatSearch = { at: today(), found: true, source: "incollata", details: r.details, teacher: r.teacher, academicYear: r.academicYear, caveats: r.caveats };
+      store.save();
+    }
+    typeTouched = false; // scelta esplicita: il tipo viene dalla scheda, con la sua citazione
+    f.type.value = r.format;
+    formatSource = { text: r.evidence, url: r.url || "" };
+    searchLine.replaceChildren();
+    hint.replaceChildren(...[`Dalla scheda che hai incollato: ${FORMAT_LABEL[r.format]}. «${r.evidence}» `, r.details ? `${r.details} ` : null,
+      r.local ? "Lettura automatica senza AI: controlla." : "Verifica che sia la scheda del tuo anno e del tuo docente."].filter(Boolean));
+    syllabusMsg.replaceChildren(`✓ Tipo di prova: ${FORMAT_LABEL[r.format]}.`);
+  }
   if (isNew) refreshSearch();
   // L'anno filtra l'elenco; se in quell'anno ci sono attività a scelta lo ricorda (al 3° anno di solito ci sono).
   let yearTouched = !isNew;

@@ -39,3 +39,45 @@ export function findExamFormat(text) {
   else if (scritto) type = "scritto";
   return type ? { type, text: m[1].trim() } : null;
 }
+
+const SECTION_RE = /modalit[àa']?\s+(?:di\s+)?(?:verifica|valutazione|d['’]\s*esame|esame)|verifica\s+dell['’]\s*apprendimento|assessment(?:\s+methods)?|examination|prova\s+d['’]\s*esame/i;
+const ORAL = /\boral[ei]?\b|colloquio|\boral\b/;
+const OPTIONAL = /facoltativ|a scelta|su richiesta|integrativ|opzional|optional|on request|migliorare il voto/;
+const WRITTEN = /scritt|written/;
+const TEST = /risposta multipla|scelta multipla|\btest\b|quiz|crocett|multiple[- ]choice/;
+const EXERCISES = /eserciz|esercitazion[ei] numerich|risoluzione di problemi|problemi (?:numerici|da risolvere)|exercise|problem[- ]solving/;
+
+/**
+ * Modalità d'esame dal testo della scheda di un insegnamento, SENZA AI (regole). Guarda la sezione sulla verifica se c'è.
+ * Un orale «facoltativo / a scelta / per migliorare il voto» non rende l'esame «scritto + orale».
+ * Meno affidabile della lettura con l'AI: il risultato è marcato `local`.
+ */
+export function formatFromSyllabus(text) {
+  const t = String(text ?? "").replace(/\s+/g, " ");
+  const i = t.search(SECTION_RE);
+  const section = i >= 0 ? t.slice(i, i + 1500) : t.slice(0, 3000);
+  const sentences = section.split(/(?<=[.;!?])\s+/).map((x) => x.trim()).filter(Boolean);
+  const n = norm(section);
+  const oralSentences = sentences.filter((x) => ORAL.test(norm(x)));
+  const oral = oralSentences.length > 0;
+  const oralOptional = oral && oralSentences.every((x) => OPTIONAL.test(norm(x)));
+  const written = WRITTEN.test(n);
+  const test = TEST.test(n);
+  const exercises = EXERCISES.test(n);
+  let format = null;
+  if ((written || test || exercises) && oral && !oralOptional) format = "misto";
+  else if (oral && !written && !test && !exercises) format = oralOptional ? null : "orale";
+  else if (exercises) format = "problemi";
+  else if (test) format = "test";
+  else if (written) format = "scritto";
+  const evidence = format ? (sentences.find((x) => [ORAL, WRITTEN, TEST, EXERCISES].some((re) => re.test(norm(x)))) ?? "").slice(0, 300) : "";
+  return {
+    found: !!format && !!evidence,
+    format: format && evidence ? format : "sconosciuto",
+    evidence,
+    details: format && format !== "misto" && oralOptional ? "Orale facoltativo." : "",
+    url: "", academicYear: "", teacher: "",
+    caveats: ["Lettura automatica senza AI: controlla il testo."],
+    local: true,
+  };
+}

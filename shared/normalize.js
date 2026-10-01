@@ -235,14 +235,27 @@ export function normalizeImportRows(raw, headers) {
 }
 
 /**
- * Modalità d'esame di un insegnamento trovata online. Vale solo con una citazione dalla pagina (evidence) e un URL
- * effettivamente visto nella ricerca: senza, il formato torna «sconosciuto» (meglio nessuna risposta che una dedotta).
+ * Modalità d'esame di un insegnamento (dalla scheda trovata online o incollata dallo studente). Vale solo con una prova:
+ * - ricerca web: citazione (evidence) e URL effettivamente visto nella ricerca (`seenUrls`);
+ * - testo incollato (`sourceText`): la citazione deve comparire davvero nel testo.
+ * Senza prova il formato torna «sconosciuto»: meglio nessuna risposta che una dedotta.
  */
-export function normalizeExamFormat(raw, seenUrls = new Set()) {
-  const url = seenUrls.has(raw?.url) ? raw.url : "";
+export function normalizeExamFormat(raw, { seenUrls = new Set(), sourceText = null } = {}) {
+  const flat = (s) => str(s).toLowerCase().replace(/[’‘`]/g, "'").replace(/[“”«»]/g, '"').replace(/\s+/g, " ").replace(/^[\s"'.…]+|[\s"'.…]+$/g, "");
   const evidence = str(raw?.evidence).slice(0, 600);
+  let url;
+  let proven;
+  if (sourceText != null) {
+    url = raw?.url && sourceText.includes(raw.url) ? raw.url : "";
+    const src = flat(sourceText);
+    const ev = flat(evidence);
+    proven = ev.length >= 8 && (src.includes(ev) || (ev.length > 40 && src.includes(ev.slice(0, 40))));
+  } else {
+    url = seenUrls.has(raw?.url) ? raw.url : "";
+    proven = !!evidence && !!url;
+  }
   let format = FORMATS.includes(raw?.format) ? raw.format : "sconosciuto";
-  if (!evidence || !url) format = "sconosciuto";
+  if (!proven) format = "sconosciuto";
   return {
     found: !!raw?.found && format !== "sconosciuto",
     format,

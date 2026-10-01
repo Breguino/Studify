@@ -1,8 +1,8 @@
 // Generazione con Claude dentro la pagina pubblicata (capability `sample`): nessuna chiave API,
 // usa l'account Claude di chi apre la pagina. Limiti: nessuna navigazione web, nessun PDF,
 // prompt ≤ 256 KiB e risposte brevi → il modulo si costruisce a passi (schema → carte/domande per argomento).
-import { CURRICULUM_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, moduleDigest } from "../shared/prompts.js";
-import { normalizeCurriculum, normalizeImportRows, normalizeModule } from "../shared/normalize.js";
+import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, moduleDigest } from "../shared/prompts.js";
+import { normalizeCurriculum, normalizeExamFormat, normalizeImportRows, normalizeModule } from "../shared/normalize.js";
 
 const MAX_MATERIAL_CHARS = 200_000;
 const CONCURRENCY = 2; // `sample` ne esegue un paio alla volta, le altre aspettano: oltre si rischia rate_limited
@@ -223,6 +223,27 @@ Non citare fonti né link che non puoi verificare. Se non sei sicuro di un'infor
   try {
     const { text } = await sample(prompt, { onText: ({ text }) => onProgress(text.length, `Scrivo la traccia… ~${Math.round(text.length / 1000)}k caratteri`) });
     return { notes: text.trim(), sources: [] };
+  } catch (e) {
+    throw explain(e);
+  }
+}
+
+/** Modalità d'esame dalla scheda dell'insegnamento incollata (la pagina Claude non naviga): la citazione deve essere nel testo. */
+export async function examFormatFromText({ text, course }, onProgress = () => {}, sampleFn) {
+  const sample = sampleFn ?? (await getSample());
+  if (!sample) throw new Error("Claude non è disponibile in questa pagina.");
+  const prompt = `Estrai la modalità d'esame dalla scheda di un insegnamento incollata dallo studente. ${SAFETY_RULES}
+${EXAM_FORMAT_RULES}
+url = "" salvo che l'indirizzo della pagina compaia nel testo. found = false se il testo non indica la modalità d'esame.
+Rispondi SOLO con un oggetto JSON: {"found": boolean, "format": "scritto"|"test"|"problemi"|"orale"|"misto"|"sconosciuto", "evidence": string,
+"details": string, "url": string, "academicYear": string, "teacher": string, "caveats": [string]}
+
+Insegnamento: ${course || "(non indicato)"}
+<scheda_insegnamento>
+${String(text).slice(0, 40_000)}
+</scheda_insegnamento>`;
+  try {
+    return normalizeExamFormat(await sample.json(prompt, { modelTier: "default" }), { sourceText: text });
   } catch (e) {
     throw explain(e);
   }

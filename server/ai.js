@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { CURRICULUM_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, moduleDigest, where } from "../shared/prompts.js";
+import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, moduleDigest, where } from "../shared/prompts.js";
 import { CurriculumSchema, DegreesSchema, ExamFormatSchema, GradeSchema, ImportRowsSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeImportRows, normalizeModule } from "./schema.js";
 
 export const MODEL = process.env.STUDIFY_MODEL || "claude-opus-5-5";
@@ -171,12 +171,8 @@ Se non trovi la scheda o la modalità non è indicata, dillo chiaramente.`;
     thinking: { type: "adaptive" },
     output_config: { effort: "low", format: zodOutputFormat(ExamFormatSchema) },
     system: `Estrai dati strutturati dal testo di una ricerca. ${SAFETY_RULES}
-format: "scritto" (domande aperte), "test" (risposta multipla), "problemi" (esercizi da risolvere), "orale", "misto" (scritto + orale
-entrambi obbligatori o comunque parte del voto); "sconosciuto" se la ricerca non riporta la modalità. Uno scritto con esercizi è "problemi";
-uno scritto con orale facoltativo resta il tipo dello scritto (indicalo in details).
-evidence = la frase sulla modalità d'esame COPIATA dalla pagina (max 300 caratteri); "" se non c'è.
-url = pagina da cui proviene, scelta SOLO tra gli URL elencati, altrimenti "". found = false se non hai trovato la modalità.
-caveats: differenze tra docenti/canali, anno accademico vecchio, dubbi.`,
+${EXAM_FORMAT_RULES}
+url = pagina da cui proviene, scelta SOLO tra gli URL elencati, altrimenti "". found = false se non hai trovato la modalità.`,
     messages: [{ role: "user", content: `<ricerca>\n${found.notes}\n</ricerca>\n<url_validi>\n${[...found.seenUrls].join("\n")}\n</url_validi>` }],
   });
   assertUsable(msg);
@@ -186,7 +182,29 @@ caveats: differenze tra docenti/canali, anno accademico vecchio, dubbi.`,
   } catch {
     throw new Error("Non sono riuscito a interpretare la scheda trovata.");
   }
-  return normalizeExamFormat(raw, found.seenUrls);
+  return normalizeExamFormat(raw, { seenUrls: found.seenUrls });
+}
+
+/** La stessa estrazione dal testo della scheda incollato dallo studente (niente web): la citazione deve essere nel testo. */
+export async function examFormatFromText({ text, course }) {
+  const msg = await client().messages.create({
+    model: MODEL,
+    max_tokens: 4000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "low", format: zodOutputFormat(ExamFormatSchema) },
+    system: `Estrai la modalità d'esame dalla scheda di un insegnamento incollata dallo studente. ${SAFETY_RULES}
+${EXAM_FORMAT_RULES}
+url = "" salvo che l'indirizzo della pagina compaia nel testo. found = false se il testo non indica la modalità d'esame.`,
+    messages: [{ role: "user", content: `Insegnamento: ${course || "(non indicato)"}\n<scheda_insegnamento>\n${text}\n</scheda_insegnamento>` }],
+  });
+  assertUsable(msg);
+  let raw;
+  try {
+    raw = ExamFormatSchema.parse(JSON.parse(textOf(msg.content)));
+  } catch {
+    throw new Error("Non sono riuscito a interpretare la scheda.");
+  }
+  return normalizeExamFormat(raw, { sourceText: text });
 }
 
 /* -------------------------------------------------------------------------- */

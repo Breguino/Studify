@@ -3,8 +3,9 @@ import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODEL, aiConfigured, buildModule, curriculum, degrees, examFormat, extendModule, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
+import { MODEL, aiConfigured, buildModule, curriculum, degrees, examFormat, examFormatFromText, extendModule, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
 import { localDelta } from "../public/js/local-builder.js";
+import { formatFromSyllabus } from "../public/js/exam-type.js";
 import { IMPORT_HEADERS } from "../shared/prompts.js";
 import { normalizeModule } from "./schema.js";
 
@@ -259,6 +260,13 @@ async function api(req, res, url) {
           })
         : examFormat(input, p),
     );
+    return send(res, 202, { jobId: id });
+  }
+
+  if (url.pathname === "/api/exam-format-text") {
+    const text = str(body.text, 40_000);
+    if (text.trim().length < 20) return send(res, 400, { error: "Incolla il testo della scheda dell'insegnamento." });
+    const id = startJob("exam-format", (p) => (MOCK ? mockRun(p, formatFromSyllabus(text)) : examFormatFromText({ text, course: str(body.course, 200) })));
     return send(res, 202, { jobId: id });
   }
 

@@ -144,3 +144,10 @@ uno storico di ripasso. Dai MATERIALI NUOVI ricava SOLO ciò che manca, senza ri
 - gaps = l'elenco AGGIORNATO delle lacune dell'intero modulo: togli quelle che i materiali nuovi colmano, aggiungi le nuove;
 - title e overview: ripeti quelli del modulo (non vengono cambiati);
 - se i materiali nuovi non aggiungono nulla, restituisci topics, flashcards e questions vuoti.`;
+
+/** Come classificare la modalità d'esame letta in una scheda d'insegnamento (ricerca web o testo incollato). */
+export const EXAM_FORMAT_RULES = `format: "scritto" (domande aperte), "test" (risposta multipla), "problemi" (esercizi da risolvere), "orale", "misto" (scritto + orale
+entrambi obbligatori o comunque parte del voto); "sconosciuto" se il testo non indica la modalità. Uno scritto con esercizi è "problemi";
+uno scritto con orale facoltativo resta il tipo dello scritto (indicalo in details). Non dedurre la modalità dal nome della materia.
+evidence = la frase sulla modalità d'esame COPIATA alla lettera dal testo (max 300 caratteri); "" se non c'è.
+details = in breve durata, parti, prove intermedie, orale facoltativo. caveats: differenze tra docenti/canali, anno accademico vecchio, dubbi.`;
