@@ -5,9 +5,11 @@ import { addDays, fmtDate, today } from "../dates.js";
 import { BUILDERS, CANON_HEADERS, SCHEMAS, TEMPLATES, autoMap, colName, detectKind, findHeaderRow, looksLikeHeader, tableFrom } from "../importers.js";
 import { go } from "../nav.js";
 import { hasText, layoutText, pagesToRows, plainLines } from "../pdf-table.js";
+import { overlaps } from "../timetable.js";
 import { readPdf } from "../pdf-text.js";
 import * as store from "../store.js";
-import { parseDelimited, readSpreadsheet } from "../tabular.js";
+import { guessIcsKind, icsRows, isIcsText, parseIcs } from "../ics.js";
+import { decodeText, parseDelimited, readSpreadsheet } from "../tabular.js";
 import { badge, confirmDialog, h, readFileAs, toast } from "../ui.js";
 
 const MAX_FILE = 10 * 1024 * 1024;
@@ -19,7 +21,7 @@ const norm = (s) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-
 
 function load(sheets, fileName, extra = {}) {
   const sheetIdx = Math.max(0, sheets.findIndex((s) => s.rows.length > 1));
-  st = { fileName, sheets, sheetIdx, hasHeader: true, kind: null, kindAuto: null, map: {}, until: "", include: null, pdf: null, notes: [], fromAI: false, meta: null, ...extra };
+  st = { fileName, sheets, sheetIdx, hasHeader: true, kind: null, kindAuto: null, map: {}, until: "", include: null, pdf: null, ics: null, notes: [], fromAI: false, meta: null, ...extra };
   setSheet(sheetIdx);
   if (extra.forceKind) { setKind(extra.forceKind); st.kindAuto = extra.forceKind; }
 }
@@ -41,6 +43,7 @@ function setSheet(i) {
 
 function setKind(kind) {
   st.kind = kind;
+  if (st.ics) st.sheets[st.sheetIdx] = { name: "Calendario (.ics)", rows: icsRows(st.ics.events, kind, CANON_HEADERS[kind]), offset: 0, headerScanned: true };
   const sh = st.sheets[st.sheetIdx];
   st.map = autoMap(kind, tableFrom(sh.rows, st.hasHeader, sh.offset).headers);
   st.include = null;
@@ -118,6 +121,21 @@ async function applyTimetable(res) {
 }
 
 /* ----------------------------------- PDF ----------------------------------- */
+
+/* ------------------------------- calendario (.ics) ------------------------------- */
+
+function loadIcs(text, fileName) {
+  const { events, stats } = parseIcs(text);
+  if (!events.length) throw new Error("Nel calendario non ci sono eventi con data e ora (gli eventi «tutto il giorno» e quelli annullati sono ignorati).");
+  const kind = guessIcsKind(events);
+  const first = events[0].date;
+  const last = events.at(-1).date;
+  const notes = [`Calendario: ${events.length} eventi dal ${fmtDate(first)} al ${fmtDate(last)}.`];
+  if (stats.cancelled) notes.push(`${stats.cancelled} eventi annullati ignorati.`);
+  if (stats.allDay) notes.push(`${stats.allDay} eventi «tutto il giorno» ignorati.`);
+  if (stats.recurring) notes.push(`${stats.recurring} eventi ricorrenti espansi in singole date.`);
+  load([{ name: "Calendario (.ics)", rows: icsRows(events, kind, CANON_HEADERS[kind]), offset: 0 }], fileName, { ics: { events }, forceKind: kind, notes });
+}
 
 const isPdf = (f) => /\.pdf$/i.test(f.name ?? "") || f.type === "application/pdf";
 
@@ -201,6 +219,7 @@ export function importView() {
     if (file.size > MAX_FILE) return toast("File troppo grande (max 10 MB).", "error");
     try {
       if (isPdf(file)) await loadPdf(file);
+      else if (/\.ics$/i.test(file.name) || file.type === "text/calendar") loadIcs(decodeText(await file.arrayBuffer()), file.name);
       else {
         const { sheets } = await readSpreadsheet(file);
         if (!sheets.some((s) => s.rows.length)) throw new Error("Il file è vuoto.");
@@ -213,11 +232,11 @@ export function importView() {
   }
 
   function build() {
-    const input = h("input", { type: "file", id: "import-file", accept: ".csv,.tsv,.txt,.xlsx,.xlsm,.pdf,text/csv,application/pdf", hidden: true });
+    const input = h("input", { type: "file", id: "import-file", accept: ".csv,.tsv,.txt,.xlsx,.xlsm,.pdf,.ics,text/csv,application/pdf,text/calendar", hidden: true });
     input.addEventListener("change", () => onFile(input.files[0]));
     const drop = h("div", { class: "file-drop", tabindex: 0, role: "button", onclick: () => input.click(), onkeydown: (e) => (e.key === "Enter" || e.key === " ") && input.click(),
       ondragover: (e) => e.preventDefault(), ondrop: (e) => { e.preventDefault(); onFile(e.dataTransfer.files[0]); } },
-      h("b", {}, "Scegli un file CSV, Excel o PDF"), h("div", { class: "small" }, "(.csv, .tsv, .xlsx, .pdf) oppure trascinalo qui. Il file resta nel tuo browser."), input);
+      h("b", {}, "Scegli un file CSV, Excel, PDF o calendario"), h("div", { class: "small" }, "(.csv, .tsv, .xlsx, .pdf, .ics) oppure trascinalo qui. Il file resta nel tuo browser."), input);
     const paste = h("textarea", { id: "import-paste", placeholder: "Oppure incolla qui le righe copiate da Excel o da una pagina web (con le intestazioni)…", style: { minHeight: "90px" } });
     paste.value = pasted;
     paste.addEventListener("input", () => (pasted = paste.value));
@@ -225,6 +244,7 @@ export function importView() {
       h("h3", {}, "1 · Il file"), drop, paste,
       h("div", { class: "row" },
         h("button", { class: "btn", onclick: () => {
+          if (isIcsText(paste.value)) { try { loadIcs(paste.value, "calendario incollato"); redraw(); } catch (e) { toast(e.message, "error"); } return; }
           const { rows, offset } = parseDelimited(paste.value);
           if (rows.length < 2) return toast("Incolla almeno l'intestazione e una riga.", "error");
           load([{ name: "Testo incollato", rows, offset }], "testo incollato");
@@ -233,8 +253,8 @@ export function importView() {
         h("span", { class: "muted small" }, "Modelli da scaricare: "),
         ...Object.entries(SCHEMAS).map(([k, s]) => h("button", { class: "btn small ghost", onclick: () => download(`modello-${k}.csv`, TEMPLATES[k]) }, s.label))));
 
-    if (!st) return [h("div", { class: "row between" }, h("h1", { style: { margin: 0 } }, "Importa da CSV, Excel o PDF"), h("a", { class: "btn ghost", href: "#/" }, "Home")),
-      h("p", { class: "muted", style: { margin: 0 } }, "Puoi importare gli appelli d'esame (date), il piano di studi (insegnamenti) e gli orari delle lezioni. Le colonne vengono riconosciute dalle intestazioni e le puoi correggere prima di importare. I PDF con tabelle semplici si leggono da soli; per orari a griglia e scansioni c'è la lettura con l'AI."), source];
+    if (!st) return [h("div", { class: "row between" }, h("h1", { style: { margin: 0 } }, "Importa da CSV, Excel, PDF o calendario"), h("a", { class: "btn ghost", href: "#/" }, "Home")),
+      h("p", { class: "muted", style: { margin: 0 } }, "Puoi importare gli appelli d'esame (date), il piano di studi (insegnamenti) e gli orari delle lezioni. Le colonne vengono riconosciute dalle intestazioni e le puoi correggere prima di importare. I PDF con tabelle semplici si leggono da soli; per orari a griglia e scansioni c'è la lettura con l'AI. Un calendario (.ics) esportato dall'ateneo o da Google Calendar si importa come orario (o come appelli)."), source];
 
     const { t, res } = compute();
     const schema = SCHEMAS[st.kind];
@@ -296,10 +316,21 @@ export function importView() {
       preview = h("div", { class: "stack" },
         h("p", { class: "muted small", style: { margin: 0 } }, "Spunta gli insegnamenti che frequenti: le loro lezioni riducono il tempo di studio dei giorni in cui cadono."),
         h("ul", { class: "checklist" }, res.courses.map((c) => h("li", {}, h("label", {}, h("input", { type: "checkbox", checked: st.include.has(c.name), onchange: (e) => { e.target.checked ? st.include.add(c.name) : st.include.delete(c.name); redraw(); } }), h("span", {}, `${c.name} `, h("span", { class: "muted small" }, `(${c.count === 1 ? "1 lezione" : `${c.count} lezioni`})`)))))),
+        (() => {
+          const ov = overlaps(res.items.filter((l) => st.include.has(l.course)));
+          if (!ov.length) return null;
+          const days = new Set(ov.map((o) => o.date)).size;
+          const ex = ov[0];
+          return h("div", { class: "callout warn" }, h("b", {}, `Alcune lezioni si sovrappongono (${days} ${days === 1 ? "giorno" : "giorni"}). `), `Per esempio ${ex.a.course} e ${ex.b.course} il ${fmtDate(ex.date)} alle ${ex.b.start}. Se non segui tutti gli insegnamenti, togli la spunta a quelli che non frequenti: le sovrapposizioni, comunque, non vengono contate due volte.`);
+        })(),
         hasWeekly ? h("label", {}, "Le lezioni settimanali valgono fino al", until, h("span", { class: "hint" }, "Data di fine delle lezioni del semestre. Senza data le sottraggo da tutti i giorni del piano.")) : null);
       action = h("button", { class: "btn primary", disabled: !res.items.length, onclick: async () => { const msg = await applyTimetable(res); if (msg) done(msg, "#/"); } }, (() => { const n = res.items.filter((l) => st.include.has(l.course)).length; return `Importa ${n} ${n === 1 ? "lezione" : "lezioni"}`; })());
     }
 
+    const icsBox = st.ics
+      ? h("div", { class: "callout stack" }, h("ul", { style: { margin: 0 } }, st.notes.map((n) => h("li", {}, n))),
+          h("p", { class: "muted small", style: { margin: 0 } }, "Gli orari sono convertiti nell'ora di Roma (con l'ora legale). Scegli sopra se sono lezioni (orario) o appelli d'esame."))
+      : null;
     const textless = !!st.pdf?.textless && !st.fromAI;
     const pdfBox = st.pdf
       ? h("div", { class: `callout stack${textless ? " warn" : ""}` },
@@ -314,8 +345,8 @@ export function importView() {
           st.pdf.text ? h("details", {}, h("summary", { class: "small" }, "Testo estratto dal PDF"), h("pre", { style: { whiteSpace: "pre", overflow: "auto", maxHeight: "260px", font: "12px ui-monospace, monospace" } }, st.pdf.text.slice(0, 8000))) : null)
       : null;
 
-    return [h("div", { class: "row between" }, h("h1", { style: { margin: 0 } }, "Importa da CSV, Excel o PDF"), h("a", { class: "btn ghost", href: "#/" }, "Home")),
-      source, kindBox, pdfBox,
+    return [h("div", { class: "row between" }, h("h1", { style: { margin: 0 } }, "Importa da CSV, Excel, PDF o calendario"), h("a", { class: "btn ghost", href: "#/" }, "Home")),
+      source, kindBox, icsBox, pdfBox,
       ...(textless ? [] : [mapBox, h("div", { class: "card stack" }, h("h3", { style: { margin: 0 } }, "4 · Anteprima"), preview, errors, action ? h("div", {}, action) : null)])];
   }
 
