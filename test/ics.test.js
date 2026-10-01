@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { expandRule, guessIcsKind, icsRows, isIcsText, parseIcs, shortRoom, titleCase, unfold, utcToLocal, wallToUtc } from "../public/js/ics.js";
 import { CANON_HEADERS, autoMap, buildTimetable, detectKind, tableFrom } from "../public/js/importers.js";
-import { busyMinutes, lessonsOn, overlaps } from "../public/js/timetable.js";
+import { busyMinutes, lastLessonOf, lessonsOn, overlaps, TENTATIVE_GAP_DAYS } from "../public/js/timetable.js";
 
 const fixture = readFileSync(new URL("./fixtures/calendario-lezioni.ics", import.meta.url), "utf8");
 const ev = (lines) => `BEGIN:VCALENDAR\r\nVERSION:2.0\r\n${lines}END:VCALENDAR\r\n`;
@@ -139,4 +139,22 @@ test("orario: sovrapposizioni tra insegnamenti diversi segnalate, stesso insegna
   assert.equal(ov.length, 1);
   assert.deepEqual([ov[0].a.course, ov[0].b.course, ov[0].date], ["Matematica II", "Economia politica II", "2026-10-02"]);
   assert.equal(overlaps([]).length, 0);
+});
+
+test("lastLessonOf: fine delle lezioni di un insegnamento, per nome come nel piano", () => {
+  const tt = { items: [
+    { course: "Statistica", date: "2026-10-06", start: "09:00", end: "11:15" },
+    { course: "Statistica", date: "2027-01-20", start: "09:00", end: "11:15" },
+    { course: "Matematica II", date: "2026-12-14", start: "09:00", end: "11:15" },
+    { course: "Business english (B2)", date: "2027-01-19", start: "09:00", end: "11:15" },
+  ] };
+  assert.deepEqual(lastLessonOf(tt, "Statistica"), { course: "Statistica", date: "2027-01-20" });
+  assert.equal(lastLessonOf(tt, "Business English (B2)").date, "2027-01-19", "maiuscole diverse fra piano e orario");
+  assert.equal(lastLessonOf(tt, "Matematica I"), null, "non è Matematica II");
+  assert.equal(lastLessonOf(tt, ""), null);
+  assert.equal(lastLessonOf(null, "Statistica"), null);
+  const weekly = { items: [{ course: "Diritto privato", weekday: 2, start: "11:00", end: "13:00" }] };
+  assert.equal(lastLessonOf(weekly, "Diritto privato"), null, "settimanali senza data di fine: non si sa quando finiscono");
+  assert.equal(lastLessonOf({ ...weekly, until: "2026-12-18" }, "Diritto privato").date, "2026-12-18");
+  assert.equal(TENTATIVE_GAP_DAYS, 7);
 });

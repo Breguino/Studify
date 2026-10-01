@@ -39,8 +39,8 @@ function examCard(exam) {
   return h(
     "a",
     { class: "card stack", href: `#/exam/${exam.id}` },
-    h("div", { class: "row between" }, h("h3", {}, exam.name), badge(dl > 0 ? `tra ${dl} g` : dl === 0 ? "oggi" : "passato", dl <= 3 && dl >= 0 ? "bad" : dl <= 10 ? "warn" : "")),
-    h("div", { class: "muted small" }, `${fmtDate(exam.date)}${exam.appelli?.find((a) => a.date === exam.date)?.time ? ` ore ${exam.appelli.find((a) => a.date === exam.date).time}` : ""} · ${EXAM_TYPES[exam.type]}${exam.appelli?.length > 1 ? ` · ${exam.appelli.length} appelli` : ""}`),
+    h("div", { class: "row between" }, h("h3", {}, exam.name), badge(dl > 0 ? `tra ${exam.dateTentative ? "~" : ""}${dl} g` : dl === 0 ? "oggi" : "passato", dl <= 3 && dl >= 0 ? "bad" : dl <= 10 ? "warn" : "")),
+    h("div", { class: "muted small" }, `${fmtDate(exam.date)}${exam.dateTentative ? " (provvisoria)" : ""}${exam.appelli?.find((a) => a.date === exam.date)?.time ? ` ore ${exam.appelli.find((a) => a.date === exam.date).time}` : ""} · ${EXAM_TYPES[exam.type]}${exam.appelli?.length > 1 ? ` · ${exam.appelli.length} appelli` : ""}`),
     exam.module
       ? h(
           "div",

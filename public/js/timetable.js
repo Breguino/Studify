@@ -1,4 +1,5 @@
 // Orario delle lezioni: voci settimanali ({weekday: 1..7}) o in data precisa ({date}).
+import { findCourse } from "./curriculum.js";
 import { minutesBetween, weekdayOf } from "./tabular.js";
 
 /** Lezioni di un giorno, in ordine di orario. Le voci settimanali valgono fino a `tt.until` (se indicato). */
@@ -26,6 +27,24 @@ export function busyMinutes(tt, date) {
   }
   return curEnd > -Infinity ? total + curEnd - curStart : 0;
 }
+
+/**
+ * Ultimo giorno di lezione dell'insegnamento `name` (abbinato al nome come col piano di studi): { course, date } o null.
+ * Per le voci settimanali vale `tt.until`; senza quella data la fine non si conosce.
+ */
+export function lastLessonOf(tt, name) {
+  if (!tt?.items?.length || !String(name ?? "").trim()) return null;
+  const names = [...new Set(tt.items.map((l) => l.course).filter(Boolean))];
+  const c = findCourse(names.map((n) => ({ name: n })), name);
+  if (!c) return null;
+  const mine = tt.items.filter((l) => l.course === c.name);
+  if (mine.some((l) => !l.date) && !tt.until) return null;
+  const last = [...mine.filter((l) => l.date).map((l) => l.date), mine.some((l) => !l.date) ? tt.until : null].filter(Boolean).sort().at(-1);
+  return last ? { course: c.name, date: last } : null;
+}
+
+/** Data provvisoria proposta quando gli appelli non sono usciti: una settimana dopo l'ultima lezione (meglio presto che tardi). */
+export const TENTATIVE_GAP_DAYS = 7;
 
 export const fmtLesson = (l) => `${l.start}–${l.end}${l.course ? ` ${l.course}` : ""}${l.room ? ` (${l.room})` : ""}`;
 

@@ -66,7 +66,8 @@ function applyExams(items) {
     const exam = it.existingId ? store.getExam(it.existingId) : null;
     if (exam) {
       exam.appelli = it.appelli;
-      if (!it.appelli.some((a) => a.date === exam.date) || exam.date < today()) exam.date = it.date;
+      if (exam.dateTentative || !it.appelli.some((a) => a.date === exam.date) || exam.date < today()) exam.date = it.date;
+      exam.dateTentative = false;
       if (!exam.cfu && it.cfu) exam.cfu = it.cfu;
       if (!exam.year && it.year) exam.year = it.year;
       exam.plan = null;

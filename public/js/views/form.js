@@ -2,6 +2,7 @@ import { go } from "../nav.js";
 import { coursesForYear, examDefaultsFromCourse, FORMAT_LABEL, findCourse, yearLabel } from "../curriculum.js";
 import { addDays, fmtDate, today } from "../dates.js";
 import { suggestExamType } from "../exam-type.js";
+import { lastLessonOf, TENTATIVE_GAP_DAYS } from "../timetable.js";
 import { EXAM_TYPES, sessionAdvice } from "../methods.js";
 import * as store from "../store.js";
 import { confirmDialog, h, toast } from "../ui.js";
@@ -19,7 +20,7 @@ export function examFormView(exam) {
   const isNew = !exam;
   const prof = store.state.profile;
   const courses = prof?.courses ?? [];
-  const v = exam ?? { name: "", date: addDays(today(), 30), type: "scritto", level: 2, hoursPerDay: 3, sessionMinutes: 25, language: "italiano", cfu: 0, year: prof?.studentYear || 0 };
+  const v = exam ?? { name: "", date: addDays(today(), 30), type: "scritto", level: 2, hoursPerDay: 3, sessionMinutes: 25, language: "italiano", cfu: 0, year: prof?.studentYear || 0, dateTentative: false };
   const university = exam ? exam.university : prof?.university ?? "";
   const degree = exam ? exam.degree : prof?.degree ?? "";
   const f = {};
@@ -40,6 +41,8 @@ export function examFormView(exam) {
   const fillCourses = (year) => courseList.replaceChildren(...coursesForYear(courses, year).map((c) => h("option", { value: c.name }, `${c.kind === "a_scelta" ? "a scelta · " : ""}${c.cfu ? `${c.cfu} CFU` : ""}`)));
   const electiveNote = h("p", { class: "muted small", style: { margin: 0 } });
   const nameInput = h("input", { required: true, value: v.name, placeholder: "es. Microeconomia", list: "courses", autocomplete: "off" });
+  const tentative = h("input", { type: "checkbox", id: "date-tentative", checked: !!v.dateTentative });
+  const dateNote = h("span", { class: "hint" });
 
   const form = h(
     "form",
@@ -54,6 +57,7 @@ export function examFormView(exam) {
           cfu: Math.min(60, Math.max(0, Number(f.cfu.value) || 0)),
           year: Number(f.year.value) || 0,
           date: f.date.value,
+          dateTentative: tentative.checked,
           type: f.type.value,
           level: Number(f.level.value),
           hoursPerDay: Math.min(12, Math.max(0.5, Number(f.hours.value) || 2)),
@@ -83,6 +87,7 @@ export function examFormView(exam) {
     h("div", { class: "cols" },
       h("div", { class: "stack", style: { gap: "6px" } },
         field("date", "Data dell'esame", h("input", { type: "date", required: true, value: v.date, min: addDays(today(), 1) })),
+        h("label", { style: { display: "flex", gap: "8px", alignItems: "center", fontWeight: 400 } }, tentative, "Data provvisoria: gli appelli non sono ancora usciti"),
         v.appelli?.filter((a) => a.date >= today()).length > 1
           ? h("label", {}, "Appello", h("select", { id: "appello", onchange: (e) => { if (e.target.value) f.date.value = e.target.value; } },
               v.appelli.filter((a) => a.date >= today()).map((a) => h("option", { value: a.date, selected: a.date === v.date }, `${fmtDate(a.date)}${a.time ? ` ore ${a.time}` : ""}${a.room ? ` · ${a.room}` : ""}`))), h("span", { class: "hint" }, "Altri appelli importati: scegli quello a cui ti presenti."))
@@ -147,6 +152,29 @@ export function examFormView(exam) {
   f.year.addEventListener("change", () => { yearTouched = true; refreshYear(); });
   refreshYear();
   if (isNew) refresh();
+
+  /* Appelli non ancora pubblicati: se dall'orario so quando finiscono le lezioni propongo una data provvisoria
+     (la data di default, fra 30 giorni, cadrebbe in pieno semestre e comprimerebbe il piano). */
+  f.date.parentElement.append(dateNote);
+  let dateTouched = !isNew;
+  const hasAppelli = !!v.appelli?.length;
+  function refreshDate() {
+    const last = hasAppelli ? null : lastLessonOf(prof?.timetable, f.name.value);
+    const est = last && last.date >= today() ? addDays(last.date, TENTATIVE_GAP_DAYS) : null;
+    if (est && !dateTouched && f.date.value !== est) { f.date.value = est; tentative.checked = true; }
+    const after = tentative.checked ? "Quando escono gli appelli importali da «Importa»: la data provvisoria viene sostituita e il piano ricalcolato." : "";
+    if (!est) return dateNote.replaceChildren(after);
+    dateNote.replaceChildren(...[
+      `Le lezioni di ${last.course} finiscono il ${fmtDate(last.date)}. `,
+      f.date.value === est
+        ? (tentative.checked ? `Data provvisoria: una settimana dopo. ${after}` : null)
+        : h("button", { type: "button", class: "btn small ghost", onclick: () => { f.date.value = est; tentative.checked = true; dateTouched = true; refreshDate(); } }, `Usa ${fmtDate(est)} come data provvisoria`),
+    ].filter(Boolean));
+  }
+  f.date.addEventListener("input", () => { dateTouched = true; refreshDate(); });
+  f.name.addEventListener("input", refreshDate);
+  tentative.addEventListener("change", refreshDate);
+  refreshDate();
 
   if (!isNew)
     form.append(

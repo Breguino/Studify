@@ -57,6 +57,9 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
      alla data indicata. Se nel profilo indichi l'**anno che frequenti** e hai il piano di studi, vengono spuntati in automatico solo gli
      insegnamenti di quell'anno; quelli che il piano mette in altri anni restano da spuntare a mano, quelli che non trova nel piano restano
      spuntati e segnalati («non nel piano»). Un nuovo orario sostituisce il precedente, previa conferma.
+     **Appelli non ancora usciti:** creando un esame la cui materia è nell'orario, la data proposta è *provvisoria*, una settimana dopo
+     l'ultima lezione (non fra 30 giorni, che cadrebbe in pieno semestre). Home e pagina dell'esame la indicano come tale; quando importi gli
+     appelli la data provvisoria viene sostituita dal primo appello e il piano si ricalcola.
    Un **calendario `.ics`** (esportato da Esse3/CINECA, Google Calendar, Outlook) si importa come orario delle lezioni o come appelli: gli orari
    in UTC vengono convertiti nell'ora di Roma con l'ora legale, le ricorrenze (`RRULE`, `EXDATE`) espanse, gli eventi annullati e «tutto il
    giorno» ignorati. Le lezioni sovrapposte sono segnalate e non vengono sottratte due volte al tempo di studio.
