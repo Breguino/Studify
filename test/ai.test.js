@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { buildModule, curriculum, extendModule, degrees, gradeAnswer, importRows, parseCurriculum, research, setClient } from "../server/ai.js";
+import { buildModule, curriculum, examFormat, extendModule, degrees, gradeAnswer, importRows, parseCurriculum, research, setClient } from "../server/ai.js";
 import { CurriculumSchema, GradeSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees } from "../server/schema.js";
 
 const stream = (msg) => ({ on() {}, finalMessage: async () => msg });
@@ -220,4 +220,27 @@ test("extendModule: il modello vede il modulo esistente e solo i materiali nuovi
   assert.equal(r.delta.flashcards[0].topicId, "t1");
   setClient(fake([{ stop_reason: "refusal", content: [] }], []));
   await assert.rejects(extendModule({ exam: { name: "x", type: "scritto", level: 3, daysLeft: 5 }, materials: [{ kind: "notes", title: "a", text: "b" }], research: null, existing: { topics: [], flashcards: [], questions: [] } }), /rifiutato/);
+});
+
+test("examFormat: ricerca della scheda, estrazione con citazione e URL visto; senza prove il formato resta sconosciuto", async () => {
+  const search = { stop_reason: "end_turn", content: [
+    { type: "web_search_tool_result", tool_use_id: "s", content: [{ type: "web_search_result", url: "https://www.unibs.it/syllabus/statistica", title: "Statistica" }] },
+    { type: "text", text: "Modalità di verifica: prova scritta con esercizi (2 ore), orale facoltativo." },
+  ] };
+  const extracted = (o) => ({ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ found: true, format: "problemi", evidence: "prova scritta con esercizi (2 ore), orale facoltativo", details: "orale facoltativo", url: "https://www.unibs.it/syllabus/statistica", academicYear: "2026-27", teacher: "Rossi", caveats: [], ...o }) }] });
+  const calls = [];
+  setClient(fake([search, extracted({})], calls));
+  const r = await examFormat({ university: "Università degli Studi di Brescia", degree: "Economia e analisi dei dati", course: "Statistica", academicYear: "2026-27" });
+  assert.match(calls[0].messages[0].content, /"Statistica"[\s\S]*Brescia[\s\S]*2026-27/);
+  assert.match(calls[0].messages[0].content, /Modalità di verifica dell'apprendimento/);
+  assert.equal(calls[0].tools[0].type, "web_search_20260209");
+  assert.match(calls[1].system, /non dedurre|SOLO tra gli URL/i);
+  assert.deepEqual([r.found, r.format, r.url, r.teacher], [true, "problemi", "https://www.unibs.it/syllabus/statistica", "Rossi"]);
+
+  setClient(fake([search, extracted({ url: "https://inventato.it/x" })], []));
+  const noUrl = await examFormat({ university: "UNIBS", course: "Statistica" });
+  assert.deepEqual([noUrl.found, noUrl.format, noUrl.url], [false, "sconosciuto", ""], "URL mai visto nella ricerca → non vale");
+
+  setClient(fake([search, extracted({ evidence: "" })], []));
+  assert.equal((await examFormat({ university: "UNIBS", course: "Statistica" })).found, false, "senza citazione → non vale");
 });

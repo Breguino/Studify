@@ -44,6 +44,19 @@ function applyCourses(p, r, label) {
   toast(`${r.courses.length} insegnamenti letti.`, "ok");
 }
 
+// Il «change» di un campo scatta al blur, cioè quando si preme il mouse su un link o un bottone: ridisegnare subito
+// sostituirebbe quell'elemento e il clic andrebbe perso. Se un pulsante è premuto, si ridisegna dopo il clic.
+let pressing = false;
+addEventListener("pointerdown", () => (pressing = true), true);
+addEventListener("pointerup", () => setTimeout(() => (pressing = false)), true);
+function rerenderAfterClick() {
+  if (!pressing) return core.rerender();
+  let done = false;
+  const go = () => { if (!done) { done = true; setTimeout(() => core.rerender()); } };
+  addEventListener("click", go, { once: true, capture: true });
+  setTimeout(go, 600);
+}
+
 export function profileView() {
   const p = store.profile();
   const web = core.ai.web !== false;
@@ -64,7 +77,7 @@ export function profileView() {
     if (changedUni) p.degrees = null; // l'elenco dei corsi appartiene all'ateneo precedente
     store.save();
   };
-  uni.addEventListener("change", () => { commit(); core.rerender(); });
+  uni.addEventListener("change", () => { commit(); rerenderAfterClick(); });
   degree.addEventListener("change", commit);
   degree.addEventListener("blur", commit);
 

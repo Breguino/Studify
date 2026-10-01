@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { CURRICULUM_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, moduleDigest, where } from "../shared/prompts.js";
-import { CurriculumSchema, DegreesSchema, GradeSchema, ImportRowsSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees, normalizeImportRows, normalizeModule } from "./schema.js";
+import { CurriculumSchema, DegreesSchema, ExamFormatSchema, GradeSchema, ImportRowsSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeImportRows, normalizeModule } from "./schema.js";
 
 export const MODEL = process.env.STUDIFY_MODEL || "claude-opus-5-5";
 
@@ -143,6 +143,50 @@ url = pagina da cui proviene, scelta SOLO tra gli URL elencati, altrimenti "". f
   const cur = normalizeCurriculum(raw, found.seenUrls);
   if (!cur.found || !cur.courses.length) throw new Error("Non ho trovato il piano di studi online: inserisci gli insegnamenti a mano.");
   return { ...cur, sources: found.sources };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Modalità d'esame di un insegnamento                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Cerca la scheda dell'insegnamento (syllabus) sul sito dell'ateneo e ne estrae la modalità d'esame,
+ * con la frase letta e l'URL. Non la deduce dalla materia: se non la trova lo dice.
+ */
+export async function examFormat({ university, degree, course, academicYear }, onProgress = () => {}) {
+  const system = `Sei un assistente che consulta i siti ufficiali delle università italiane.
+${SAFETY_RULES}
+Riporta solo ciò che leggi nelle pagine trovate; non dedurre la modalità d'esame dal nome della materia.`;
+  const prompt = `Trova la scheda ufficiale dell'insegnamento "${course}"${degree ? ` del corso di studio "${degree}"` : ""} presso "${university}"
+(syllabus / programma dell'insegnamento${academicYear ? `, anno accademico ${academicYear} o il più recente disponibile` : ", anno accademico più recente"}).
+Riporta TESTUALMENTE la parte sulla modalità d'esame (di solito «Modalità di verifica dell'apprendimento», «Modalità d'esame»,
+«Assessment methods»): scritto, orale, test, esercizi, prove intermedie, durata, se l'orale è obbligatorio o facoltativo.
+Indica l'URL della pagina, l'anno accademico e il docente. Se ci sono più docenti o canali con modalità diverse, elencali.
+Se non trovi la scheda o la modalità non è indicata, dillo chiaramente.`;
+  const found = await webResearch({ system, prompt, maxUses: 6 }, onProgress);
+
+  const msg = await client().messages.create({
+    model: MODEL,
+    max_tokens: 4000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "low", format: zodOutputFormat(ExamFormatSchema) },
+    system: `Estrai dati strutturati dal testo di una ricerca. ${SAFETY_RULES}
+format: "scritto" (domande aperte), "test" (risposta multipla), "problemi" (esercizi da risolvere), "orale", "misto" (scritto + orale
+entrambi obbligatori o comunque parte del voto); "sconosciuto" se la ricerca non riporta la modalità. Uno scritto con esercizi è "problemi";
+uno scritto con orale facoltativo resta il tipo dello scritto (indicalo in details).
+evidence = la frase sulla modalità d'esame COPIATA dalla pagina (max 300 caratteri); "" se non c'è.
+url = pagina da cui proviene, scelta SOLO tra gli URL elencati, altrimenti "". found = false se non hai trovato la modalità.
+caveats: differenze tra docenti/canali, anno accademico vecchio, dubbi.`,
+    messages: [{ role: "user", content: `<ricerca>\n${found.notes}\n</ricerca>\n<url_validi>\n${[...found.seenUrls].join("\n")}\n</url_validi>` }],
+  });
+  assertUsable(msg);
+  let raw;
+  try {
+    raw = ExamFormatSchema.parse(JSON.parse(textOf(msg.content)));
+  } catch {
+    throw new Error("Non sono riuscito a interpretare la scheda trovata.");
+  }
+  return normalizeExamFormat(raw, found.seenUrls);
 }
 
 /* -------------------------------------------------------------------------- */

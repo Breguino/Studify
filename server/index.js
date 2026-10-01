@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODEL, aiConfigured, buildModule, curriculum, degrees, extendModule, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
+import { MODEL, aiConfigured, buildModule, curriculum, degrees, examFormat, extendModule, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
 import { localDelta } from "../public/js/local-builder.js";
 import { IMPORT_HEADERS } from "../shared/prompts.js";
 import { normalizeModule } from "./schema.js";
@@ -243,6 +243,21 @@ async function api(req, res, url) {
             ],
           })
         : curriculum({ university, degree }, p),
+    );
+    return send(res, 202, { jobId: id });
+  }
+
+  if (url.pathname === "/api/exam-format") {
+    const input = { university: str(body.university, 200), degree: str(body.degree, 200), course: str(body.course, 200), academicYear: str(body.academicYear, 20) };
+    if (!input.university || !input.course) return send(res, 400, { error: "Servono ateneo e insegnamento." });
+    const id = startJob("exam-format", (p) =>
+      MOCK
+        ? mockRun(p, {
+            found: true, format: "problemi", details: "Scritto di 2 ore con esercizi; orale facoltativo (demo).",
+            evidence: `L'esame di ${input.course} consiste in una prova scritta con esercizi e domande di teoria (risposta simulata).`,
+            url: "https://www.example.org/syllabus-demo", academicYear: input.academicYear || "2026-27", teacher: "", caveats: ["Risposta della modalità demo: nessuna ricerca vera."],
+          })
+        : examFormat(input, p),
     );
     return send(res, 202, { jobId: id });
   }

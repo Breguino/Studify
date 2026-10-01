@@ -47,6 +47,11 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
      cercarlo sul sito dell'ateneo (solo versione con server), **incollare** il piano copiato dal sito/Esse3/PDF (letto dall'AI oppure con
      la lettura rapida senza AI), o inserire gli insegnamenti a mano. Anno, tipo (obbligatorio / a scelta), CFU e prova si correggono riga per riga.
    - creando un esame scegli **anno** e **insegnamento**: CFU, tipo di prova e anno si precompilano.
+   - **Modalità d'esame dalla scheda dell'insegnamento** (versione con server e chiave API): se la modalità di un insegnamento del
+     piano non è nota, scegliendolo parte da sola una ricerca web sulla scheda/syllabus dell'ateneo. Vale solo con una frase copiata
+     dalla pagina e un URL effettivamente visto nella ricerca; il risultato (anche «non trovata») resta nel piano, così non si ripete.
+     Per insegnamenti fuori dal piano c'è un bottone; un tipo scelto a mano non viene sovrascritto. Serve l'ateneo nel profilo. Nella
+     pagina Claude non c'è ricerca web: resta il suggerimento dalla materia.
    I dati trovati sul web sono sempre segnalati «da verificare» (a.a., fonti): la prova d'esame resta «Non indicato» se la scheda non la dichiara.
 0b. **Importa da CSV o Excel** (pulsante «Importa CSV / Excel»): tre tipi di file, riconosciuti dalle intestazioni (colonne correggibili a mano):
    - **appelli d'esame**: insegnamento, data, ora, aula, tipo di prova, CFU, anno. Più date per lo stesso insegnamento = più appelli (si sceglie

@@ -233,3 +233,24 @@ export function normalizeImportRows(raw, headers) {
     .filter((r) => r.filter(Boolean).length >= 2);
   return { found: !!raw?.found && rows.length > 0, rows: [headers, ...rows], notes: (raw?.notes ?? []).map(str).filter(Boolean).slice(0, 10) };
 }
+
+/**
+ * Modalità d'esame di un insegnamento trovata online. Vale solo con una citazione dalla pagina (evidence) e un URL
+ * effettivamente visto nella ricerca: senza, il formato torna «sconosciuto» (meglio nessuna risposta che una dedotta).
+ */
+export function normalizeExamFormat(raw, seenUrls = new Set()) {
+  const url = seenUrls.has(raw?.url) ? raw.url : "";
+  const evidence = str(raw?.evidence).slice(0, 600);
+  let format = FORMATS.includes(raw?.format) ? raw.format : "sconosciuto";
+  if (!evidence || !url) format = "sconosciuto";
+  return {
+    found: !!raw?.found && format !== "sconosciuto",
+    format,
+    evidence: format === "sconosciuto" ? "" : evidence,
+    details: str(raw?.details).slice(0, 400),
+    url,
+    academicYear: str(raw?.academicYear).slice(0, 20),
+    teacher: str(raw?.teacher).slice(0, 120),
+    caveats: (raw?.caveats ?? []).map(str).filter(Boolean).slice(0, 5),
+  };
+}

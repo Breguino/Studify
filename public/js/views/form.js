@@ -1,3 +1,5 @@
+import * as api from "../api.js";
+import { core } from "../core.js";
 import { go } from "../nav.js";
 import { coursesForYear, examDefaultsFromCourse, FORMAT_LABEL, findCourse, yearLabel } from "../curriculum.js";
 import { addDays, fmtDate, today } from "../dates.js";
@@ -15,6 +17,28 @@ const LEVELS = {
   5: "5 · Mi serve solo ripassare",
 };
 const GENERIC_HINT = "Cambia il mix di metodi: all'orale conta spiegare, al test riconoscere.";
+
+// Ricerche della modalità d'esame (per insegnamento): sopravvivono ai re-render e non si ripetono nella stessa sessione.
+const formatSearches = new Map();
+const key = (s) => String(s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+
+function searchFormat({ university, degree, academicYear, name, course }) {
+  const k = key(course?.name ?? name);
+  if (!formatSearches.has(k)) {
+    const job = api.runJob("/api/exam-format", { university, degree, course: course?.name ?? name, academicYear }, () => {})
+      .then((r) => {
+        if (course) {
+          if (r.found) Object.assign(course, { format: r.format, formatEvidence: r.evidence, url: r.url });
+          course.formatSearch = { at: today(), found: r.found, details: r.details, teacher: r.teacher, academicYear: r.academicYear, caveats: r.caveats };
+          store.save();
+        }
+        return r;
+      })
+      .catch((e) => { formatSearches.delete(k); throw e; });
+    formatSearches.set(k, job);
+  }
+  return formatSearches.get(k);
+}
 
 export function examFormView(exam) {
   const isNew = !exam;
@@ -127,7 +151,13 @@ export function examFormView(exam) {
     if (d?.type) {
       f.type.value = d.type;
       formatSource = { text: d.evidence, url: d.url };
-      hint.replaceChildren(...[`Dal tuo piano di studi: ${FORMAT_LABEL[d.type]}${d.evidence && d.evidence !== "demo" ? ` (${d.evidence})` : ""}. `, d.url ? h("a", { href: d.url, target: "_blank", rel: "noopener noreferrer" }, "fonte") : null, d.url ? " · " : null, "Verifica con il tuo docente."].filter(Boolean));
+      const web = course.formatSearch?.found;
+      hint.replaceChildren(...[
+        web ? `Dalla scheda dell'insegnamento${course.formatSearch.academicYear ? ` (a.a. ${course.formatSearch.academicYear}${course.formatSearch.teacher ? `, ${course.formatSearch.teacher}` : ""})` : ""}: ${FORMAT_LABEL[d.type]}. «${d.evidence}» ` : `Dal tuo piano di studi: ${FORMAT_LABEL[d.type]}${d.evidence && d.evidence !== "demo" ? ` (${d.evidence})` : ""}. `,
+        web && course.formatSearch.details ? `${course.formatSearch.details} ` : null,
+        d.url ? h("a", { href: d.url, target: "_blank", rel: "noopener noreferrer" }, "fonte") : null, d.url ? " · " : null,
+        web ? "Le modalità cambiano tra docenti e anni: verifica." : "Verifica con il tuo docente.",
+      ].filter(Boolean));
       return;
     }
     formatSource = null;
@@ -138,6 +168,49 @@ export function examFormView(exam) {
       : "Materia non riconosciuta: ho messo «scritto + orale». Scegli quello del tuo esame.");
   }
   f.name.addEventListener("input", refresh);
+
+  /* Modalità d'esame dalla scheda dell'insegnamento sul sito dell'ateneo (solo con ricerca web: server con chiave API).
+     Parte da sola per gli insegnamenti del piano senza modalità nota, una volta sola; per gli altri c'è un bottone. */
+  const searchLine = h("span", { class: "hint", id: "format-search" });
+  hint.after(searchLine);
+  const webOk = !!core.ai?.ai && core.ai.web !== false;
+  let timer = null;
+  function refreshSearch(auto = true) {
+    clearTimeout(timer);
+    searchLine.replaceChildren();
+    const name = f.name.value.trim();
+    if (!webOk || name.length < 4) return;
+    const course = findCourse(courses, name);
+    const exact = course && key(course.name) === key(name);
+    if (course?.format && course.format !== "sconosciuto") return; // già nota (piano dal web o ricerca precedente)
+    if (!university) return searchLine.replaceChildren("Indica l'ateneo (", h("a", { href: "#/profile" }, "Imposta"), ") per cercare la modalità d'esame sulla scheda dell'insegnamento.");
+    const pending = formatSearches.get(key(course?.name ?? name));
+    const start = () => show(searchFormat({ university, degree, academicYear: prof?.academicYear ?? "", name, course }), name);
+    if (pending) return show(pending, name);
+    if (course?.formatSearch && !course.formatSearch.found)
+      return searchLine.replaceChildren(`Modalità d'esame non trovata sul sito (cercata il ${fmtDate(course.formatSearch.at)}): resta il suggerimento dalla materia. `, h("button", { type: "button", class: "btn small ghost", onclick: start }, "Cerca di nuovo"));
+    if (exact && auto) { timer = setTimeout(start, 600); return; }
+    searchLine.replaceChildren(h("button", { type: "button", class: "btn small ghost", onclick: start }, `Cerca la modalità d'esame sul sito dell'ateneo`));
+  }
+  function show(job, name) {
+    searchLine.replaceChildren(h("span", { class: "spinner" }), ` Cerco la modalità d'esame di «${name}» sulla scheda dell'insegnamento…`);
+    job.then((r) => {
+      if (key(f.name.value) !== key(name) || !form.isConnected) return;
+      if (!r.found) return refreshSearch(false);
+      searchLine.replaceChildren();
+      // scelta fatta a mano: non la tocco, ma dico cosa dice la scheda
+      if (typeTouched) return searchLine.replaceChildren(`Sulla scheda dell'insegnamento: ${FORMAT_LABEL[r.format]}. `, h("a", { href: r.url, target: "_blank", rel: "noopener noreferrer" }, "fonte"));
+      if (findCourse(courses, name)) return refresh(); // salvata nel piano: refresh mostra fonte e citazione
+      f.type.value = r.format;
+      formatSource = { text: r.evidence, url: r.url };
+      hint.replaceChildren(`Dalla scheda dell'insegnamento: ${FORMAT_LABEL[r.format]}. «${r.evidence}» `, h("a", { href: r.url, target: "_blank", rel: "noopener noreferrer" }, "fonte"), " · Le modalità cambiano tra docenti e anni: verifica.");
+    }, (e) => {
+      if (key(f.name.value) !== key(name) || !form.isConnected) return;
+      searchLine.replaceChildren(`Ricerca non riuscita: ${e.message} `, h("button", { type: "button", class: "btn small ghost", onclick: () => show(searchFormat({ university, degree, academicYear: prof?.academicYear ?? "", name, course: findCourse(courses, name) }), name) }, "Riprova"));
+    });
+  }
+  f.name.addEventListener("input", () => refreshSearch());
+  if (isNew) refreshSearch();
   // L'anno filtra l'elenco; se in quell'anno ci sono attività a scelta lo ricorda (al 3° anno di solito ci sono).
   let yearTouched = !isNew;
   const refreshYear = () => {

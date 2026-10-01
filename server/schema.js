@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { FORMATS, KINDS, LEVELS } from "../shared/normalize.js";
 
-export { normalizeCurriculum, normalizeDegrees, normalizeImportRows, normalizeModule } from "../shared/normalize.js";
+export { normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeImportRows, normalizeModule } from "../shared/normalize.js";
 
 // Schema del "modulo di studio" generato dall'AI. Tutti i campi sono obbligatori
 // (gli output strutturati non gestiscono bene i campi opzionali): dove un campo
@@ -87,4 +87,16 @@ export const GradeSchema = z.object({
   feedback: z.string(),
   covered: z.array(z.string()),
   missing: z.array(z.string()),
+});
+
+// Modalità d'esame di un singolo insegnamento (dalla scheda / syllabus sul sito dell'ateneo).
+export const ExamFormatSchema = z.object({
+  found: z.boolean(),
+  format: z.enum(FORMATS),
+  evidence: z.string(), // frase copiata dalla pagina
+  details: z.string(), // durata, parti, prova intermedia… in breve
+  url: z.string(),
+  academicYear: z.string(),
+  teacher: z.string(),
+  caveats: z.array(z.string()),
 });
