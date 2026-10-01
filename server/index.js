@@ -140,7 +140,7 @@ async function api(req, res, url) {
     const id = startJob("research", (p) =>
       MOCK
         ? mockRun(p, {
-            notes: "[DEMO] Appunti di esempio trovati online.\n\nFonti: https://example.org/dispense",
+            notes: "[DEMO] Appunti di esempio trovati online.\n\nModalità d'esame: prova scritta con esercizi e colloquio orale (fonte: scheda del corso demo)\n\nFonti: https://example.org/dispense",
             sources: [{ id: "S1", title: "Dispense di esempio (demo)", url: "https://example.org/dispense" }],
           })
         : research(input, p),

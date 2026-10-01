@@ -70,6 +70,9 @@ ${focus ? `Argomenti/programma indicati dallo studente:\n${focus}\n` : "Se non c
 
 Restituisci appunti di studio strutturati per argomento: definizioni, idee chiave, formule/procedure, esempi.
 Per ogni argomento indica a fine sezione "Fonti:" con gli URL da cui proviene l'informazione.
+Se la scheda del corso o il sito dell'ateneo indicano come si svolge l'esame, riportalo in una riga che inizia
+esattamente con "Modalità d'esame:" (scritto, orale, test, esercizi, o combinazioni) citando la fonte; se non lo trovi
+scrivi "Modalità d'esame: non trovata". Non dedurlo dalla materia.
 Chiudi con "Lacune:" elencando ciò che non sei riuscito a verificare.`;
 
   const messages = [{ role: "user", content: prompt }];

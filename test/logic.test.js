@@ -7,6 +7,7 @@ import { buildPlan, splitPhases } from "../public/js/planner.js";
 import { pickQuestions, readiness, recordScore, topicStats, weakTopics } from "../public/js/progress.js";
 import { buildLocalModule } from "../public/js/local-builder.js";
 import { normalizeModule } from "../server/schema.js";
+import { findExamFormat, suggestExamType } from "../public/js/exam-type.js";
 
 test("date: aritmetica sui giorni e cambio ora legale", () => {
   assert.equal(daysBetween("2026-03-28", "2026-03-30"), 2); // attraversa il cambio d'ora
@@ -186,4 +187,28 @@ test("server: normalizeModule scarta riferimenti orfani e mcq invalide", () => {
   assert.equal(m.flashcards.length, 1);
   assert.equal(m.questions.length, 1);
   assert.equal(m.questions[0].kind, "open");
+});
+
+test("tipo di prova: suggerito dalla materia, 'misto' con bassa confidenza se sconosciuta", () => {
+  assert.equal(suggestExamType("Fisica 1").type, "problemi");
+  assert.equal(suggestExamType("Analisi Matematica II").type, "problemi");
+  assert.equal(suggestExamType("Diritto privato").type, "orale");
+  assert.equal(suggestExamType("Storia Contemporanea").type, "orale");
+  assert.equal(suggestExamType("Anatomia umana").type, "orale");
+  assert.equal(suggestExamType("Basi di dati").type, "misto");
+  assert.equal(suggestExamType("Lingua inglese B2").type, "test");
+  assert.equal(suggestExamType("Economia aziendale").type, "misto"); // «economia aziendale» (17 car.) batte «economia politica»
+  assert.equal(suggestExamType("Microeconomia").type, "problemi");
+  const unknown = suggestExamType("Laboratorio di cose");
+  assert.equal(unknown.type, "misto");
+  assert.equal(unknown.confidence, "bassa");
+  assert.equal(suggestExamType("").confidence, "bassa");
+});
+
+test("tipo di prova: lettura della modalità dichiarata dalla ricerca", () => {
+  assert.equal(findExamFormat("blabla\nModalità d'esame: prova scritta con esercizi e orale facoltativo\nFonti").type, "misto");
+  assert.equal(findExamFormat("Modalità d'esame: solo orale").type, "orale");
+  assert.equal(findExamFormat("Modalità d'esame: test a risposta multipla (30 domande)").type, "test");
+  assert.equal(findExamFormat("Modalità d'esame: non trovata"), null);
+  assert.equal(findExamFormat("nessuna riga utile"), null);
 });

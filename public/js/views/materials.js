@@ -1,6 +1,8 @@
 import * as api from "../api.js";
 import { core } from "../core.js";
 import { daysLeft } from "../domain.js";
+import { findExamFormat } from "../exam-type.js";
+import { EXAM_TYPES } from "../methods.js";
 import { buildLocalModule } from "../local-builder.js";
 import * as store from "../store.js";
 import { badge, h, readFileAs, toast, uid } from "../ui.js";
@@ -141,6 +143,15 @@ export function materialsTab(exam) {
       toast(`Trovate ${r.sources.length} fonti.`, "ok");
     }) }, exam.materials.some((m) => m.kind === "web") ? "Ripeti la ricerca" : "Cerca online"), !ai ? h("span", { class: "muted small" }, " Richiede l'AI (ANTHROPIC_API_KEY).") : null));
 
+  /* --- formato d'esame trovato dalla ricerca online --- */
+  const web = exam.materials.find((m) => m.kind === "web");
+  const found = web ? findExamFormat(web.text) : null;
+  const formatBox = found && found.type !== exam.type
+    ? h("div", { class: "callout row between" },
+        h("span", {}, h("b", {}, "La ricerca indica: "), found.text, `. Il tuo esame è impostato come «${EXAM_TYPES[exam.type]}».`),
+        h("button", { class: "btn small", onclick: () => { exam.type = found.type; exam.plan = null; store.save(); core.rerender(); } }, `Imposta «${EXAM_TYPES[found.type]}»`))
+    : null;
+
   /* --- elenco materiali --- */
   const list = hasContent
     ? h("div", { class: "stack", style: { gap: "8px" } }, exam.materials.map((m) =>
@@ -166,5 +177,5 @@ export function materialsTab(exam) {
 
   return h("div", { class: "stack" },
     h("div", { class: "grid" }, h("div", { class: "card stack" }, paste, drop), researchBox),
-    h("h2", { style: { margin: "6px 0 0" } }, `Materiali (${exam.materials.length})`), list, gen);
+    formatBox, h("h2", { style: { margin: "6px 0 0" } }, `Materiali (${exam.materials.length})`), list, gen);
 }

@@ -1,4 +1,5 @@
 import { addDays, today } from "../dates.js";
+import { suggestExamType } from "../exam-type.js";
 import { EXAM_TYPES, sessionAdvice } from "../methods.js";
 import * as store from "../store.js";
 import { h, toast } from "../ui.js";
@@ -55,7 +56,7 @@ export function examFormView(exam) {
     field("university", "Università / corso (facoltativo)", h("input", { value: v.university, placeholder: "es. Università di Bologna — Economia" }), "Aiuta l'AI a trovare materiale pertinente al tuo programma."),
     h("div", { class: "cols" },
       field("date", "Data dell'esame", h("input", { type: "date", required: true, value: v.date, min: addDays(today(), 1) })),
-      field("type", "Tipo di prova", select(EXAM_TYPES, v.type), "Cambia il mix di metodi: all'orale conta spiegare, al test riconoscere."),
+      field("type", "Tipo di prova", select(EXAM_TYPES, v.type)),
     ),
     field("level", "Quanto conosci già la materia?", select(LEVELS, v.level), "Non c'è una risposta giusta: serve per dosare spiegazioni e difficoltà."),
     h("div", { class: "cols" },
@@ -65,6 +66,25 @@ export function examFormView(exam) {
     field("language", "Lingua del materiale", h("input", { value: v.language })),
     h("div", { class: "row" }, h("button", { class: "btn primary", type: "submit" }, isNew ? "Continua: aggiungi i materiali" : "Salva"), h("a", { class: "btn ghost", href: isNew ? "#/" : `#/exam/${exam.id}` }, "Annulla")),
   );
+  // Il tipo di prova viene suggerito dalla materia finché l'utente non lo sceglie a mano.
+  const hint = h("span", { class: "hint" });
+  let touched = !isNew;
+  const typeLabel = f.type.parentElement;
+  typeLabel.append(hint);
+  const refresh = () => {
+    const sg = suggestExamType(f.name.value);
+    if (!f.name.value.trim()) { hint.textContent = "Cambia il mix di metodi: all'orale conta spiegare, al test riconoscere."; return; }
+    if (!touched) f.type.value = sg.type;
+    hint.textContent = touched
+      ? "Cambia il mix di metodi: all'orale conta spiegare, al test riconoscere."
+      : sg.match
+        ? `Suggerito dalla materia («${sg.match}»): ${sg.label}. Dipende dal docente: correggilo se il tuo è diverso.`
+        : "Materia non riconosciuta: ho messo «scritto + orale». Scegli quello del tuo esame.";
+  };
+  f.type.addEventListener("change", () => { touched = true; refresh(); });
+  f.name.addEventListener("input", refresh);
+  if (isNew) refresh();
+
   if (!isNew)
     form.append(
       h("hr", { style: { width: "100%", border: 0, borderTop: "1px solid var(--line)" } }),
