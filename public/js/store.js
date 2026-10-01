@@ -8,7 +8,7 @@ let db = null;
 let persistent = false;
 let timer = null;
 
-export const state = { version: VERSION, exams: [] };
+export const state = { version: VERSION, exams: [], profile: null };
 
 const open = () =>
   new Promise((resolve, reject) => {
@@ -48,7 +48,7 @@ export async function init() {
 export function save() {
   if (!persistent) return;
   clearTimeout(timer);
-  timer = setTimeout(flush, 250);
+  timer = setTimeout(flush, 60);
 }
 
 export async function flush() {
@@ -60,6 +60,7 @@ export async function flush() {
   }
 }
 addEventListener("pagehide", flush);
+addEventListener("visibilitychange", () => document.visibilityState === "hidden" && flush());
 
 export const putFile = (id, data) => (persistent ? tx("files", "readwrite", (s) => s.put(data, id)) : (memFiles.set(id, data), Promise.resolve()));
 export const getFile = (id) => (persistent ? tx("files", "readonly", (s) => s.get(id)) : Promise.resolve(memFiles.get(id)));
@@ -68,6 +69,13 @@ const memFiles = new Map();
 
 /* ------------------------------- esami -------------------------------- */
 
+export const emptyProfile = () => ({ university: "", degree: "", courses: [], sources: [], academicYear: "", caveats: [], fetchedAt: null });
+
+export function profile() {
+  state.profile ??= emptyProfile();
+  return state.profile;
+}
+
 export const getExam = (id) => state.exams.find((e) => e.id === id);
 
 export function newExam(fields) {
@@ -75,6 +83,9 @@ export function newExam(fields) {
     id: crypto.randomUUID?.() ?? String(Date.now()),
     name: "",
     university: "",
+    degree: "",
+    cfu: 0,
+    formatSource: null,
     date: "",
     type: "scritto",
     level: 2,
@@ -122,6 +133,7 @@ export async function importAll(json) {
   const data = JSON.parse(json);
   if (data.app !== "studify" || !Array.isArray(data.state?.exams)) throw new Error("File di backup non valido.");
   state.exams = data.state.exams;
+  state.profile = data.state.profile ?? null;
   for (const [id, f] of Object.entries(data.files ?? {})) await putFile(id, f);
   await flush();
 }

@@ -17,6 +17,10 @@ Serve Node ≥ 20. Nessun build step: il frontend è JavaScript ES modules servi
 
 ## Come funziona
 
+0. **Ateneo e corso di studio** (scheda «Ateneo»): scegli l'ateneo (anche con la sigla: `UNIBS`, `POLIMI`, `UNIBO`…) e scrivi il corso.
+   L'AI cerca il **piano di studi** sui siti ufficiali e, dove la scheda dell'insegnamento lo dichiara, la **prova d'esame** con il link alla fonte;
+   altrimenti resta «Non indicato» (non viene dedotta dal nome). Gli insegnamenti si possono anche inserire a mano. Poi, creando un esame,
+   scegli l'insegnamento dalla lista e CFU e tipo di prova si precompilano. Ateneo, corso e CFU migliorano anche la ricerca dei materiali e il modulo.
 1. **Descrivi l'esame**: data, tipo di prova (scritto, test, esercizi, orale, misto), livello di partenza (1-5), ore al giorno.
 2. **Porta i materiali**: incolla/carica appunti e PDF; oppure «Cerca online con l'AI» (ricerca web con fonti e link,
    che puoi leggere ed eliminare prima di usarla).
@@ -46,6 +50,9 @@ una prima lettura guidata e da esempi svolti (expertise reversal); con pochi gio
 - **Il modulo è una bozza, non una verità.** L'AI può sbagliare. Ogni argomento indica l'origine
   (*tuoi appunti* / *web* / *conoscenza generale dell'AI — da verificare*); le lacune sono esplicitate. Confronta con il programma del corso.
 - **La «preparazione» è una stima**, non una previsione del voto: non misura quanto il tuo esame sarà simile ai quiz generati.
+- **Piano di studi trovato online**: può essere di un anno accademico precedente o di un altro curriculum, e molte guide (Esse3, PDF)
+  non sono raggiungibili dalla ricerca. L'app lo segnala come «da verificare»; se non lo trova, usa l'inserimento manuale.
+  L'elenco atenei è solo per l'autocompletamento: puoi scrivere qualunque ateneo.
 - **Ricerca online**: la qualità dipende da ciò che il web offre sul tuo corso; dispense del tuo docente battono qualsiasi ricerca.
 - **Privacy**: i dati restano nel browser (IndexedDB). Il testo dei materiali viene inviato al server locale e da lì all'API di
   Anthropic solo quando generi un modulo, cerchi online o fai correggere una risposta.

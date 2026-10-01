@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODEL, aiConfigured, buildModule, friendlyError, gradeAnswer, research } from "./ai.js";
+import { MODEL, aiConfigured, buildModule, curriculum, friendlyError, gradeAnswer, research } from "./ai.js";
 import { normalizeModule } from "./schema.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
@@ -108,6 +108,9 @@ function parseExam(e = {}) {
     level,
     daysLeft: Math.max(0, Number(e.daysLeft) || 0),
     language: str(e.language, 40) || "italiano",
+    university: str(e.university, 200),
+    degree: str(e.degree, 200),
+    cfu: Math.min(60, Math.max(0, Number(e.cfu) || 0)),
   };
 }
 
@@ -136,7 +139,7 @@ async function api(req, res, url) {
   if (url.pathname === "/api/research") {
     const name = str(body.examName, 200);
     if (!name) return send(res, 400, { error: "Indica il nome dell'esame." });
-    const input = { examName: name, university: str(body.university, 200), focus: str(body.focus, 5000), language: str(body.language, 40) || "italiano" };
+    const input = { examName: name, university: str(body.university, 200), degree: str(body.degree, 200), focus: str(body.focus, 5000), language: str(body.language, 40) || "italiano" };
     const id = startJob("research", (p) =>
       MOCK
         ? mockRun(p, {
@@ -144,6 +147,25 @@ async function api(req, res, url) {
             sources: [{ id: "S1", title: "Dispense di esempio (demo)", url: "https://example.org/dispense" }],
           })
         : research(input, p),
+    );
+    return send(res, 202, { jobId: id });
+  }
+
+  if (url.pathname === "/api/curriculum") {
+    const university = str(body.university, 200).trim();
+    const degree = str(body.degree, 200).trim();
+    if (!university || !degree) return send(res, 400, { error: "Indica ateneo e corso di studio." });
+    const id = startJob("curriculum", (p) =>
+      MOCK
+        ? mockRun(p, {
+            found: true, degreeName: `${degree} (demo)`, academicYear: "demo", caveats: ["Dati dimostrativi: non sono il vero piano di studi."], sources: [],
+            courses: [
+              { name: "Analisi matematica 1 (demo)", year: 1, cfu: 9, format: "scritto", formatEvidence: "demo", url: "" },
+              { name: "Diritto privato (demo)", year: 1, cfu: 6, format: "orale", formatEvidence: "demo", url: "" },
+              { name: "Fondamenti di informatica (demo)", year: 1, cfu: 9, format: "sconosciuto", formatEvidence: "", url: "" },
+            ],
+          })
+        : curriculum({ university, degree }, p),
     );
     return send(res, 202, { jobId: id });
   }

@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { GradeSchema, ModuleSchema, normalizeModule } from "./schema.js";
+import { CurriculumSchema, GradeSchema, ModuleSchema, normalizeCurriculum, normalizeModule } from "./schema.js";
 
 export const MODEL = process.env.STUDIFY_MODEL || "claude-opus-5-5";
 
@@ -55,26 +55,15 @@ function assertUsable(msg) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Ricerca online di materiale didattico                                      */
+/* Ricerca web (base comune a materiale didattico e piano di studi)           */
 /* -------------------------------------------------------------------------- */
 
-export async function research({ examName, university, focus, language = "italiano" }, onProgress = () => {}) {
-  const system = `Sei un assistente che cerca materiale didattico affidabile per uno studente universitario.
-${SAFETY_RULES}
-Regole:
-- Preferisci fonti autorevoli: siti universitari, OpenCourseWare, manuali/dispense pubbliche, documentazione ufficiale, enciclopedie solo come appoggio.
-- Non inventare nulla: riporta solo ciò che trovi, e dì chiaramente cosa non hai trovato.
-- Scrivi in ${language}.`;
-  const prompt = `Cerca online materiale per preparare l'esame "${examName}"${university ? ` (${university})` : ""}.
-${focus ? `Argomenti/programma indicati dallo studente:\n${focus}\n` : "Se non c'è un programma, ricostruisci i contenuti tipici di un corso con questo nome."}
-
-Restituisci appunti di studio strutturati per argomento: definizioni, idee chiave, formule/procedure, esempi.
-Per ogni argomento indica a fine sezione "Fonti:" con gli URL da cui proviene l'informazione.
-Se la scheda del corso o il sito dell'ateneo indicano come si svolge l'esame, riportalo in una riga che inizia
-esattamente con "Modalità d'esame:" (scritto, orale, test, esercizi, o combinazioni) citando la fonte; se non lo trovi
-scrivi "Modalità d'esame: non trovata". Non dedurlo dalla materia.
-Chiudi con "Lacune:" elencando ciò che non sei riuscito a verificare.`;
-
+/**
+ * Esegue una ricerca web con ripresa su pause_turn.
+ * Restituisce il testo prodotto, le fonti citate (o, in mancanza, i primi risultati) e l'insieme di
+ * TUTTI gli URL effettivamente visti, per poter verificare che il modello non ne inventi.
+ */
+async function webResearch({ system, prompt, maxUses = 8 }, onProgress = () => {}) {
   const messages = [{ role: "user", content: prompt }];
   let notes = "";
   const results = new Map(); // url -> title
@@ -87,7 +76,7 @@ Chiudi con "Lacune:" elencando ciò che non sei riuscito a verificare.`;
       thinking: { type: "adaptive" },
       output_config: { effort: "medium" },
       system,
-      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 8 }],
+      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: maxUses }],
       messages,
     });
     stream.on("text", (d) => onProgress(d.length));
@@ -108,7 +97,71 @@ Chiudi con "Lacune:" elencando ciò che non sei riuscito a verificare.`;
   if (!notes.trim()) throw new Error("La ricerca non ha prodotto risultati utilizzabili.");
   const pool = cited.size ? cited : results;
   const sources = [...pool.entries()].slice(0, 15).map(([url, title], i) => ({ id: `S${i + 1}`, title, url }));
-  return { notes: notes.trim(), sources };
+  return { notes: notes.trim(), sources, seenUrls: new Set([...results.keys(), ...cited.keys()]) };
+}
+
+const where = (university, degree) => [university, degree].filter(Boolean).join(" — ");
+
+/* -------------------------------------------------------------------------- */
+/* Ricerca online di materiale didattico                                      */
+/* -------------------------------------------------------------------------- */
+
+export async function research({ examName, university, degree, focus, language = "italiano" }, onProgress = () => {}) {
+  const system = `Sei un assistente che cerca materiale didattico affidabile per uno studente universitario.
+${SAFETY_RULES}
+Regole:
+- Preferisci fonti autorevoli: siti universitari, OpenCourseWare, manuali/dispense pubbliche, documentazione ufficiale, enciclopedie solo come appoggio.
+- Non inventare nulla: riporta solo ciò che trovi, e dì chiaramente cosa non hai trovato.
+- Scrivi in ${language}.`;
+  const prompt = `Cerca online materiale per preparare l'esame "${examName}"${where(university, degree) ? ` (${where(university, degree)})` : ""}.
+${university ? "Cerca prima la scheda ufficiale dell'insegnamento (programma, testi consigliati, modalità d'esame) sul sito dell'ateneo, poi altro materiale.\n" : ""}${focus ? `Argomenti/programma indicati dallo studente:\n${focus}\n` : "Se non c'è un programma, ricostruisci i contenuti tipici di un corso con questo nome."}
+
+Restituisci appunti di studio strutturati per argomento: definizioni, idee chiave, formule/procedure, esempi.
+Per ogni argomento indica a fine sezione "Fonti:" con gli URL da cui proviene l'informazione.
+Se la scheda del corso o il sito dell'ateneo indicano come si svolge l'esame, riportalo in una riga che inizia
+esattamente con "Modalità d'esame:" (scritto, orale, test, esercizi, o combinazioni) citando la fonte; se non lo trovi
+scrivi "Modalità d'esame: non trovata". Non dedurlo dalla materia.
+Chiudi con "Lacune:" elencando ciò che non sei riuscito a verificare.`;
+  const { notes, sources } = await webResearch({ system, prompt }, onProgress);
+  return { notes, sources };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Piano di studi di un corso di laurea                                       */
+/* -------------------------------------------------------------------------- */
+
+export async function curriculum({ university, degree }, onProgress = () => {}) {
+  const system = `Sei un assistente che consulta i siti ufficiali delle università italiane.
+${SAFETY_RULES}
+Non inventare insegnamenti, CFU o modalità d'esame: riporta solo ciò che leggi nelle pagine trovate.`;
+  const prompt = `Trova il piano di studi (manifesto degli studi / offerta formativa) del corso di studio "${degree}" presso "${university}",
+per l'anno accademico più recente disponibile. Preferisci le pagine ufficiali dell'ateneo e del dipartimento.
+Elenca gli insegnamenti con: anno di corso, CFU e, se la scheda dell'insegnamento lo dice esplicitamente, la modalità d'esame
+(scritto, orale, test, esercizi) con l'URL della pagina dove l'hai letta. Indica anche l'anno accademico dei dati.
+Se esistono più curricula, indica quale hai usato. Se non trovi il corso, dillo chiaramente.`;
+  const found = await webResearch({ system, prompt, maxUses: 10 }, onProgress);
+
+  const msg = await client().messages.create({
+    model: MODEL,
+    max_tokens: 16000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "low", format: zodOutputFormat(CurriculumSchema) },
+    system: `Estrai dati strutturati dal testo di una ricerca. ${SAFETY_RULES}
+Regole: includi solo insegnamenti elencati nel testo. format = "sconosciuto" salvo che il testo dichiari esplicitamente la modalità
+d'esame di QUELL'insegnamento (mai dedurla dal nome). formatEvidence = frase breve che lo giustifica, altrimenti "". url = pagina
+da cui proviene, scelta SOLO tra gli URL elencati, altrimenti "". year/cfu = 0 se non indicati. found = false se il corso non è stato trovato.`,
+    messages: [{ role: "user", content: `<ricerca>\n${found.notes}\n</ricerca>\n<url_validi>\n${[...found.seenUrls].join("\n")}\n</url_validi>` }],
+  });
+  assertUsable(msg);
+  let raw;
+  try {
+    raw = CurriculumSchema.parse(JSON.parse(textOf(msg.content)));
+  } catch {
+    throw new Error("Non sono riuscito a interpretare il piano di studi trovato. Riprova o inseriscilo a mano.");
+  }
+  const cur = normalizeCurriculum(raw, found.seenUrls);
+  if (!cur.found || !cur.courses.length) throw new Error("Non ho trovato il piano di studi online: inserisci gli insegnamenti a mano.");
+  return { ...cur, sources: found.sources };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -156,7 +209,7 @@ function buildUserContent({ exam, materials, research: res }) {
     parts.push(`<fonti_online>\n${res.sources.map((s) => `${s.id}: ${s.title} — ${s.url}`).join("\n")}\n</fonti_online>`);
   }
   const type = exam.type in EXAM_TYPE_LABEL ? exam.type : "misto";
-  parts.push(`Esame: ${exam.name}
+  parts.push(`Esame: ${exam.name}${exam.university || exam.degree ? `\nAteneo / corso di studio: ${where(exam.university, exam.degree)}` : ""}${exam.cfu ? `\nCFU: ${exam.cfu} (indica l'ampiezza e la profondità attese del programma; non dedurre contenuti specifici del docente)` : ""}
 Tipo di prova: ${EXAM_TYPE_LABEL[type]}
 Conoscenza pregressa dello studente (1 = zero, 5 = ottima): ${exam.level}
 Giorni disponibili: ${exam.daysLeft}

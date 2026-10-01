@@ -75,6 +75,7 @@ export function homeView() {
             ].map(([t, p]) => h("div", { class: "card flat" }, h("h3", {}, t), h("p", { class: "muted" }, p))),
           ),
         ),
+    !store.state.profile?.university ? h("div", { class: "callout row between" }, h("span", {}, h("b", {}, "Indica il tuo ateneo e corso di studio "), "(es. UNIBS): affina la ricerca dei materiali e suggerisce il formato d'esame dei tuoi insegnamenti."), h("a", { class: "btn small", href: "#/profile" }, "Imposta")) : null,
     !core.ai.ai && !core.ai.offline ? h("div", { class: "callout warn" }, "AI non configurata: puoi comunque usare l'app in modalità base (flashcard dalle definizioni nei tuoi appunti). Per moduli completi, quiz e ricerca online imposta ANTHROPIC_API_KEY.") : null,
   );
 }

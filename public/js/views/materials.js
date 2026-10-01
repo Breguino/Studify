@@ -83,7 +83,7 @@ async function generate(exam) {
       else materials.push({ kind: "notes", title: m.title, text: m.text });
     }
     const mod = await api.runJob("/api/module", {
-      exam: { name: exam.name, type: exam.type, level: exam.level, daysLeft: daysLeft(exam), language: exam.language },
+      exam: { name: exam.name, type: exam.type, level: exam.level, daysLeft: daysLeft(exam), language: exam.language, university: exam.university, degree: exam.degree, cfu: exam.cfu },
       materials, research,
     }, onProgress);
     resetProgress(exam, mod);
@@ -137,7 +137,7 @@ export function materialsTab(exam) {
     focus,
     jobLine(exam, "research", "Ricerca in corso"),
     h("div", {}, h("button", { class: "btn", disabled: !ai || busy, onclick: () => run(exam, "research", async (p) => {
-      const r = await api.runJob("/api/research", { examName: exam.name, university: exam.university, focus: focus.value, language: exam.language }, p);
+      const r = await api.runJob("/api/research", { examName: exam.name, university: exam.university, degree: exam.degree, focus: focus.value, language: exam.language }, p);
       exam.materials = exam.materials.filter((m) => m.kind !== "web");
       exam.materials.push({ id: uid(), kind: "web", title: "Ricerca online", text: r.notes, sources: r.sources, size: r.notes.length });
       toast(`Trovate ${r.sources.length} fonti.`, "ok");

@@ -132,3 +132,4 @@ details > summary { cursor: pointer; }
 .file-drop { border: 2px dashed var(--line); border-radius: 12px; padding: 18px; text-align: center; color: var(--muted); }
 .option[disabled] { opacity: 1; cursor: default; color: var(--text); }
 .option[disabled]:not(.correct):not(.wrong) { opacity: .65; }
+.inline-form > input, .inline-form > select { width: auto; flex: 1 1 150px; } .inline-form > input[type=number] { flex: 0 0 90px; }

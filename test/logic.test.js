@@ -8,6 +8,8 @@ import { pickQuestions, readiness, recordScore, topicStats, weakTopics } from ".
 import { buildLocalModule } from "../public/js/local-builder.js";
 import { normalizeModule } from "../server/schema.js";
 import { findExamFormat, suggestExamType } from "../public/js/exam-type.js";
+import { UNIVERSITIES, resolveUniversity } from "../public/js/universities.js";
+import { examDefaultsFromCourse, findCourse } from "../public/js/curriculum.js";
 
 test("date: aritmetica sui giorni e cambio ora legale", () => {
   assert.equal(daysBetween("2026-03-28", "2026-03-30"), 2); // attraversa il cambio d'ora
@@ -211,4 +213,30 @@ test("tipo di prova: lettura della modalità dichiarata dalla ricerca", () => {
   assert.equal(findExamFormat("Modalità d'esame: test a risposta multipla (30 domande)").type, "test");
   assert.equal(findExamFormat("Modalità d'esame: non trovata"), null);
   assert.equal(findExamFormat("nessuna riga utile"), null);
+});
+
+test("atenei: sigle e alias risolti, testo libero lasciato in pace", () => {
+  assert.equal(resolveUniversity("UNIBS"), "Università degli Studi di Brescia");
+  assert.equal(resolveUniversity("unibs "), "Università degli Studi di Brescia");
+  assert.equal(resolveUniversity("polimi"), "Politecnico di Milano");
+  assert.equal(resolveUniversity("la statale"), "Università degli Studi di Milano");
+  assert.equal(resolveUniversity("Universita degli studi di brescia"), "Università degli Studi di Brescia"); // senza accenti
+  assert.equal(resolveUniversity("Ateneo sconosciuto"), null);
+  assert.equal(resolveUniversity(""), null);
+  const all = UNIVERSITIES.flatMap(([n, ...a]) => [n, ...a].map((x) => x.toLowerCase()));
+  assert.equal(new Set(all).size, all.length, "nessuna sigla/nome duplicato (ambiguità)");
+});
+
+test("piano di studi: abbinamento insegnamento, ambiguo → nessuno", () => {
+  const courses = [
+    { name: "Analisi matematica 1", cfu: 9, format: "scritto", formatEvidence: "prova scritta", url: "https://u/x" },
+    { name: "Analisi matematica 2", cfu: 9, format: "sconosciuto", formatEvidence: "", url: "" },
+    { name: "Diritto privato (demo)", cfu: 6, format: "orale", formatEvidence: "demo", url: "" },
+  ];
+  assert.equal(findCourse(courses, "analisi matematica 1").cfu, 9);
+  assert.equal(findCourse(courses, "Diritto privato").format, "orale");
+  assert.equal(findCourse(courses, "Analisi matematica"), null, "troppo generico: due insegnamenti");
+  assert.equal(findCourse(courses, "Fisica"), null);
+  assert.deepEqual(examDefaultsFromCourse(courses[0]), { cfu: 9, type: "scritto", evidence: "prova scritta", url: "https://u/x" });
+  assert.equal(examDefaultsFromCourse(courses[1]).type, null, "formato sconosciuto → si ricade sull'euristica");
 });

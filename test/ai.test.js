@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { buildModule, gradeAnswer, research, setClient } from "../server/ai.js";
-import { GradeSchema, ModuleSchema } from "../server/schema.js";
+import { buildModule, curriculum, gradeAnswer, research, setClient } from "../server/ai.js";
+import { CurriculumSchema, GradeSchema, ModuleSchema, normalizeCurriculum } from "../server/schema.js";
 
 const stream = (msg) => ({ on() {}, finalMessage: async () => msg });
 const fake = (responses, calls) => ({
@@ -86,4 +86,42 @@ test("schemi: JSON schema generato è chiuso (additionalProperties:false) e senz
     assert.ok(json.includes('"additionalProperties":false'));
     assert.ok(!/"\$ref"/.test(json) || true);
   }
+});
+
+test("curriculum: due fasi (ricerca web → estrazione), URL inventati e formati senza evidenza scartati", async () => {
+  const calls = [];
+  const web = { stop_reason: "end_turn", content: [
+    { type: "web_search_tool_result", tool_use_id: "s", content: [{ type: "web_search_result", url: "https://unibs.it/piano", title: "Piano" }] },
+    { type: "text", text: "Anno 1: Analisi 1 (9 CFU) ...", citations: [{ url: "https://unibs.it/piano", title: "Piano" }] },
+  ] };
+  const extracted = { found: true, degreeName: "Ing. Informatica", academicYear: "2025/26", caveats: [], courses: [
+    { name: "Analisi 1", year: 1, cfu: 9, format: "scritto", formatEvidence: "Esame: prova scritta", url: "https://unibs.it/piano" },
+    { name: "Fisica", year: 1, cfu: 9, format: "orale", formatEvidence: "", url: "https://inventato.example/x" },
+    { name: "analisi 1", year: 1, cfu: 9, format: "scritto", formatEvidence: "dup", url: "" },
+  ] };
+  setClient(fake([web, { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(extracted) }] }], calls));
+  const r = await curriculum({ university: "Università degli Studi di Brescia", degree: "Ingegneria Informatica" });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].tools[0].type, "web_search_20260209");
+  assert.match(calls[0].messages[0].content, /Brescia/);
+  assert.equal(calls[1].tools, undefined, "l'estrazione non usa il web");
+  assert.match(calls[1].messages[0].content, /<url_validi>\nhttps:\/\/unibs.it\/piano/);
+  assert.equal(r.courses.length, 2, "duplicato rimosso");
+  assert.equal(r.courses[0].url, "https://unibs.it/piano");
+  assert.equal(r.courses[1].url, "", "URL mai visto → scartato");
+  assert.equal(r.courses[1].format, "sconosciuto", "formato senza evidenza → sconosciuto");
+  assert.equal(r.sources[0].url, "https://unibs.it/piano");
+});
+
+test("curriculum: corso non trovato → errore chiaro, non un elenco inventato", async () => {
+  const web = { stop_reason: "end_turn", content: [{ type: "text", text: "Non ho trovato il corso." }] };
+  const empty = { found: false, degreeName: "", academicYear: "", caveats: [], courses: [] };
+  setClient(fake([web, { stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(empty) }] }], []));
+  await assert.rejects(curriculum({ university: "X", degree: "Y" }), /Non ho trovato il piano di studi/);
+});
+
+test("curriculum: schema chiuso e normalizzazione dei range", () => {
+  assert.ok(JSON.stringify(zodOutputFormat(CurriculumSchema).schema).includes('"additionalProperties":false'));
+  const n = normalizeCurriculum({ found: true, degreeName: " X ", academicYear: "", caveats: [], courses: [{ name: "A", year: 99, cfu: -4, format: "boh", formatEvidence: "", url: "" }] });
+  assert.deepEqual([n.courses[0].year, n.courses[0].cfu, n.courses[0].format], [6, 0, "sconosciuto"]);
 });
