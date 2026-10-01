@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODEL, aiConfigured, buildModule, curriculum, degrees, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
+import { MODEL, aiConfigured, buildModule, curriculum, degrees, extendModule, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
+import { localDelta } from "../public/js/local-builder.js";
 import { IMPORT_HEADERS } from "../shared/prompts.js";
 import { normalizeModule } from "./schema.js";
 
@@ -100,6 +101,20 @@ function sameOriginOk(req) {
 }
 
 const str = (v, max = 500) => (typeof v === "string" ? v.slice(0, max) : "");
+
+/** Il modulo esistente come lo manda il browser (solo ciò che serve a dire al modello cosa c'è già). */
+function parseExisting(e = {}) {
+  const arr = (a, n) => (Array.isArray(a) ? a.slice(0, n) : []);
+  return {
+    topics: arr(e.topics, 80).map((t) => ({
+      id: str(t.id, 12), title: str(t.title, 300), importance: Number(t.importance) || 2, summary: str(t.summary, 3000),
+      keyConcepts: arr(t.keyConcepts, 30).map((k) => str(typeof k === "string" ? k : k?.term, 200)).filter(Boolean),
+    })).filter((t) => t.id && t.title),
+    flashcards: arr(e.flashcards, 3000).map((c) => ({ topicId: str(c.topicId, 12), front: str(c.front, 500) })),
+    questions: arr(e.questions, 1500).map((q) => ({ topicId: str(q.topicId, 12), prompt: str(q.prompt, 800) })),
+    gaps: arr(e.gaps, 60).map((g) => str(g, 600)).filter(Boolean),
+  };
+}
 
 function parseExam(e = {}) {
   const level = Math.min(5, Math.max(1, Number(e.level) || 2));
@@ -232,7 +247,7 @@ async function api(req, res, url) {
     return send(res, 202, { jobId: id });
   }
 
-  if (url.pathname === "/api/module") {
+  if (url.pathname === "/api/module" || url.pathname === "/api/module-extend") {
     const materials = (Array.isArray(body.materials) ? body.materials : []).slice(0, 40).map((m) => ({
       kind: ["pdf", "notes", "web"].includes(m.kind) ? m.kind : "notes",
       title: str(m.title, 200) || "Appunti",
@@ -249,7 +264,14 @@ async function api(req, res, url) {
       : null;
     if (!materials.some((m) => m.text || m.data) && !res0) return send(res, 400, { error: "Aggiungi almeno un materiale." });
     const input = { exam: parseExam(body.exam), materials, research: res0 };
-    const id = startJob("module", (p) => (MOCK ? mockRun(p, demoModule()) : buildModule(input, p)));
+    if (url.pathname === "/api/module") {
+      const id = startJob("module", (p) => (MOCK ? mockRun(p, demoModule()) : buildModule(input, p)));
+      return send(res, 202, { jobId: id });
+    }
+    input.existing = parseExisting(body.existing);
+    if (!input.existing.topics.length) return send(res, 400, { error: "Il modulo da aggiornare è vuoto: generalo prima." });
+    const notes = materials.map((m) => m.text).filter(Boolean).join("\n\n");
+    const id = startJob("module", (p) => (MOCK ? mockRun(p, { delta: localDelta(notes, "Appunti nuovi"), sources: [], mode: "local" }) : extendModule(input, p)));
     return send(res, 202, { jobId: id });
   }
 
@@ -282,7 +304,12 @@ async function api(req, res, url) {
 const VENDOR = { "/vendor/pdfjs/pdf.min.mjs": "pdf.min.mjs", "/vendor/pdfjs/pdf.worker.min.mjs": "pdf.worker.min.mjs" };
 const VENDOR_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "node_modules", "pdfjs-dist", "legacy", "build");
 
+// Codice condiviso server/browser (fuori da public/): solo i file elencati.
+const SHARED = { "/shared/normalize.js": "normalize.js" };
+const SHARED_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "shared");
+
 async function serveStatic(req, res, url) {
+  if (SHARED[url.pathname]) return send(res, 200, await readFile(join(SHARED_DIR, SHARED[url.pathname])), { "Content-Type": MIME[".js"] });
   if (VENDOR[url.pathname]) {
     try {
       return send(res, 200, await readFile(join(VENDOR_DIR, VENDOR[url.pathname])), { "Content-Type": MIME[".js"], "Cache-Control": "public, max-age=86400" });

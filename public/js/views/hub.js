@@ -1,6 +1,6 @@
 import { go } from "../nav.js";
 import { daysLeft, ensurePlan, flashQueue, isDone, methodsFor, setDone, taskHref } from "../domain.js";
-import { fmtDate, fmtDay, today } from "../dates.js";
+import { daysBetween, fmtDate, fmtDay, today } from "../dates.js";
 import { METHODS, EXAM_TYPES } from "../methods.js";
 import { PHASES } from "../planner.js";
 import { fmtLesson } from "../timetable.js";
@@ -94,17 +94,21 @@ function todayTab(exam) {
 
 const ORIGIN = { notes: "dai tuoi appunti", online: "dal web", model: "conoscenza generale dell'AI (verifica)" };
 
+/** Aggiunto o approfondito con gli appunti nelle ultime due settimane. */
+const recent = (iso) => !!iso && daysBetween(today(new Date(iso)), today()) <= 14;
+
 function moduleTab(exam) {
   const mod = exam.module;
   if (!mod) return emptyState("Nessun modulo", "Crealo dalla scheda Materiali.", h("a", { class: "btn primary", href: `#/exam/${exam.id}/materials` }, "Vai ai materiali"));
   return h("div", { class: "stack" },
     h("div", { class: "card" }, h("h2", {}, mod.title || "Modulo di studio"), paras(mod.overview),
-      h("div", { class: "row" }, badge(`${mod.topics.length} argomenti`, "brand"), badge(`${mod.flashcards.length} flashcard`), badge(`${mod.questions.length} domande`), mod.local ? badge("modalità base", "warn") : null)),
+      h("div", { class: "row" }, badge(`${mod.topics.length} argomenti`, "brand"), badge(`${mod.flashcards.length} flashcard`), badge(`${mod.questions.length} domande`), mod.local ? badge("modalità base", "warn") : null),
+      exam.moduleUpdatedAt ? h("p", { class: "muted small", style: { margin: "8px 0 0" } }, `Aggiornato con appunti nuovi il ${fmtDate(today(new Date(exam.moduleUpdatedAt)))}.`) : null),
     mod.gaps?.length ? h("div", { class: "callout warn" }, h("b", {}, "Cose da verificare / lacune individuate"), h("ul", {}, mod.gaps.map((g) => h("li", {}, g)))) : null,
     h("div", { class: "stack", style: { gap: "10px" } }, mod.topics.map((t) =>
       h("a", { class: "topic card flat", href: `#/exam/${exam.id}/topic/${t.id}`, style: { textDecoration: "none", color: "inherit" } },
         h("div", { class: "row between" }, h("h3", { style: { margin: 0 } }, t.title),
-          h("div", { class: "row" }, badge(["", "marginale", "importante", "centrale"][t.importance], t.importance === 3 ? "bad" : t.importance === 2 ? "warn" : ""), exam.learned[t.id] ? badge("studiato", "good") : null)),
+          h("div", { class: "row" }, recent(t.addedAt) ? badge("nuovo", "brand") : recent(t.updatedAt) ? badge("approfondito", "brand") : null, badge(["", "marginale", "importante", "centrale"][t.importance], t.importance === 3 ? "bad" : t.importance === 2 ? "warn" : ""), exam.learned[t.id] ? badge("studiato", "good") : null)),
         h("p", { class: "muted small", style: { margin: "6px 0 0" } }, t.summary.slice(0, 180) + (t.summary.length > 180 ? "…" : ""))))),
     mod.sources?.length ? h("details", {}, h("summary", {}, `Fonti online (${mod.sources.length})`), h("ul", { class: "source-list" }, mod.sources.map((s) => h("li", {}, h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer" }, s.title || s.url))))) : null,
     h("p", { class: "muted small" }, "Il modulo è una bozza generata da te + AI: confrontalo con il programma e con il docente. Le fonti web e le conoscenze generali vanno verificate."),

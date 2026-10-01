@@ -26,9 +26,16 @@ const answer = (prompt) => {
     { name: "Teoria dei giochi", year: 3, cfu: 6, format: "sconosciuto", formatEvidence: "", kind: "a_scelta", group: "A scelta: area economica", url: "" },
     { name: "Statistica applicata", year: 3, cfu: 6, format: "sconosciuto", formatEvidence: "", kind: "a_scelta", group: "A scelta: area economica", url: "" } ] };
   if (prompt.includes("<risposta_studente>")) return { score: 0.75, verdict: "parziale", feedback: "Quasi: manca il punto sul riequilibrio.", covered: ["Individua l'eccesso di offerta"], missing: ["Indica la condizione di equilibrio"] };
+  if (prompt.includes("<modulo_esistente>")) return { gaps: ["Lacuna aggiornata dopo gli appunti nuovi (finta)."], topics: [
+    { id: "t1", title: demo.topics[0].title, importance: 3, difficulty: 2, summary: "Riassunto aggiornato con gli appunti nuovi (finto).", keyConcepts: [{ term: "Prezzo massimo", definition: "tetto imposto dallo Stato" }], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "estratto" },
+    { id: "n1", title: "Esternalità", importance: 3, difficulty: 2, summary: "Costi o benefici che ricadono su terzi.", keyConcepts: [{ term: "Esternalità", definition: "effetto su terzi" }], mustKnow: ["Definire un'esternalità"], commonMistakes: [], origin: "notes", excerpt: "estratto" } ] };
   if (prompt.includes("<argomento>")) {
     const t = JSON.parse(prompt.split("<argomento>")[1].split("</argomento>")[0]);
     const topic = demo.topics.find((x) => x.title === t.title);
+    if (!topic || prompt.includes("<carte_esistenti>")) return {
+      flashcards: [1, 2, 3].map((i) => ({ front: `${t.title}: domanda nuova ${i}?`, back: `Risposta ${i}`, type: "definizione" })),
+      questions: [{ kind: "open", prompt: `Spiega ${t.title} con un esempio.`, options: [], correctIndex: -1, modelAnswer: "…", explanation: "…", rubric: ["definizione", "esempio"] }],
+    };
     return {
       flashcards: demo.flashcards.filter((c) => c.topicId === topic.id).map(({ front, back, type }) => ({ front, back, type })),
       questions: demo.questions.filter((q) => q.topicId === topic.id).map(({ topicId, id, ...q }) => q),

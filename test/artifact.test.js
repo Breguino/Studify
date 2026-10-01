@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { explain, generateModule, generateNotes, gradeAnswer, parseCurriculum } from "../artifact/generate.js";
+import { explain, extendModule, generateModule, generateNotes, gradeAnswer, parseCurriculum } from "../artifact/generate.js";
 import { decodeState, encodeState, split } from "../artifact/backend.js";
 
 const demo = JSON.parse(readFileSync(new URL("../public/demo/module.json", import.meta.url), "utf8"));
@@ -134,4 +134,34 @@ test("pagina Claude: importazione da PDF — testo, scansione con immagini, limi
   assert.match(seen.p, /immagini allegate/);
   await assert.rejects(importRows({ kind: "esami", text: "", images: blobs, today: "2026-10-01" }, () => {}, mk({})), /scansione.*non può leggere immagini/);
   await assert.rejects(importRows({ kind: "esami", text: "x".repeat(210_000) }, () => {}, mk({})), /troppo lungo/);
+});
+
+test("pagina Claude: aggiornamento a due passi — argomenti nuovi/approfonditi, carte senza doppioni", async () => {
+  const calls = [];
+  const sample = async () => ({ text: "" });
+  sample.json = async (prompt) => {
+    calls.push(prompt);
+    if (prompt.includes("<argomento>")) {
+      const t = JSON.parse(prompt.split("<argomento>")[1].split("</argomento>")[0]);
+      return { flashcards: [{ front: `Carta su ${t.title}`, back: "r", type: "definizione" }], questions: [] };
+    }
+    return { gaps: ["lacuna aggiornata"], topics: [
+      { id: "t1", title: "titolo cambiato dal modello", summary: "aggiornato", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "e" },
+      { id: "x7", title: "Esternalità", summary: "s", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "e" },
+      { id: "x8", title: "" },
+    ] };
+  };
+  const existing = { topics: [{ id: "t1", title: "Domanda e offerta", summary: "s", keyConcepts: ["equilibrio"] }], flashcards: [{ topicId: "t1", front: "Che cos'è l'equilibrio?" }], questions: [], gaps: ["vecchia"] };
+  const r = await extendModule({ exam, materials: [{ kind: "notes", title: "L5", text: "appunti nuovi" }], research: null, existing }, () => {}, sample);
+  assert.match(calls[0], /<modulo_esistente>[\s\S]*Che cos'è l'equilibrio\?/);
+  assert.match(calls[0], /Materiali NUOVI[\s\S]*titolo="L5"/);
+  assert.equal(calls.length, 3, "un passo 1 + due argomenti (quello senza titolo scartato)");
+  const deepen = calls.find((c) => c.includes('"title":"Domanda e offerta"'));
+  assert.match(deepen, /<carte_esistenti>\n- Che cos'è l'equilibrio\?/);
+  assert.match(deepen, /2-5 flashcard/);
+  assert.match(calls.find((c) => c.includes('"title":"Esternalità"')), /6-9 flashcard/);
+  assert.deepEqual(r.delta.topics.map((t) => [t.id, t.title]), [["t1", "Domanda e offerta"], ["n1", "Esternalità"]]);
+  assert.deepEqual(r.delta.flashcards.map((c) => c.topicId), ["t1", "n1"]);
+  assert.deepEqual(r.delta.gaps, ["lacuna aggiornata"]);
+  await assert.rejects(extendModule({ exam, materials: [{ kind: "pdf", title: "p", data: "x" }], research: null, existing }, () => {}, sample), /PDF non sono supportati/);
 });

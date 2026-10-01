@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { CURRICULUM_RULES, EXAM_TYPE_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, where } from "../shared/prompts.js";
+import { CURRICULUM_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, moduleDigest, where } from "../shared/prompts.js";
 import { CurriculumSchema, DegreesSchema, GradeSchema, ImportRowsSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees, normalizeImportRows, normalizeModule } from "./schema.js";
 
 export const MODEL = process.env.STUDIFY_MODEL || "claude-opus-5-5";
@@ -246,7 +246,18 @@ ${SAFETY_RULES}
 
 ${MODULE_PRINCIPLES}`;
 
-function buildUserContent({ exam, materials, research: res }) {
+const fullTask = (exam, type) => `Produci il modulo di studio completo.
+- Argomenti: tra 5 e 15, in base all'ampiezza dei materiali.
+- Flashcard: circa 6-10 per argomento (mai meno di 4).
+- Domande: circa 3-6 per argomento; mix per questo tipo di prova: ${QUESTION_MIX[type]}.
+- Calibra difficoltà e spiegazioni sul livello ${exam.level}/5: più scaffolding e esempi se basso, più sfumature e casi limite se alto.`;
+
+const extendTask = (exam, type) => `${EXTEND_RULES}
+- Argomento nuovo: circa 6-10 flashcard e 3-6 domande. Argomento approfondito: 2-6 flashcard e 1-3 domande, solo sui contenuti nuovi.
+- Mix delle domande per questo tipo di prova: ${QUESTION_MIX[type]}.
+- Calibra difficoltà e spiegazioni sul livello ${exam.level}/5.`;
+
+function buildUserContent({ exam, materials, research: res, existing }, task = fullTask) {
   const content = [];
   for (const m of materials) {
     if (m.kind === "pdf" && m.data)
@@ -256,7 +267,7 @@ function buildUserContent({ exam, materials, research: res }) {
         source: { type: "base64", media_type: "application/pdf", data: m.data },
       });
   }
-  const parts = [];
+  const parts = existing ? [moduleDigest(existing), "Materiali NUOVI da integrare nel modulo (anche i PDF allegati sono nuovi):"] : [];
   for (const m of materials) {
     if (m.kind !== "pdf" && m.text) parts.push(`<appunti_studente titolo="${m.title.replace(/"/g, "'")}">\n${m.text}\n</appunti_studente>`);
   }
@@ -265,13 +276,7 @@ function buildUserContent({ exam, materials, research: res }) {
     parts.push(`<fonti_online>\n${res.sources.map((s) => `${s.id}: ${s.title} — ${s.url}`).join("\n")}\n</fonti_online>`);
   }
   const type = exam.type in EXAM_TYPE_LABEL ? exam.type : "misto";
-  parts.push(`${examContext(exam)}
-
-Produci il modulo di studio completo.
-- Argomenti: tra 5 e 15, in base all'ampiezza dei materiali.
-- Flashcard: circa 6-10 per argomento (mai meno di 4).
-- Domande: circa 3-6 per argomento; mix per questo tipo di prova: ${QUESTION_MIX[type]}.
-- Calibra difficoltà e spiegazioni sul livello ${exam.level}/5: più scaffolding e esempi se basso, più sfumature e casi limite se alto.`);
+  parts.push(`${examContext(exam)}\n\n${task(exam, type)}`);
   content.push({ type: "text", text: parts.join("\n\n") });
   return content;
 }
@@ -299,6 +304,31 @@ export async function buildModule(input, onProgress = () => {}) {
   const mod = normalizeModule(parsed, sources);
   if (mod.topics.length === 0) throw new Error("Il modulo generato non contiene argomenti: i materiali sono sufficienti?");
   return mod;
+}
+
+/**
+ * Aggiorna un modulo con materiali nuovi: il modello vede il modulo esistente (compatto) e restituisce, nello stesso
+ * formato, solo argomenti nuovi / approfonditi e le carte e domande nuove. La fusione (id stabili) la fa il browser.
+ * @returns {Promise<{delta: object, sources: object[]}>}
+ */
+export async function extendModule(input, onProgress = () => {}) {
+  const sources = input.research?.sources ?? [];
+  const stream = client().messages.stream({
+    model: MODEL,
+    max_tokens: 64000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "high", format: zodOutputFormat(ModuleSchema) },
+    system: MODULE_SYSTEM,
+    messages: [{ role: "user", content: buildUserContent(input, extendTask) }],
+  });
+  stream.on("text", (d) => onProgress(d.length));
+  const msg = await stream.finalMessage();
+  assertUsable(msg);
+  try {
+    return { delta: ModuleSchema.parse(JSON.parse(textOf(msg.content))), sources };
+  } catch {
+    throw new Error("L'AI ha restituito un aggiornamento in formato non valido. Riprova.");
+  }
 }
 
 /* -------------------------------------------------------------------------- */

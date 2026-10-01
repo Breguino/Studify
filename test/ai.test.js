@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { buildModule, curriculum, degrees, gradeAnswer, importRows, parseCurriculum, research, setClient } from "../server/ai.js";
+import { buildModule, curriculum, extendModule, degrees, gradeAnswer, importRows, parseCurriculum, research, setClient } from "../server/ai.js";
 import { CurriculumSchema, GradeSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees } from "../server/schema.js";
 
 const stream = (msg) => ({ on() {}, finalMessage: async () => msg });
@@ -199,4 +199,25 @@ test("importazione da documento: testo con layout o PDF come allegato, righe por
   setClient(fake([{ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ found: false, rows: [], notes: [] }) }] }], []));
   await assert.rejects(importRows({ kind: "esami", text: "ciao" }), /non ho trovato dati di questo tipo/);
   await assert.rejects(importRows({ kind: "boh", text: "x" }), /non valido/);
+});
+
+test("extendModule: il modello vede il modulo esistente e solo i materiali nuovi; risultato grezzo per la fusione", async () => {
+  const calls = [];
+  const delta = { ...rawModule, topics: [{ ...rawModule.topics[0], id: "n1", title: "Nuovo" }], flashcards: [{ id: "f", topicId: "t1", front: "nuova carta", back: "r", type: "definizione" }] };
+  setClient(fake([{ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(delta) }] }], calls));
+  const r = await extendModule({
+    exam: { name: "Fisica", type: "orale", level: 2, daysLeft: 40, language: "italiano" },
+    materials: [{ kind: "notes", title: "Lezione 5", text: "appunti nuovi" }],
+    research: null,
+    existing: { topics: [{ id: "t1", title: "Cinematica", summary: "moto", keyConcepts: ["velocità"] }], flashcards: [{ topicId: "t1", front: "Che cos'è la velocità?" }], questions: [], gaps: ["manca la dinamica"] },
+  });
+  const text = calls[0].messages[0].content.at(-1).text;
+  assert.match(text, /<modulo_esistente>[\s\S]*## t1 · Cinematica[\s\S]*Che cos'è la velocità\?[\s\S]*manca la dinamica/);
+  assert.match(text, /Materiali NUOVI[\s\S]*<appunti_studente titolo="Lezione 5">/);
+  assert.match(text, /SOLO ciò che manca/);
+  assert.equal(calls[0].output_config.format.type, "json_schema");
+  assert.equal(r.delta.topics[0].id, "n1", "id del modello lasciati com'erano: li rinumera la fusione");
+  assert.equal(r.delta.flashcards[0].topicId, "t1");
+  setClient(fake([{ stop_reason: "refusal", content: [] }], []));
+  await assert.rejects(extendModule({ exam: { name: "x", type: "scritto", level: 3, daysLeft: 5 }, materials: [{ kind: "notes", title: "a", text: "b" }], research: null, existing: { topics: [], flashcards: [], questions: [] } }), /rifiutato/);
 });

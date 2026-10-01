@@ -99,3 +99,48 @@ altrimenti riportala com'è scritta. Oggi è ${today}.
 In "notes" scrivi in italiano le cose importanti che lo studente deve sapere (periodo di validità dell'orario, curricula multipli, parti
 illeggibili, ambiguità). found = false se il documento non contiene dati di questo tipo.
 ${SAFETY_RULES}`;
+
+/* ------------------------- aggiornamento con appunti nuovi ------------------------- */
+
+const clip = (s, n) => (String(s ?? "").length > n ? `${String(s).slice(0, n - 1)}…` : String(s ?? ""));
+
+/**
+ * Il modulo esistente in forma compatta, per dire al modello cosa c'è già (argomenti con riassunto e concetti,
+ * fronti delle carte, testi delle domande). Accetta il modulo intero o il sottoinsieme che il browser manda al server.
+ * Oltre `maxChars` si tolgono prima le domande, poi le carte oltre le prime 12 per argomento.
+ */
+export function moduleDigest(mod, maxChars = 60_000) {
+  const build = ({ questions = true, cardsPerTopic = Infinity } = {}) => {
+    const out = [];
+    for (const t of mod.topics ?? []) {
+      out.push(`## ${t.id} · ${clip(t.title, 160)} (importanza ${t.importance ?? 2})`);
+      if (t.summary) out.push(`Riassunto: ${clip(t.summary, 900)}`);
+      const terms = (t.keyConcepts ?? []).map((k) => (typeof k === "string" ? k : k.term)).filter(Boolean);
+      if (terms.length) out.push(`Concetti: ${terms.map((x) => clip(x, 80)).join("; ")}`);
+      const cards = (mod.flashcards ?? []).filter((c) => c.topicId === t.id);
+      if (cards.length) out.push(`Carte già presenti:\n${cards.slice(0, cardsPerTopic).map((c) => `- ${clip(c.front, 140)}`).join("\n")}${cards.length > cardsPerTopic ? `\n- … e altre ${cards.length - cardsPerTopic}` : ""}`);
+      const qs = questions ? (mod.questions ?? []).filter((q) => q.topicId === t.id) : [];
+      if (qs.length) out.push(`Domande già presenti:\n${qs.map((q) => `- ${clip(q.prompt, 160)}`).join("\n")}`);
+      out.push("");
+    }
+    if (mod.gaps?.length) out.push(`Lacune segnalate finora:\n${mod.gaps.map((g) => `- ${clip(g, 300)}`).join("\n")}`);
+    return `<modulo_esistente>\n${out.join("\n")}\n</modulo_esistente>`;
+  };
+  let d = build();
+  if (d.length > maxChars) d = build({ questions: false });
+  if (d.length > maxChars) d = build({ questions: false, cardsPerTopic: 12 });
+  return d.length > maxChars ? `${d.slice(0, maxChars - 30)}\n…\n</modulo_esistente>` : d;
+}
+
+/** Istruzioni per aggiornare un modulo con i materiali nuovi (stesso formato di output del modulo completo). */
+export const EXTEND_RULES = `Il modulo di studio esiste già (in <modulo_esistente>) e lo studente lo sta usando: flashcard e quiz hanno già
+uno storico di ripasso. Dai MATERIALI NUOVI ricava SOLO ciò che manca, senza riscrivere il resto:
+- un ARGOMENTO NUOVO per contenuti che il modulo non copre: id "n1", "n2"…;
+- un ARGOMENTO ESISTENTE approfondito dai materiali nuovi: riportalo con il SUO id (es. "t3") e lo stesso titolo; summary = riassunto
+  aggiornato e completo (integra quello attuale, non perderne il contenuto); keyConcepts, mustKnow e commonMistakes = SOLO le voci nuove;
+- non riportare gli argomenti che i materiali nuovi non toccano;
+- flashcard e domande SOLO sui contenuti nuovi, con topicId = id dell'argomento (esistente o nuovo); non ripetere carte o domande
+  già presenti, nemmeno con parole diverse;
+- gaps = l'elenco AGGIORNATO delle lacune dell'intero modulo: togli quelle che i materiali nuovi colmano, aggiungi le nuove;
+- title e overview: ripeti quelli del modulo (non vengono cambiati);
+- se i materiali nuovi non aggiungono nulla, restituisci topics, flashcards e questions vuoti.`;

@@ -3,8 +3,10 @@ import { core } from "../core.js";
 import { daysLeft } from "../domain.js";
 import { findExamFormat } from "../exam-type.js";
 import { EXAM_TYPES } from "../methods.js";
-import { buildLocalModule } from "../local-builder.js";
+import { buildLocalModule, localDelta } from "../local-builder.js";
+import { applyUpdate, compactModule, pendingMaterials, updateSummary } from "../module-update.js";
 import * as store from "../store.js";
+import { fmtDate, today } from "../dates.js";
 import { badge, confirmDialog, h, readFileAs, toast, uid } from "../ui.js";
 
 const MAX_PDF_TOTAL = 24 * 1024 * 1024;
@@ -13,6 +15,7 @@ const KIND = { notes: "Appunti", pdf: "PDF", web: "Ricerca online" };
 // Operazioni lunghe in corso, per esame: sopravvivono ai re-render della pagina.
 const jobs = new Map();
 
+const now = () => new Date().toISOString();
 const kb = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 function jobLine(exam, kind, label) {
@@ -30,7 +33,7 @@ async function run(exam, kind, fn) {
   try {
     await fn((chars, label) => {
       const j = jobs.get(exam.id);
-      if (j?.el) j.el.textContent = label ?? `${kind === "research" ? "Ricerca in corso" : "Generazione in corso"}… ~${Math.round(chars / 1000)}k caratteri prodotti`;
+      if (j?.el) j.el.textContent = label ?? `${{ research: "Ricerca in corso", update: "Aggiornamento in corso" }[kind] ?? "Generazione in corso"}… ~${Math.round(chars / 1000)}k caratteri prodotti`;
     });
   } catch (e) {
     toast(e.message, "error");
@@ -50,7 +53,7 @@ async function addFiles(exam, files) {
       try {
         const text = await core.pdfText(file);
         if (text.trim().length < 80) toast(`«${file.name}»: PDF senza testo selezionabile (scansione): incolla il testo a mano.`, "error");
-        else exam.materials.push({ id: uid(), kind: "notes", title: `${name} (da PDF)`, text, size: text.length });
+        else exam.materials.push({ id: uid(), kind: "notes", title: `${name} (da PDF)`, text, size: text.length, addedAt: now() });
       } catch (e) {
         toast(`«${file.name}»: ${e.message}`, "error");
       }
@@ -62,11 +65,11 @@ async function addFiles(exam, files) {
       const dataUrl = await readFileAs(file, "dataurl");
       const fileId = uid();
       await store.putFile(fileId, dataUrl.slice(dataUrl.indexOf(",") + 1));
-      exam.materials.push({ id: uid(), kind: "pdf", title: name, fileId, size: file.size });
+      exam.materials.push({ id: uid(), kind: "pdf", title: name, fileId, size: file.size, addedAt: now() });
       pdfTotal += file.size;
     } else if (/\.(txt|md|markdown)$/i.test(file.name) || file.type.startsWith("text/")) {
       const text = await readFileAs(file, "text");
-      exam.materials.push({ id: uid(), kind: "notes", title: name, text, size: text.length });
+      exam.materials.push({ id: uid(), kind: "notes", title: name, text, size: text.length, addedAt: now() });
     } else toast(`«${file.name}»: formato non supportato (usa .txt, .md o .pdf).`, "error");
   }
   store.save();
@@ -80,28 +83,52 @@ async function removeMaterial(exam, m) {
   core.rerender();
 }
 
+const hasProgress = (exam) => exam.module && (Object.keys(exam.srs).length || Object.keys(exam.qstats).length || Object.keys(exam.learned).length);
+const examInfo = (exam) => ({ name: exam.name, type: exam.type, level: exam.level, daysLeft: daysLeft(exam), language: exam.language, university: exam.university, degree: exam.degree, cfu: exam.cfu });
+
+/** Materiali nel formato delle API (i PDF letti dall'archivio, la ricerca online a parte). */
+async function payload(list) {
+  const materials = [];
+  let research = null;
+  for (const m of list) {
+    if (m.kind === "web") research = { notes: m.text, sources: m.sources, generated: !!m.generated };
+    else if (m.kind === "pdf") materials.push({ kind: "pdf", title: m.title, data: await store.getFile(m.fileId) });
+    else materials.push({ kind: "notes", title: m.title, text: m.text });
+  }
+  return { materials, research };
+}
+
 async function generate(exam) {
-  const hasProgress = exam.module && (Object.keys(exam.srs).length || Object.keys(exam.qstats).length || Object.keys(exam.learned).length);
-  if (hasProgress && !(await confirmDialog("Rigenerare il modulo azzera flashcard, quiz e argomenti già svolti per questo esame. Continuare?", { ok: "Rigenera", danger: true }))) return;
+  if (hasProgress(exam) && !(await confirmDialog("Rigenerare il modulo azzera flashcard, quiz e argomenti già svolti per questo esame. Se hai solo aggiunto appunti nuovi, usa «Aggiungi al modulo». Continuare?", { ok: "Rigenera tutto", danger: true }))) return;
   await run(exam, "module", async (onProgress) => {
-    const materials = [];
-    let research = null;
-    for (const m of exam.materials) {
-      if (m.kind === "web") research = { notes: m.text, sources: m.sources };
-      else if (m.kind === "pdf") materials.push({ kind: "pdf", title: m.title, data: await store.getFile(m.fileId) });
-      else materials.push({ kind: "notes", title: m.title, text: m.text });
-    }
-    const mod = await api.runJob("/api/module", {
-      exam: { name: exam.name, type: exam.type, level: exam.level, daysLeft: daysLeft(exam), language: exam.language, university: exam.university, degree: exam.degree, cfu: exam.cfu },
-      materials, research,
-    }, onProgress);
+    const mod = await api.runJob("/api/module", { exam: examInfo(exam), ...(await payload(exam.materials)) }, onProgress);
     resetProgress(exam, mod);
     toast("Modulo pronto!", "ok");
   });
 }
 
 function resetProgress(exam, mod) {
-  Object.assign(exam, { module: mod, moduleBuiltAt: new Date().toISOString(), srs: {}, qstats: {}, learned: {}, done: {}, plan: null });
+  mod.materialIds = exam.materials.map((m) => m.id);
+  Object.assign(exam, { module: mod, moduleBuiltAt: now(), moduleUpdatedAt: null, srs: {}, qstats: {}, learned: {}, done: {}, plan: null });
+}
+
+/** Aggiunge al modulo i materiali nuovi: argomenti nuovi o approfonditi, carte e domande nuove; i progressi restano. */
+async function update(exam) {
+  const pending = pendingMaterials(exam);
+  if (!pending.length) return;
+  await run(exam, "update", async (onProgress) => {
+    const res = await api.runJob("/api/module-extend", { exam: examInfo(exam), ...(await payload(pending)), existing: compactModule(exam.module) }, onProgress);
+    toast(updateSummary(applyUpdate(exam, res, pending.map((m) => m.id))), "ok");
+  });
+}
+
+function updateLocal(exam) {
+  const pending = pendingMaterials(exam);
+  const text = pending.filter((m) => m.kind === "notes").map((m) => m.text).join("\n\n");
+  if (!text.trim()) return toast("La modalità base usa solo appunti testuali (non PDF).", "error");
+  toast(updateSummary(applyUpdate(exam, { delta: localDelta(text, "Appunti nuovi"), mode: "local" }, pending.map((m) => m.id))), "ok");
+  store.save();
+  core.rerender();
 }
 
 function generateLocal(exam) {
@@ -126,7 +153,7 @@ export function materialsTab(exam) {
   const paste = h("form", { class: "stack", onsubmit: (e) => {
     e.preventDefault();
     if (!text.value.trim()) return toast("Incolla del testo.", "error");
-    exam.materials.push({ id: uid(), kind: "notes", title: title.value.trim() || `Appunti ${exam.materials.length + 1}`, text: text.value, size: text.value.length });
+    exam.materials.push({ id: uid(), kind: "notes", title: title.value.trim() || `Appunti ${exam.materials.length + 1}`, text: text.value, size: text.value.length, addedAt: now() });
     store.save();
     core.rerender();
   } }, h("h3", {}, "Incolla appunti"), title, text, h("div", {}, h("button", { class: "btn", type: "submit" }, "Aggiungi")));
@@ -154,7 +181,7 @@ export function materialsTab(exam) {
       return run(exam, "research", async (p) => {
         const r = await api.runJob("/api/research", { examName: exam.name, university: exam.university, degree: exam.degree, focus: focus.value, language: exam.language }, p);
         exam.materials = exam.materials.filter((m) => m.kind !== "web");
-        exam.materials.push({ id: uid(), kind: "web", title: webOk ? "Ricerca online" : "Traccia AI (non verificata)", text: r.notes, sources: r.sources, size: r.notes.length, generated: !webOk });
+        exam.materials.push({ id: uid(), kind: "web", title: webOk ? "Ricerca online" : "Traccia AI (non verificata)", text: r.notes, sources: r.sources, size: r.notes.length, generated: !webOk, addedAt: now() });
         toast(webOk ? `Trovate ${r.sources.length} fonti.` : "Traccia pronta: leggila prima di usarla.", "ok");
       });
     } }, hasWeb ? (webOk ? "Ripeti la ricerca" : "Rigenera la traccia") : (webOk ? "Cerca online" : "Genera la traccia")), !ai ? h("span", { class: "muted small" }, " Richiede l'AI (ANTHROPIC_API_KEY).") : null));
@@ -169,27 +196,53 @@ export function materialsTab(exam) {
     : null;
 
   /* --- elenco materiali --- */
+  const pending = pendingMaterials(exam);
+  const isPending = new Set(pending.map((m) => m.id));
   const list = hasContent
     ? h("div", { class: "stack", style: { gap: "8px" } }, exam.materials.map((m) =>
         h("div", { class: "card flat" },
-          h("div", { class: "row between" }, h("div", {}, h("b", {}, m.title), " ", badge(KIND[m.kind], m.kind === "web" ? "brand" : ""), " ", h("span", { class: "muted small" }, kb(m.size))),
+          h("div", { class: "row between" }, h("div", {}, h("b", {}, m.title), " ", badge(KIND[m.kind], m.kind === "web" ? "brand" : ""), " ", isPending.has(m.id) ? badge("non ancora nel modulo", "warn") : null, " ", h("span", { class: "muted small" }, kb(m.size))),
             h("button", { class: "btn small danger", onclick: () => removeMaterial(exam, m), "aria-label": `Rimuovi ${m.title}` }, "Rimuovi")),
           m.kind === "web" ? h("details", {}, h("summary", { class: "small" }, m.generated ? "Anteprima (bozza dalla conoscenza di Claude, senza fonti)" : `Anteprima e ${m.sources.length} fonti`),
             h("pre", { style: { whiteSpace: "pre-wrap", maxHeight: "260px", overflow: "auto", font: "inherit", fontSize: ".9rem" } }, m.text),
             h("ul", { class: "source-list" }, m.sources.map((s) => h("li", {}, h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer" }, s.title || s.url))))) : null)))
     : h("p", { class: "muted" }, "Nessun materiale ancora. Aggiungi appunti, file o fai partire una ricerca online.");
 
-  /* --- generazione --- */
-  const gen = h("div", { class: "card stack" },
-    h("h3", {}, exam.module ? "Rigenera il modulo" : "Genera il modulo di studio"),
-    h("p", { class: "muted small", style: { margin: 0 } }, ai
-      ? "L'AI legge tutti i materiali e produce argomenti, flashcard, domande e l'elenco delle lacune. Il tuo materiale ha la priorità sulle fonti web."
-      : "AI non disponibile: la modalità base ricava argomenti e flashcard dalle definizioni presenti nei tuoi appunti testuali (niente quiz)."),
-    jobLine(exam, "module", "Generazione in corso"),
-    h("div", { class: "row" },
-      ai ? h("button", { class: "btn primary", disabled: !hasContent || busy, onclick: () => generate(exam) }, exam.module ? "Rigenera con l'AI" : "Genera con l'AI") : null,
-      !ai ? h("button", { class: "btn primary", disabled: !hasContent || busy, onclick: () => generateLocal(exam) }, "Crea modulo base") : null,
-      exam.module ? h("a", { class: "btn", href: `#/exam/${exam.id}/today` }, "Vai al piano") : null));
+  /* --- generazione / aggiornamento --- */
+  const toPlan = exam.module ? h("a", { class: "btn", href: `#/exam/${exam.id}/today` }, "Vai al piano") : null;
+  let gen;
+  if (!exam.module)
+    gen = h("div", { class: "card stack" },
+      h("h3", {}, "Genera il modulo di studio"),
+      h("p", { class: "muted small", style: { margin: 0 } }, ai
+        ? "L'AI legge tutti i materiali e produce argomenti, flashcard, domande e l'elenco delle lacune. Il tuo materiale ha la priorità sulle fonti web."
+        : "AI non disponibile: la modalità base ricava argomenti e flashcard dalle definizioni presenti nei tuoi appunti testuali (niente quiz)."),
+      h("p", { class: "muted small", style: { margin: 0 } }, "Non serve aspettare di avere tutto: puoi partire dagli appunti delle prime lezioni e aggiungere gli altri man mano."),
+      jobLine(exam, "module", "Generazione in corso"),
+      h("div", { class: "row" },
+        ai ? h("button", { class: "btn primary", disabled: !hasContent || busy, onclick: () => generate(exam) }, "Genera con l'AI") : null,
+        !ai ? h("button", { class: "btn primary", disabled: !hasContent || busy, onclick: () => generateLocal(exam) }, "Crea modulo base") : null));
+  else {
+    const regen = ai
+      ? h("button", { class: "btn ghost", disabled: !hasContent || busy, onclick: () => generate(exam) }, "Rigenera tutto")
+      : h("button", { class: "btn ghost", disabled: !hasContent || busy, onclick: async () => { if (!hasProgress(exam) || (await confirmDialog("Rigenerare il modulo azzera flashcard, quiz e argomenti già svolti. Continuare?", { ok: "Rigenera tutto", danger: true }))) generateLocal(exam); } }, "Rigenera tutto");
+    gen = pending.length
+      ? h("div", { class: "card stack" },
+          h("h3", {}, pending.length === 1 ? "Aggiungi il materiale nuovo al modulo" : `Aggiungi i ${pending.length} materiali nuovi al modulo`),
+          h("p", { class: "muted small", style: { margin: 0 } }, `${pending.map((m) => `«${m.title}»`).join(", ")}: `,
+            ai ? "l'AI li confronta con il modulo e aggiunge argomenti nuovi, approfondisce quelli che hai già e crea carte e domande solo sui contenuti nuovi."
+              : "la modalità base aggiunge argomenti e flashcard ricavati dalle definizioni.",
+            h("b", {}, " Flashcard, quiz e argomenti già studiati restano come sono.")),
+          jobLine(exam, "update", "Aggiornamento in corso"), jobLine(exam, "module", "Generazione in corso"),
+          h("div", { class: "row" },
+            h("button", { class: "btn primary", disabled: busy, onclick: () => (ai ? update(exam) : updateLocal(exam)) }, "Aggiungi al modulo"),
+            regen, toPlan))
+      : h("div", { class: "card stack" },
+          h("h3", {}, "Il modulo comprende tutti i materiali"),
+          h("p", { class: "muted small", style: { margin: 0 } }, `${exam.moduleUpdatedAt ? `Ultimo aggiornamento: ${fmtDate(today(new Date(exam.moduleUpdatedAt)))}. ` : ""}Dopo la prossima lezione aggiungi qui gli appunti e poi «Aggiungi al modulo»: ripassare ogni settimana quello che hai appena studiato funziona meglio che concentrare tutto prima dell'esame.`),
+          jobLine(exam, "module", "Generazione in corso"),
+          h("div", { class: "row" }, toPlan, regen));
+  }
 
   return h("div", { class: "stack" },
     h("div", { class: "grid" }, h("div", { class: "card stack" }, paste, drop), researchBox),

@@ -96,3 +96,13 @@ export function buildLocalModule(notes, title = "Appunti") {
     local: true,
   };
 }
+
+/**
+ * Modalità base per l'aggiornamento: argomenti e carte dei soli appunti nuovi, nel formato che `mergeModule` si aspetta
+ * (id provvisori n1, n2…; un titolo uguale a un argomento esistente lo approfondisce invece di duplicarlo).
+ */
+export function localDelta(notes, title = "Appunti") {
+  const m = buildLocalModule(notes, title);
+  const id = (t) => t.replace(/^t/, "n");
+  return { topics: m.topics.map((t) => ({ ...t, id: id(t.id) })), flashcards: m.flashcards.map((c) => ({ ...c, topicId: id(c.topicId) })), questions: [] };
+}

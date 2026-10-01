@@ -77,6 +77,11 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
    che puoi leggere ed eliminare prima di usarla).
 3. **Genera il modulo**: l'AI produce argomenti (con importanza/difficoltà), flashcard atomiche, domande
    (scelta multipla, aperte, esercizi con rubrica) e un elenco di **lacune** nei materiali.
+   **Durante il semestre non serve aspettare di avere tutto:** dopo ogni lezione aggiungi gli appunti e premi «Aggiungi al
+   modulo». L'AI vede il modulo esistente (argomenti, riassunti, carte e domande già presenti) e restituisce solo le novità:
+   argomenti nuovi, argomenti esistenti approfonditi (riassunto aggiornato, concetti in più) e carte/domande sui contenuti nuovi,
+   senza doppioni. Gli id esistenti non cambiano, quindi ripasso dilazionato, statistiche dei quiz e argomenti studiati restano;
+   le lacune vengono aggiornate. «Rigenera tutto» resta disponibile ma azzera i progressi (e lo dice prima).
 4. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
 
 | Sessione | Cosa fa |

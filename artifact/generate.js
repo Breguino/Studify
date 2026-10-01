@@ -1,7 +1,7 @@
 // Generazione con Claude dentro la pagina pubblicata (capability `sample`): nessuna chiave API,
 // usa l'account Claude di chi apre la pagina. Limiti: nessuna navigazione web, nessun PDF,
 // prompt ≤ 256 KiB e risposte brevi → il modulo si costruisce a passi (schema → carte/domande per argomento).
-import { CURRICULUM_RULES, EXAM_TYPE_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext } from "../shared/prompts.js";
+import { CURRICULUM_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, moduleDigest } from "../shared/prompts.js";
 import { normalizeCurriculum, normalizeImportRows, normalizeModule } from "../shared/normalize.js";
 
 const MAX_MATERIAL_CHARS = 200_000;
@@ -132,6 +132,80 @@ export async function generateModule({ exam, materials, research }, onProgress =
   const mod = normalizeModule(raw, []);
   if (!mod.topics.length || (mod.flashcards.length === 0 && mod.questions.length === 0)) throw new Error("Non sono riuscito a generare carte e domande. Riprova con meno materiale.");
   return mod;
+}
+
+const EXTEND_OUTLINE_SHAPE = `Rispondi SOLO con un oggetto JSON (nessun testo prima o dopo) con questa forma:
+{"gaps": [string] (elenco AGGIORNATO delle lacune dell'intero modulo),
+ "topics": [{"id": string (l'id esistente, es. "t3", se lo approfondisci; "n1", "n2"… se è nuovo), "title": string,
+   "importance": 1|2|3, "difficulty": 1|2|3, "summary": string, "keyConcepts": [{"term": string, "definition": string}] (solo voci nuove),
+   "mustKnow": [string] (solo voci nuove), "commonMistakes": [string] (solo voci nuove), "origin": "notes"|"model",
+   "excerpt": string (passaggio COPIATO alla lettera dai MATERIALI NUOVI su cui si basa, max 1000 caratteri)}]}
+Al massimo 8 argomenti in tutto (nuovi + approfonditi). Carte e domande verranno chieste dopo, argomento per argomento.`;
+
+/**
+ * Aggiorna un modulo con i materiali nuovi, a passi come `generateModule`: (1) argomenti nuovi o da approfondire,
+ * (2) carte e domande per ciascuno, con l'elenco di quelle già presenti per non ripeterle.
+ * @returns {Promise<{delta: object, sources: object[]}>} da fondere con `mergeModule`
+ */
+export async function extendModule({ exam, materials, research, existing }, onProgress = () => {}, sampleFn) {
+  const sample = sampleFn ?? (await getSample());
+  if (!sample) throw new Error("Claude non è disponibile in questa pagina.");
+  const type = exam.type in EXAM_TYPE_LABEL ? exam.type : "misto";
+  const body = materialBlock({ materials, research });
+  if (!body.trim()) throw new Error(materials.some((m) => m.kind === "pdf") ? "I PDF non sono supportati in questa versione: incolla il testo degli appunti." : "Non ci sono appunti testuali nuovi da aggiungere.");
+  const digest = moduleDigest(existing, 50_000);
+  if (body.length + digest.length > MAX_MATERIAL_CHARS) throw new Error(`Appunti nuovi troppo estesi per un solo aggiornamento (${Math.round(body.length / 1000)}k caratteri): aggiungili un po' alla volta.`);
+
+  const step1 = "Passo 1: confronto gli appunti nuovi con il modulo…";
+  onProgress(0, step1);
+  let outline;
+  try {
+    outline = await sample.json(`${RULES}\n\n${digest}\n\nMateriali NUOVI da integrare nel modulo:\n${body}\n\n${examContext(exam)}\n\n${EXTEND_RULES}\n\n${EXTEND_OUTLINE_SHAPE}`, {
+      modelTier: "default",
+      onText: ({ text }) => onProgress(text.length, step1),
+    });
+  } catch (e) {
+    throw explain(e);
+  }
+  const known = new Map((existing.topics ?? []).map((t) => [t.id, t]));
+  const topics = (Array.isArray(outline?.topics) ? outline.topics : [])
+    .filter((t) => t && (known.has(t.id) || (typeof t.title === "string" && t.title.trim())))
+    .slice(0, 8);
+  let n = 0;
+  for (const t of topics) {
+    if (known.has(t.id)) t.title = known.get(t.id).title;
+    else t.id = `n${++n}`;
+  }
+
+  let done = 0;
+  const failed = [];
+  const perTopic = await pool(topics, CONCURRENCY, async (t) => {
+    const old = known.has(t.id);
+    const have = old ? (existing.flashcards ?? []).filter((c) => c.topicId === t.id).map((c) => `- ${c.front}`).join("\n") : "";
+    const prompt = `${RULES}\n\n${examContext(exam)}\n\n<argomento>\n${JSON.stringify({ title: t.title, summary: t.summary, keyConcepts: t.keyConcepts, mustKnow: t.mustKnow, excerpt: t.excerpt ?? "" })}\n</argomento>\n${old ? `<carte_esistenti>\n${have}\n</carte_esistenti>\n` : ""}\nCompito: crea flashcard e domande SOLO ${old ? "sui contenuti NUOVI dell'estratto, senza ripetere le carte esistenti (nemmeno con parole diverse)" : "su questo argomento"}, fedeli all'estratto e al riassunto (non aggiungere fatti che non vi compaiono).\n${TOPIC_SHAPE(type, old ? { cards: "2-5 flashcard", questions: "1-3 domande" } : { cards: "6-9 flashcard", questions: "3-5 domande" })}`;
+    try {
+      const r = await sample.json(prompt, { modelTier: "default" });
+      return { flashcards: Array.isArray(r?.flashcards) ? r.flashcards : [], questions: Array.isArray(r?.questions) ? r.questions : [] };
+    } catch (e) {
+      if (e?.code === "not_granted" || e?.code === "sampling_disabled" || e?.code === "rate_limited") throw explain(e);
+      failed.push(t.title);
+      return { flashcards: [], questions: [] };
+    } finally {
+      done++;
+      onProgress(0, `Passo 2: carte e domande — ${done}/${topics.length} argomenti`);
+    }
+  });
+
+  const gaps = Array.isArray(outline?.gaps) ? outline.gaps : existing.gaps ?? [];
+  return {
+    delta: {
+      gaps: [...gaps, ...failed.map((f) => `Per «${f}» non sono riuscito a generare carte e domande: ripeti l'aggiornamento.`)],
+      topics: topics.map(({ excerpt, ...t }) => ({ ...t, sourceIds: [] })),
+      flashcards: perTopic.flatMap((r, i) => r.flashcards.map((c) => ({ ...c, topicId: topics[i].id }))),
+      questions: perTopic.flatMap((r, i) => r.questions.map((q) => ({ ...q, topicId: topics[i].id }))),
+    },
+    sources: [],
+  };
 }
 
 /** Senza ricerca web: una traccia di studio scritta da Claude dal programma indicato. Bozza non verificata. */
