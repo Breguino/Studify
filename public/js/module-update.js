@@ -90,3 +90,50 @@ export function sliceText(text, range) {
   if (!r || !String(text).includes("\f")) return String(text ?? "");
   return String(text).split("\f").slice(r.from - 1, r.to).join("\n\n");
 }
+
+/** Sostituisce le pagine `from…` del testo diviso in pagine («\f») con quelle nuove (null = lascia com'era). */
+export function replacePages(text, from, pages, numPages) {
+  const arr = String(text ?? "").split("\f");
+  while (arr.length < (numPages ?? 0)) arr.push("");
+  pages.forEach((p, k) => { if (p != null) arr[from - 1 + k] = p; });
+  return arr.join("\f");
+}
+
+/** Unione di intervalli «1-4,7-9» + {from,to} → stringa ordinata e compattata. */
+export function addRange(list, from, to) {
+  const rs = String(list ?? "").split(",").map((x) => parseRange(x)).filter(Boolean);
+  rs.push({ from, to });
+  rs.sort((a, b) => a.from - b.from);
+  const out = [];
+  for (const r of rs) {
+    const last = out.at(-1);
+    if (last && r.from <= last.to + 1) last.to = Math.max(last.to, r.to);
+    else out.push({ ...r });
+  }
+  return out.map(fmt).join(",");
+}
+
+/** Pagine già trascritte con Claude dentro l'intervallo {from,to}. */
+export function rangesCover(list, from, to) {
+  const rs = String(list ?? "").split(",").map((x) => parseRange(x)).filter(Boolean);
+  for (let p = from; p <= to; p++) if (!rs.some((r) => p >= r.from && p <= r.to)) return false;
+  return true;
+}
+
+/**
+ * Pagine con probabili formule rovinate dall'estrazione del testo (frazioni spezzate su più righe, simboli isolati).
+ * Serve solo a suggerire la lettura con Claude.
+ */
+export function mathyPages(text) {
+  // una formula spezzata lascia righe fatte quasi solo di simboli isolati: «2  1  2», «s  =  ∑  ( xi - x )», «i = 1»
+  const brokenLine = (l) => {
+    const tok = l.split(/\s+/).filter(Boolean);
+    return l.length <= 2 || (tok.length >= 3 && tok.filter((t) => t.length === 1).length / tok.length >= 0.6);
+  };
+  return String(text ?? "").split("\f").filter((p) => {
+    const lines = p.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (lines.length < 3) return false;
+    const sym = (p.match(/[=∑∫√±≤≥≠≈∞∂∆Δσμβαλπθεχ∈∀∃⇒→∏ˆ¯−×·÷′\u0302\u0304\u0305]/g) ?? []).length;
+    return lines.filter(brokenLine).length >= 2 && sym >= 1;
+  }).length;
+}

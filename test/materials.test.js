@@ -71,3 +71,22 @@ test("tipo di materiale: dal nome del file e nel prompt", () => {
   assert.equal(materialText({ role: "esercizi", title: 'Temi "2024"', pages: "3-5", text: "Es. 1" }), `<esercizi titolo="Temi '2024'" pagine="3-5">\nEs. 1\n</esercizi>`);
   assert.equal(materialText({ title: "L1", text: "x" }), `<appunti_studente titolo="L1">\nx\n</appunti_studente>`);
 });
+
+test("equazioni di Word e PowerPoint (OMML) → LaTeX valido per KaTeX", async () => {
+  const katex = (await import("katex")).default;
+  const d = await officeText(fx("formule.docx"), "formule.docx");
+  const lines = d.text.split("\n");
+  assert.equal(lines[0], String.raw`L'elasticità è $\varepsilon =\left| \frac{\Delta Q/Q}{\Delta P/P}\right|$, in valore assoluto.`);
+  assert.ok(d.text.includes(String.raw`$$\bar{x}=\frac{1}{n}\sum_{i=1}^{n}{x}_{i}$$`), "media con barra e sommatoria");
+  const VAR = "$$" + String.raw`{s}^{2}=\frac{1}{n-1}\sum_{i=1}^{n}{\left({x}_{i}-\bar{x}\right)}^{2}$$`;
+  assert.ok(d.text.includes(VAR), "varianza campionaria");
+  assert.ok(d.text.includes(String.raw`Limite notevole: $\lim_{x\to 0}\frac{\sin x}{x}=1$`), "lim e sin come operatori");
+  assert.ok(d.text.includes(String.raw`\hat{{\beta}_{1}}=\sqrt{{a}^{2}+{b}^{2}}\le \int_{0}^{\infty}{e}^{-x}dx`), "accento, radice, integrale");
+  assert.ok(d.text.includes(String.raw`\begin{matrix}1 & 2 \\ 3 & 4 \end{matrix}`) && d.text.includes(String.raw`\left\{\begin{aligned}2x+y=5 \\ x-y=1 \end{aligned}\right.`), "matrice e sistema");
+  assert.ok(d.text.includes(String.raw`Media | $\mu =E\left[ X \right]$`), "formula in una tabella");
+  assert.ok(!d.text.includes("cancellato") && d.text.endsWith("Fine."), "testo cancellato (revisioni) escluso");
+  const p = await officeText(fx("formule.pptx"), "formule.pptx");
+  assert.equal(p.text, `Varianza campionaria\n\n${VAR}`, "equazione presa una volta (non l'immagine di riserva), niente numero di slide");
+  for (const t of [d.text, p.text])
+    for (const m of t.matchAll(/\$\$([\s\S]+?)\$\$|\$([^$]+)\$/g)) assert.doesNotThrow(() => katex.renderToString(m[1] ?? m[2], { throwOnError: true }), m[0]);
+});

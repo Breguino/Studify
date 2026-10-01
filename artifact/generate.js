@@ -1,8 +1,8 @@
 // Generazione con Claude dentro la pagina pubblicata (capability `sample`): nessuna chiave API,
 // usa l'account Claude di chi apre la pagina. Limiti: nessuna navigazione web, nessun PDF,
 // prompt ≤ 256 KiB e risposte brevi → il modulo si costruisce a passi (schema → carte/domande per argomento).
-import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXERCISES_TASK, EXTEND_RULES, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest } from "../shared/prompts.js";
-import { normalizeCurriculum, normalizeExamFormat, normalizeImportRows, normalizeModule } from "../shared/normalize.js";
+import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXERCISES_TASK, EXTEND_RULES, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, JSON_LATEX_RULE, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest } from "../shared/prompts.js";
+import { normalizeCurriculum, normalizeExamFormat, normalizeImportRows, normalizeModule, repairLatex } from "../shared/normalize.js";
 
 const MAX_MATERIAL_CHARS = 200_000;
 const CONCURRENCY = 2; // `sample` ne esegue un paio alla volta, le altre aspettano: oltre si rischia rate_limited
@@ -55,7 +55,7 @@ function materialBlock({ materials, research }) {
   return parts.join("\n\n");
 }
 
-const RULES = `${MODULE_INTRO}\n${SAFETY_RULES}\n\n${MODULE_PRINCIPLES}`;
+const RULES = `${MODULE_INTRO}\n${SAFETY_RULES}\n\n${MODULE_PRINCIPLES}\n${JSON_LATEX_RULE}`;
 
 const OUTLINE_SHAPE = `Rispondi SOLO con un oggetto JSON (nessun testo prima o dopo) con questa forma:
 {"title": string, "overview": string (3-5 frasi), "gaps": [string],
@@ -216,6 +216,54 @@ export async function extendModule({ exam, materials, research, existing }, onPr
   };
 }
 
+const PAGES_PER_CALL = 3; // poche pagine per richiesta: la trascrizione di una pagina fitta è lunga
+const MARK = /^=== PAGINA (\d+) ===\s*$/m;
+
+/**
+ * Trascrive pagine di PDF (immagini) in testo con formule LaTeX: è il modo per avere formule esatte nella pagina Claude,
+ * dove il testo estratto dal PDF le rovina. `images[k]` è la pagina `firstPage + k`.
+ * @returns {Promise<string[]>} testo di ciascuna pagina, nello stesso ordine
+ */
+export async function transcribePages({ images, firstPage, title = "" }, onProgress = () => {}, sampleFn) {
+  const sample = sampleFn ?? (await getSample());
+  if (!sample) throw new Error("Claude non è disponibile in questa pagina.");
+  const limits = await sample.limits?.().catch(() => null);
+  if (!limits?.images) throw new Error("Qui Claude non può leggere le immagini delle pagine: le formule restano quelle del testo del PDF.");
+  const per = Math.max(1, Math.min(PAGES_PER_CALL, limits.images.maxCount ?? PAGES_PER_CALL));
+  const groups = [];
+  for (let k = 0; k < images.length; k += per) groups.push({ start: k, imgs: images.slice(k, k + per) });
+  let done = 0;
+  const parts = await pool(groups, CONCURRENCY, async ({ start, imgs }) => {
+    const from = firstPage + start;
+    const to = from + imgs.length - 1;
+    const prompt = `Trascrivi fedelmente ${imgs.length === 1 ? `la pagina ${from}` : `le pagine da ${from} a ${to}`} di «${title}» (le immagini sono in ordine).
+${SAFETY_RULES}
+- Testo: parola per parola, senza riassumere, correggere o aggiungere. Titoli con «#», elenchi con «-».
+- Formule: tutte in LaTeX compatibile con KaTeX, $...$ nel testo e $$...$$ se sono su una riga a sé; stessi simboli e notazione della pagina
+  (pedici, apici, barre, cappelli, frazioni, sommatorie, matrici, sistemi con \begin{cases}). Mai formule in testo semplice.
+- Tabelle: una riga per riga della tabella, celle separate da « | ».
+- Figure e grafici: una riga «[Figura: …]» che dice cosa mostrano (assi, curve, valori leggibili).
+- Ignora intestazioni e piè di pagina ripetuti e i numeri di pagina.
+Prima di ogni pagina scrivi una riga «=== PAGINA n ===» con il suo numero (${from}${to > from ? `…${to}` : ""}). Nient'altro prima o dopo.`;
+    try {
+      const { text } = await sample(prompt, { images: imgs, modelTier: "default" });
+      const pages = {};
+      const chunks = String(text ?? "").split(MARK); // ["prima", n, testo, n, testo…]
+      for (let k = 1; k < chunks.length; k += 2) pages[Number(chunks[k])] = chunks[k + 1].trim();
+      if (!Object.keys(pages).length && imgs.length === 1 && String(text ?? "").trim()) pages[from] = String(text).trim();
+      return Array.from({ length: imgs.length }, (_, k) => pages[from + k] ?? null);
+    } catch (e) {
+      throw explain(e);
+    } finally {
+      done += imgs.length;
+      onProgress(0, `Leggo le pagine con Claude… ${done}/${images.length}`);
+    }
+  });
+  const out = parts.flat();
+  if (out.every((p) => p == null)) throw new Error("Claude non ha restituito la trascrizione delle pagine. Riprova con meno pagine.");
+  return out;
+}
+
 /** Senza ricerca web: una traccia di studio scritta da Claude dal programma indicato. Bozza non verificata. */
 export async function generateNotes({ examName, university, degree, focus, language = "italiano" }, onProgress = () => {}, sampleFn) {
   const sample = sampleFn ?? (await getSample());
@@ -263,6 +311,7 @@ export async function gradeAnswer({ question, reference, rubric = [], answer, la
   if (!sample) throw new Error("Claude non è disponibile in questa pagina.");
   const prompt = `${GRADE_RULES(language)}
 Rispondi SOLO con un oggetto JSON: {"score": number 0-1, "verdict": "corretta"|"parziale"|"errata", "feedback": string, "covered": [string], "missing": [string]}
+${JSON_LATEX_RULE}
 
 <domanda>${question}</domanda>
 <risposta_di_riferimento>${reference}</risposta_di_riferimento>
@@ -274,9 +323,9 @@ Rispondi SOLO con un oggetto JSON: {"score": number 0-1, "verdict": "corretta"|"
     return {
       score,
       verdict: ["corretta", "parziale", "errata"].includes(g?.verdict) ? g.verdict : score > 0.8 ? "corretta" : score > 0.4 ? "parziale" : "errata",
-      feedback: String(g?.feedback ?? ""),
-      covered: Array.isArray(g?.covered) ? g.covered.map(String) : [],
-      missing: Array.isArray(g?.missing) ? g.missing.map(String) : [],
+      feedback: repairLatex(String(g?.feedback ?? "")),
+      covered: Array.isArray(g?.covered) ? g.covered.map((x) => repairLatex(String(x))) : [],
+      missing: Array.isArray(g?.missing) ? g.missing.map((x) => repairLatex(String(x))) : [],
     };
   } catch (e) {
     throw explain(e);

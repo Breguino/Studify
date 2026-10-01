@@ -97,6 +97,15 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
      Con il server le pagine scelte vengono estratte nel browser (pdf-lib) e all'AI arriva solo quel PDF, figure e formule
      comprese; nella pagina Claude si usa il testo di quelle pagine (circa 60-80 pagine per volta; le formule possono uscire male).
      Allargando l'intervallo dopo (es. da 1-40 a 1-80) «Aggiungi al modulo» manda solo le pagine nuove.
+   - **Formule.** Nel modulo (argomenti, flashcard, quiz, svolgimenti, correzioni) le formule sono LaTeX disegnato con **KaTeX**
+     (`$…$` nel testo, `$$…$$` a sé); i prompt lo chiedono esplicitamente, con i comandi supportati. Un «\frac» scritto con un solo
+     backslash in una stringa JSON diventa un carattere di controllo (form feed) senza dare errore, come \beta, \theta, \nabla, \rho:
+     `repairLatex` lo ripara in tutto il testo generato. In ingresso: i **PDF** con il server arrivano a Claude come PDF (formule
+     comprese); nella **pagina Claude** il testo estratto le spezza su più righe, quindi «Leggi formule e figure con Claude» manda
+     le pagine scelte come immagini e Claude le trascrive in LaTeX (3 pagine per richiesta, al massimo 30 per volta; l'app segnala le
+     pagine che sembrano avere formule rovinate). Le **equazioni di Word e PowerPoint** (OMML) sono convertite in LaTeX: frazioni,
+     apici/pedici, radici, sommatorie e integrali, parentesi, funzioni e limiti, accenti, matrici, sistemi. L'«Anteprima del testo»
+     di ogni materiale mostra le formule disegnate, per controllarle prima di generare il modulo.
 3. **Genera il modulo**: l'AI produce argomenti (con importanza/difficoltà), flashcard atomiche, domande
    (scelta multipla, aperte, esercizi con rubrica) e un elenco di **lacune** nei materiali.
    **Durante il semestre non serve aspettare di avere tutto:** dopo ogni lezione aggiungi gli appunti e premi «Aggiungi al

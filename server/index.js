@@ -338,8 +338,22 @@ const VENDOR = {
 const SHARED = { "/shared/normalize.js": "normalize.js" };
 const SHARED_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "shared");
 
+// KaTeX (formule): modulo, CSS e font da node_modules/katex/dist.
+const KATEX_DIR = join(NODE_MODULES, "katex", "dist");
+const KATEX_TYPES = { ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".woff2": "font/woff2" };
+
 async function serveStatic(req, res, url) {
   if (SHARED[url.pathname]) return send(res, 200, await readFile(join(SHARED_DIR, SHARED[url.pathname])), { "Content-Type": MIME[".js"] });
+  if (url.pathname.startsWith("/vendor/katex/")) {
+    const file = normalize(join(KATEX_DIR, decodeURIComponent(url.pathname.slice("/vendor/katex/".length))));
+    const type = KATEX_TYPES[extname(file)];
+    if (!type || !file.startsWith(KATEX_DIR + sep)) return send(res, 404, "Non trovato");
+    try {
+      return send(res, 200, await readFile(file), { "Content-Type": type, "Cache-Control": "public, max-age=86400" });
+    } catch {
+      return send(res, 404, "KaTeX non installato (npm install)");
+    }
+  }
   if (VENDOR[url.pathname]) {
     try {
       return send(res, 200, await readFile(join(NODE_MODULES, VENDOR[url.pathname])), { "Content-Type": MIME[".js"], "Cache-Control": "public, max-age=86400" });

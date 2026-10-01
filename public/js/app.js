@@ -1,3 +1,4 @@
+import { loadMath } from "./math.js";
 import * as api from "./api.js";
 import { core } from "./core.js";
 import { backend } from "./backend.js";
@@ -77,9 +78,11 @@ store.setSaveErrorHandler(() => {
 });
 
 export async function boot() {
+  const math = loadMath(); // KaTeX in parallelo: se arriva dopo il primo disegno, le formule si ridisegnano
   await store.init();
   core.ai = await api.status();
   renderAiPill();
   if (!store.isPersistent()) toast(backend.noPersistMessage ?? "Salvataggio locale non disponibile (navigazione privata?): i dati andranno persi alla chiusura.", "error");
   render();
+  await math;
 }

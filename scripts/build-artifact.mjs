@@ -3,6 +3,7 @@
 // per provarla in un browser normale (non è un artefatto da pubblicare).
 import { build } from "esbuild";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,7 +14,7 @@ const harness = process.argv.includes("--harness");
 const swap = {
   name: "swap-platform-modules",
   setup(b) {
-    b.onResolve({ filter: /(^|\/)(api|backend|pdf-text|pdf-pages)\.js$/ }, (args) => {
+    b.onResolve({ filter: /(^|\/)(api|backend|pdf-text|pdf-pages|math-lib)\.js$/ }, (args) => {
       if (!args.importer.includes("/public/js/")) return null;
       return { path: join(ROOT, "artifact", args.path.split("/").pop()) };
     });
@@ -32,7 +33,12 @@ const out = await build({
   legalComments: "none",
 });
 const js = out.outputFiles[0].text.replace(/<\/script/gi, "<\\/script");
-const css = await readFile(join(ROOT, "public/styles.css"), "utf8");
+// CSS di KaTeX con i font WOFF2 incorporati (la pagina non può caricare font o fogli di stile esterni).
+const KATEX = join(ROOT, "node_modules/katex/dist");
+let katexCss = await readFile(join(KATEX, "katex.min.css"), "utf8");
+katexCss = katexCss.replace(/src:url\(fonts\/([^)]+)\.woff2\) format\("woff2"\)(?:,url\([^)]+\) format\("[^"]+"\))*/g, (_, f) => `src:url(data:font/woff2;base64,${readFileSync(join(KATEX, "fonts", `${f}.woff2`)).toString("base64")}) format("woff2")`);
+if (/url\(fonts\//.test(katexCss)) throw new Error("CSS di KaTeX: font non incorporati (formato cambiato?)");
+const css = `${await readFile(join(ROOT, "public/styles.css"), "utf8")}\n${katexCss}`;
 const tpl = await readFile(join(ROOT, "artifact/template.html"), "utf8");
 const body = tpl.replace("/*CSS*/", () => css).replace("/*JS*/", () => js);
 

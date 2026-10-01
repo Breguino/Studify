@@ -4,13 +4,14 @@ import { daysLeft } from "../domain.js";
 import { findExamFormat } from "../exam-type.js";
 import { EXAM_TYPES } from "../methods.js";
 import { buildLocalModule, localDelta } from "../local-builder.js";
-import { applyUpdate, compactModule, markSent, parseRange, pendingMaterials, sliceText, unsentPages, updateSummary } from "../module-update.js";
+import { addRange, applyUpdate, compactModule, markSent, mathyPages, parseRange, pendingMaterials, rangesCover, replacePages, sliceText, unsentPages, updateSummary } from "../module-update.js";
 import { officeText } from "../office-text.js";
 import { extractPdfPages } from "../pdf-pages.js";
 import { readPdf } from "../pdf-text.js";
 import { guessRole, roleOf, ROLES } from "../material-roles.js";
 import * as store from "../store.js";
 import { fmtDate, today } from "../dates.js";
+import { richParas } from "../math.js";
 import { badge, confirmDialog, h, readFileAs, toast, uid } from "../ui.js";
 
 const MAX_PDF_TOTAL = 300 * 1024 * 1024; // archiviati nel browser: anche libri interi, poi se ne scelgono le pagine
@@ -36,9 +37,9 @@ function jobLine(exam, kind, label) {
   return h("div", { class: "callout row" }, h("span", { class: "spinner" }), el, h("span", { class: "muted small" }, "può richiedere qualche minuto, puoi cambiare pagina"));
 }
 
-async function run(exam, kind, fn) {
+async function run(exam, kind, fn, meta = {}) {
   if (jobs.has(exam.id)) return toast("C'è già un'operazione in corso per questo esame.", "error");
-  jobs.set(exam.id, { kind, el: null, started: Date.now() });
+  jobs.set(exam.id, { kind, el: null, started: Date.now(), ...meta });
   core.rerender();
   try {
     await fn((chars, label) => {
@@ -63,8 +64,14 @@ async function addFiles(exam, files) {
       try {
         if (file.size > 8 * 1024 * 1024) toast(`Leggo «${file.name}»: per un libro può volerci qualche decina di secondi…`);
         const { text, pages } = await core.pdfText(file);
-        if (text.replace(/\f/g, "").trim().length < 80) toast(`«${file.name}»: PDF senza testo selezionabile (scansione): incolla il testo a mano.`, "error");
-        else exam.materials.push({ id: uid(), kind: "notes", role: guessRole(file.name, true), title: `${name} (da PDF)`, text, size: text.length, numPages: pages, addedAt: now() });
+        const pdfFileId = uid();
+        await store.putFile(pdfFileId, new Uint8Array(await file.arrayBuffer())); // solo per questa sessione: serve a «Leggi formule»
+        const scanned = text.replace(/\f/g, "").trim().length < 80;
+        if (scanned && !core.pdfPageImages) toast(`«${file.name}»: PDF senza testo selezionabile (scansione): incolla il testo a mano.`, "error");
+        else {
+          exam.materials.push({ id: uid(), kind: "notes", role: guessRole(file.name, true), title: `${name} (da PDF)`, text: scanned ? Array(pages).fill("").join("\f") : text, size: text.length, numPages: pages, fromPdf: true, pdfFileId, fileName: file.name, addedAt: now() });
+          if (scanned) toast(`«${file.name}» è una scansione: scegli le pagine e usa «Leggi formule e testo con Claude».`);
+        }
       } catch (e) {
         toast(`«${file.name}»: ${e.message}`, "error");
       }
@@ -105,6 +112,7 @@ async function addFiles(exam, files) {
 
 async function removeMaterial(exam, m) {
   if (m.fileId) await store.delFile(m.fileId);
+  if (m.pdfFileId) await store.delFile(m.pdfFileId);
   exam.materials = exam.materials.filter((x) => x.id !== m.id);
   store.save();
   core.rerender();
@@ -185,6 +193,68 @@ function generateLocal(exam) {
   store.save();
   toast(`Modulo base: ${mod.topics.length} argomenti, ${mod.flashcards.length} flashcard.`, "ok");
   core.rerender();
+}
+
+/** Anteprima del testo usato (pagine scelte), con le formule disegnate: per controllare che siano giuste. */
+function preview(m) {
+  const box = h("div", { class: "material-preview" });
+  return h("details", { ontoggle: (e) => {
+    if (!e.target.open || box.childNodes.length) return;
+    const pages = sliceText(m.text, m.pages);
+    const text = pages.length > 6000 ? `${pages.slice(0, 6000).replace(/\$[^$]*$/, "")}\n\n…` : pages;
+    box.replaceChildren(...richParas(text.replace(/\f/g, "\n\n").replace(/^#{1,4}\s+/gm, ""))); // titoli Markdown della trascrizione
+  } }, h("summary", { class: "small" }, "Anteprima del testo"), box);
+}
+
+const MAX_TRANSCRIBE = 30; // pagine per volta da far leggere a Claude come immagini
+
+/**
+ * Pagina Claude: le formule estratte come testo da un PDF escono storpiate. Qui le pagine scelte diventano immagini e Claude
+ * le trascrive con le formule in LaTeX. Il PDF resta in memoria solo per la sessione: dopo una ricarica va riselezionato.
+ */
+function formulaRow(exam, m) {
+  if (!core.pdfPageImages || !(m.fromPdf || m.title.endsWith("(da PDF)")) || !m.numPages) return null;
+  const r = parseRange(m.pages, m.numPages) ?? { from: 1, to: m.numPages };
+  const n = r.to - r.from + 1;
+  const job = jobs.get(exam.id);
+  if (job?.kind === "transcribe" && job.mid === m.id) return jobLine(exam, "transcribe", "Leggo le pagine con Claude");
+  if (rangesCover(m.mathPages, r.from, r.to)) return h("div", { class: "small" }, badge("formule lette con Claude", "good"), h("span", { class: "muted" }, ` pagine ${m.mathPages.replace(/,/g, ", ")}`));
+  const mathy = mathyPages(sliceText(m.text, m.pages));
+  const picker = h("input", { type: "file", accept: ".pdf,application/pdf", hidden: true, onchange: async (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const data = new Uint8Array(await f.arrayBuffer());
+    const pages = (await core.pdfText(f)).pages;
+    if (pages !== m.numPages) return toast(`Non sembra lo stesso PDF (${pages} pagine invece di ${m.numPages}).`, "error");
+    m.pdfFileId ??= uid();
+    await store.putFile(m.pdfFileId, data);
+    transcribe(exam, m, r, data);
+  } });
+  const go = async () => {
+    const data = m.pdfFileId ? await store.getFile(m.pdfFileId) : null;
+    if (!data) return picker.click(); // dopo una ricarica il PDF non c'è più: lo si riseleziona
+    transcribe(exam, m, r, data);
+  };
+  return h("div", { class: "stack", style: { gap: "4px" } },
+    h("div", { class: "row", style: { gap: "8px" } },
+      h("button", { class: "btn small", disabled: n > MAX_TRANSCRIBE || jobs.has(exam.id), onclick: go }, `Leggi formule e figure con Claude (${n === 1 ? `pagina ${r.from}` : `pagine ${r.from}–${r.to}`})`), picker),
+    h("span", { class: "small muted" }, n > MAX_TRANSCRIBE ? `Scegli al massimo ${MAX_TRANSCRIBE} pagine per volta.` : mathy
+      ? `${mathy} ${mathy === 1 ? "pagina sembra avere" : "pagine sembrano avere"} formule: dal testo del PDF escono storpiate. Claude legge le pagine come immagini e le trascrive esatte (circa ${Math.ceil(n / 3)} richieste).`
+      : "Consigliato se ci sono formule, tabelle o grafici: Claude legge le pagine come immagini."));
+}
+
+async function transcribe(exam, m, r, data) {
+  await run(exam, "transcribe", async (onProgress) => {
+    onProgress(0, "Preparo le immagini delle pagine…");
+    const { images } = await core.pdfPageImages(data, r.from, r.to);
+    const pages = await api.runJob("/api/transcribe", { images, firstPage: r.from, title: m.title.replace(/ \(da PDF\)$/, "") }, onProgress);
+    m.text = replacePages(m.text, r.from, pages, m.numPages);
+    m.size = m.text.length;
+    pages.forEach((p, k) => { if (p != null) m.mathPages = addRange(m.mathPages, r.from + k, r.from + k); });
+    const missing = pages.filter((p) => p == null).length;
+    const inModule = m.sentPages !== undefined;
+    toast(`Pagine lette con Claude${missing ? ` (${missing} non trascritte: riprova)` : ""}.${inModule ? " Queste pagine erano già nel modulo con le formule del testo del PDF: per rifare carte e domande usa «Rigenera tutto»." : ""}`, missing ? "error" : "ok");
+  }, { mid: m.id });
 }
 
 /** «Pagine 45–120 di 380»: per libri e slide si sceglie la parte da usare (vuoto = tutte). */
@@ -274,11 +344,13 @@ export function materialsTab(exam) {
               m.kind !== "web" ? h("div", { class: "row", style: { gap: "6px", marginTop: "4px" } }, h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Tipo",
                 h("select", { class: "role-select", "aria-label": `Tipo di ${m.title}`, onchange: (e) => { m.role = e.target.value; store.save(); rerenderSoon(); } },
                   Object.entries(ROLES).map(([k, t]) => h("option", { value: k, selected: roleOf(m) === k }, t)))),
-                m.numPages > 1 ? pagePicker(m) : null) : null),
+                m.numPages > 1 ? pagePicker(m) : null) : null,
+              m.kind === "notes" ? formulaRow(exam, m) : null),
             h("button", { class: "btn small danger", onclick: () => removeMaterial(exam, m), "aria-label": `Rimuovi ${m.title}` }, "Rimuovi")),
           m.kind === "web" ? h("details", {}, h("summary", { class: "small" }, m.generated ? "Anteprima (bozza dalla conoscenza di Claude, senza fonti)" : `Anteprima e ${m.sources.length} fonti`),
             h("pre", { style: { whiteSpace: "pre-wrap", maxHeight: "260px", overflow: "auto", font: "inherit", fontSize: ".9rem" } }, m.text),
-            h("ul", { class: "source-list" }, m.sources.map((s) => h("li", {}, h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer" }, s.title || s.url))))) : null)))
+            h("ul", { class: "source-list" }, m.sources.map((s) => h("li", {}, h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer" }, s.title || s.url))))) : null,
+          m.kind === "notes" ? preview(m) : null)))
     : h("p", { class: "muted" }, "Nessun materiale ancora. Aggiungi appunti, file o fai partire una ricerca online.");
 
   /* --- generazione / aggiornamento --- */

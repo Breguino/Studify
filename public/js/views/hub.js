@@ -5,8 +5,9 @@ import { METHODS, EXAM_TYPES } from "../methods.js";
 import { PHASES } from "../planner.js";
 import { fmtLesson } from "../timetable.js";
 import { studyStart, windowDays } from "../workload.js";
+import { clipRich, rich, richParas } from "../math.js";
 import * as store from "../store.js";
-import { badge, emptyState, h, paras } from "../ui.js";
+import { badge, emptyState, h } from "../ui.js";
 import { core } from "../core.js";
 import { materialsTab } from "./materials.js";
 import { methodsTab, progressTab } from "./insights.js";
@@ -109,15 +110,15 @@ function moduleTab(exam) {
   const mod = exam.module;
   if (!mod) return emptyState("Nessun modulo", "Crealo dalla scheda Materiali.", h("a", { class: "btn primary", href: `#/exam/${exam.id}/materials` }, "Vai ai materiali"));
   return h("div", { class: "stack" },
-    h("div", { class: "card" }, h("h2", {}, mod.title || "Modulo di studio"), paras(mod.overview),
+    h("div", { class: "card" }, h("h2", {}, mod.title || "Modulo di studio"), richParas(mod.overview),
       h("div", { class: "row" }, badge(`${mod.topics.length} argomenti`, "brand"), badge(`${mod.flashcards.length} flashcard`), badge(`${mod.questions.length} domande`), mod.local ? badge("modalità base", "warn") : null),
       exam.moduleUpdatedAt ? h("p", { class: "muted small", style: { margin: "8px 0 0" } }, `Aggiornato con appunti nuovi il ${fmtDate(today(new Date(exam.moduleUpdatedAt)))}.`) : null),
-    mod.gaps?.length ? h("div", { class: "callout warn" }, h("b", {}, "Cose da verificare / lacune individuate"), h("ul", {}, mod.gaps.map((g) => h("li", {}, g)))) : null,
+    mod.gaps?.length ? h("div", { class: "callout warn" }, h("b", {}, "Cose da verificare / lacune individuate"), h("ul", {}, mod.gaps.map((g) => h("li", {}, rich(g))))) : null,
     h("div", { class: "stack", style: { gap: "10px" } }, mod.topics.map((t) =>
       h("a", { class: "topic card flat", href: `#/exam/${exam.id}/topic/${t.id}`, style: { textDecoration: "none", color: "inherit" } },
-        h("div", { class: "row between" }, h("h3", { style: { margin: 0 } }, t.title),
+        h("div", { class: "row between" }, h("h3", { style: { margin: 0 } }, rich(t.title)),
           h("div", { class: "row" }, recent(t.addedAt) ? badge("nuovo", "brand") : recent(t.updatedAt) ? badge("approfondito", "brand") : null, badge(["", "marginale", "importante", "centrale"][t.importance], t.importance === 3 ? "bad" : t.importance === 2 ? "warn" : ""), exam.learned[t.id] ? badge("studiato", "good") : null)),
-        h("p", { class: "muted small", style: { margin: "6px 0 0" } }, t.summary.slice(0, 180) + (t.summary.length > 180 ? "…" : ""))))),
+        h("p", { class: "muted small", style: { margin: "6px 0 0" } }, rich(clipRich(t.summary, 180)))))),
     mod.sources?.length ? h("details", {}, h("summary", {}, `Fonti online (${mod.sources.length})`), h("ul", { class: "source-list" }, mod.sources.map((s) => h("li", {}, h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer" }, s.title || s.url))))) : null,
     h("p", { class: "muted small" }, "Il modulo è una bozza generata da te + AI: confrontalo con il programma e con il docente. Le fonti web e le conoscenze generali vanno verificate."),
   );
@@ -145,12 +146,12 @@ export function topicView(exam, tid, query) {
 
   return h("div", { class: "stack", style: { maxWidth: "760px" } },
     h("a", { class: "muted", href: `#/exam/${exam.id}/module` }, "← Modulo"),
-    h("div", { class: "row between" }, h("h1", {}, t.title), h("div", { class: "row" }, badge(`difficoltà ${t.difficulty}/3`), badge(["", "marginale", "importante", "centrale"][t.importance], t.importance === 3 ? "bad" : "warn"))),
+    h("div", { class: "row between" }, h("h1", {}, rich(t.title)), h("div", { class: "row" }, badge(`difficoltà ${t.difficulty}/3`), badge(["", "marginale", "importante", "centrale"][t.importance], t.importance === 3 ? "bad" : "warn"))),
     h("div", { class: "callout" }, h("b", {}, "Prima di leggere: "), "scrivi o pensa a 3 cose che già sai su questo argomento (anche sbagliate). Il tentativo di ricordare rende la lettura successiva più efficace."),
-    h("div", { class: "card" }, h("h3", {}, "In breve"), paras(t.summary)),
-    t.keyConcepts.length ? h("div", { class: "card" }, h("h3", {}, "Concetti chiave"), t.keyConcepts.map((k) => h("div", { class: "concept" }, h("b", {}, k.term), k.definition))) : null,
-    t.mustKnow.length ? h("div", { class: "card" }, h("h3", {}, "Da saper dire senza appunti"), h("ul", {}, t.mustKnow.map((m) => h("li", {}, m)))) : null,
-    t.commonMistakes.length ? h("div", { class: "callout warn" }, h("b", {}, "Errori frequenti"), h("ul", {}, t.commonMistakes.map((m) => h("li", {}, m)))) : null,
+    h("div", { class: "card" }, h("h3", {}, "In breve"), richParas(t.summary)),
+    t.keyConcepts.length ? h("div", { class: "card" }, h("h3", {}, "Concetti chiave"), t.keyConcepts.map((k) => h("div", { class: "concept" }, h("b", {}, rich(k.term)), rich(k.definition)))) : null,
+    t.mustKnow.length ? h("div", { class: "card" }, h("h3", {}, "Da saper dire senza appunti"), h("ul", {}, t.mustKnow.map((m) => h("li", {}, rich(m))))) : null,
+    t.commonMistakes.length ? h("div", { class: "callout warn" }, h("b", {}, "Errori frequenti"), h("ul", {}, t.commonMistakes.map((m) => h("li", {}, rich(m))))) : null,
     h("p", { class: "muted small" }, `Origine: ${ORIGIN[t.origin] ?? ORIGIN.notes}.`, srcs.length ? h("span", {}, " Fonti: ", srcs.map((s, i) => [i ? ", " : "", h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer" }, s.title || s.url)])) : null),
     h("div", { class: "row between" },
       h("div", { class: "row" }, complete, h("a", { class: "btn", href: `#/exam/${exam.id}/explain/${t.id}` }, "Spiega a parole tue")),

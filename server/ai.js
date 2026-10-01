@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXERCISES_TASK, EXTEND_RULES, MATERIAL_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, where } from "../shared/prompts.js";
-import { CurriculumSchema, DegreesSchema, ExamFormatSchema, GradeSchema, ImportRowsSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeImportRows, normalizeModule } from "./schema.js";
+import { CurriculumSchema, DegreesSchema, ExamFormatSchema, GradeSchema, ImportRowsSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeImportRows, normalizeModule, repairLatex } from "./schema.js";
 
 export const MODEL = process.env.STUDIFY_MODEL || "claude-opus-5-5";
 
@@ -418,5 +418,5 @@ export async function gradeAnswer({ question, reference, rubric = [], answer, la
   });
   assertUsable(msg);
   const g = GradeSchema.parse(JSON.parse(textOf(msg.content)));
-  return { ...g, score: Math.min(1, Math.max(0, g.score)) };
+  return { ...g, score: Math.min(1, Math.max(0, g.score)), feedback: repairLatex(g.feedback), covered: g.covered.map(repairLatex), missing: g.missing.map(repairLatex) };
 }

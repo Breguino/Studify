@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { examFormatFromText, explain, extendModule, generateModule, generateNotes, gradeAnswer, parseCurriculum } from "../artifact/generate.js";
+import { examFormatFromText, explain, extendModule, generateModule, transcribePages, generateNotes, gradeAnswer, parseCurriculum } from "../artifact/generate.js";
 import { decodeState, encodeState, split } from "../artifact/backend.js";
 
 const demo = JSON.parse(readFileSync(new URL("../public/demo/module.json", import.meta.url), "utf8"));
@@ -198,4 +198,28 @@ test("pagina Claude: gli esercizi passano dal passo 1 al passo 2 dell'argomento"
   assert.match(media, /Non farne flashcard/);
   assert.ok(!prompts.find((p) => p.includes('"title":"Varianza"')).includes("<esercizi_dai_materiali>"));
   assert.ok(!("exercises" in mod.topics[0]) && !("excerpt" in mod.topics[0]), "estratti ed esercizi non finiscono nel modulo");
+});
+
+test("pagina Claude: trascrizione delle pagine a gruppi di 3, con immagini e marcatori di pagina", async () => {
+  const calls = [];
+  const sample = async (prompt, opts) => {
+    calls.push({ prompt, n: opts.images.length });
+    const from = Number(prompt.match(/(?:le pagine da|la pagina) (\d+)/)[1]);
+    if (from === 11) return { text: "" }; // una richiesta che non restituisce nulla
+    return { text: opts.images.map((_, k) => `=== PAGINA ${from + k} ===\nTesto $x_{${from + k}}$`).join("\n") };
+  };
+  sample.json = async () => ({});
+  sample.limits = async () => ({ images: { maxCount: 8 } });
+  const images = Array.from({ length: 7 }, () => new Blob(["x"]));
+  const progress = [];
+  const out = await transcribePages({ images, firstPage: 5, title: "Libro" }, (c, l) => progress.push(l), sample);
+  assert.deepEqual(calls.map((c) => c.n), [3, 3, 1]);
+  assert.match(calls[0].prompt, /le pagine da 5 a 7 di «Libro»/);
+  assert.match(calls[0].prompt, /LaTeX compatibile con KaTeX/);
+  assert.match(calls[2].prompt, /la pagina 11/);
+  assert.deepEqual(out, ["Testo $x_{5}$", "Testo $x_{6}$", "Testo $x_{7}$", "Testo $x_{8}$", "Testo $x_{9}$", "Testo $x_{10}$", null]);
+  assert.ok(progress.some((l) => /7\/7/.test(l)));
+  const noImages = async () => ({ text: "" });
+  noImages.limits = async () => ({});
+  await assert.rejects(transcribePages({ images, firstPage: 1 }, () => {}, noImages), /non può leggere le immagini/);
 });

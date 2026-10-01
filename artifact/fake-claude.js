@@ -49,9 +49,25 @@ const answer = (prompt) => {
   return { title: demo.title, overview: demo.overview, gaps: demo.gaps, topics: demo.topics.map((t) => ({ ...t, excerpt: "estratto dagli appunti" })) };
 };
 
+// Trascrizione delle pagine (immagini): risponde con i marcatori e una formula in LaTeX per pagina.
+function transcription(prompt) {
+  const m = prompt.match(/le pagine da (\d+) a (\d+)/) ?? prompt.match(/la pagina (\d+)/);
+  const from = Number(m[1]);
+  const to = Number(m[2] ?? m[1]);
+  const out = [];
+  for (let p = from; p <= to; p++)
+    out.push(`=== PAGINA ${p} ===\n# Capitolo ${Math.ceil(p / 4)}, pagina ${p}\nLa varianza campionaria è\n\n$$s^2=\\frac{1}{n-1}\\sum_{i=1}^{n}\\left(x_i-\\bar{x}\\right)^2$$\n\ne la media $\\bar{x}=\\frac{1}{n}\\sum_i x_i$ (pagina ${p}).`);
+  return out.join("\n\n");
+}
+
 const sample = async (prompt, opts = {}) => {
-  calls.push({ kind: "text", chars: prompt.length });
+  calls.push({ kind: "text", chars: prompt.length, prompt, images: opts.images?.length ?? 0 });
   await sleep(120);
+  if (prompt.includes("Trascrivi fedelmente")) {
+    const text = transcription(prompt);
+    opts.onText?.({ text, delta: text });
+    return { text, truncated: false, modelTierApplied: "default" };
+  }
   const text = "# Traccia di studio\n\nDomanda e offerta: ...\n\nLacune: verifica sul tuo corso.";
   opts.onText?.({ text, delta: text });
   return { text, truncated: false, modelTierApplied: "default" };

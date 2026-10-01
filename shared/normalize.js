@@ -5,39 +5,79 @@ export const FORMATS = ["scritto", "orale", "test", "problemi", "misto", "sconos
 export const KINDS = ["obbligatorio", "a_scelta", "sconosciuto"];
 export const LEVELS = ["L", "LM", "LMCU", ""];
 
+/*
+ * LaTeX rovinato dal JSON. In una stringa JSON «\frac» è valido ma significa form feed + "rac", «\beta» backspace + "eta",
+ * «\theta» tab + "heta", «\nabla» a capo + "abla", «\rho» ritorno a capo + "ho": non dà errore, la formula si rompe e basta.
+ * Qui si rimettono i backslash: \f e \b sempre (nel testo non servono mai), tab/a capo/ritorno solo dentro una formula
+ * o davanti a un comando noto. Si toglie anche il backslash doppio davanti a un comando ($\\frac$ → $\frac$).
+ */
+const CMD = "frac|dfrac|tfrac|sqrt|sum|prod|int|oint|iint|lim|log|ln|exp|sin|cos|tan|alpha|beta|gamma|Gamma|delta|Delta|epsilon|varepsilon|zeta|eta|theta|vartheta|Theta|lambda|Lambda|mu|nu|xi|pi|Pi|rho|sigma|Sigma|tau|phi|varphi|Phi|chi|psi|Psi|omega|Omega|cdot|times|div|pm|mp|le|leq|ge|geq|neq|ne|approx|equiv|sim|propto|infty|partial|nabla|to|rightarrow|Rightarrow|leftarrow|Leftarrow|leftrightarrow|iff|implies|left|right|bar|hat|tilde|vec|dot|ddot|overline|underline|mathbb|mathrm|mathbf|mathcal|text|textbf|operatorname|begin|end|quad|qquad|forall|exists|in|notin|subset|subseteq|cup|cap|ldots|cdots|binom|max|min|sup|inf|det|Pr|neg|land|lor|mid|perp|angle|circ|prime";
+const AFTER = {
+  "\t": new RegExp(`^(?:heta|imes|ext|extbf|extit|extrm|au|ilde|riangle|op|o(?![a-z])|frac|an(?![a-z])|anh|hinspace)`),
+  "\r": new RegExp(`^(?:ho|ight|ightarrow|angle|m(?![a-z])|vert|Vert)`),
+  "\n": new RegExp(`^(?:abla|eq|e(?![a-z])|eg|u(?![a-z])|ot|i(?![a-z])|ewline|exists|leq|geq|mid|parallel|subseteq|supseteq|sim|cong|prec|succ|vdash|o(?![a-z])|leftarrow|rightarrow|Rightarrow|Leftarrow)`),
+};
+const DOUBLE = new RegExp(`\\\\\\\\(?=(?:${CMD})(?![a-zA-Z]))`, "g");
+
+export function repairLatex(text) {
+  const s = String(text ?? "");
+  if (!/[\t\n\r\f\b$]|\\\\/.test(s)) return s;
+  let out = "";
+  let inMath = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === "$" && s[i - 1] !== "\\") {
+      if (s[i + 1] === "$") { out += "$$"; i++; }
+      else out += c;
+      inMath = !inMath;
+      continue;
+    }
+    if (c === "\f") { out += "\\f"; continue; }
+    if (c === "\b") { out += "\\b"; continue; }
+    if (c in AFTER) {
+      const rest = s.slice(i + 1, i + 14);
+      if (/^[a-zA-Z]/.test(rest) && AFTER[c].test(rest) && (inMath || c !== "\n")) { out += `\\${{ "\t": "t", "\r": "r", "\n": "n" }[c]}`; continue; }
+    }
+    out += c;
+  }
+  // backslash doppio davanti a un comando, solo dentro le formule
+  return out.replace(/(\$\$?)([\s\S]*?)\1/g, (m, d, body) => `${d}${body.replace(DOUBLE, "\\")}${d}`);
+}
+
 const clamp = (n, lo, hi, dflt) => (Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : dflt);
 const str = (s) => (typeof s === "string" ? s.trim() : "");
+const tex = (s) => repairLatex(str(s)); // testo che può contenere formule
 
 const normTopic = (t, id, validSource) => ({
   id,
-  title: str(t.title),
+  title: tex(t.title),
   importance: clamp(t.importance, 1, 3, 2),
   difficulty: clamp(t.difficulty, 1, 3, 2),
-  summary: str(t.summary),
-  keyConcepts: (t.keyConcepts ?? []).filter((k) => str(k.term) && str(k.definition)),
-  mustKnow: (t.mustKnow ?? []).map(str).filter(Boolean),
-  commonMistakes: (t.commonMistakes ?? []).map(str).filter(Boolean),
+  summary: tex(t.summary),
+  keyConcepts: (t.keyConcepts ?? []).filter((k) => str(k.term) && str(k.definition)).map((k) => ({ term: tex(k.term), definition: tex(k.definition) })),
+  mustKnow: (t.mustKnow ?? []).map(tex).filter(Boolean),
+  commonMistakes: (t.commonMistakes ?? []).map(tex).filter(Boolean),
   origin: t.origin ?? "notes",
   sourceIds: (t.sourceIds ?? []).filter((s) => validSource.has(s)),
 });
 
-const normCard = (c, id, topicId) => (topicId && str(c.front) && str(c.back) ? { id, topicId, front: str(c.front), back: str(c.back), type: c.type } : null);
+const normCard = (c, id, topicId) => (topicId && str(c.front) && str(c.back) ? { id, topicId, front: tex(c.front), back: tex(c.back), type: c.type } : null);
 
 function normQuestion(q, id, topicId) {
   if (!topicId || !str(q.prompt)) return null;
-  const options = (q.options ?? []).map(str).filter(Boolean);
+  const options = (q.options ?? []).map(tex).filter(Boolean);
   const correctIndex = Math.round(q.correctIndex);
   if (q.kind === "mcq" && (options.length < 2 || !(correctIndex >= 0 && correctIndex < options.length))) return null;
   return {
     id,
     topicId,
     kind: q.kind,
-    prompt: str(q.prompt),
+    prompt: tex(q.prompt),
     options: q.kind === "mcq" ? options : [],
     correctIndex: q.kind === "mcq" ? correctIndex : -1,
-    modelAnswer: str(q.modelAnswer),
-    explanation: str(q.explanation),
-    rubric: (q.rubric ?? []).map(str).filter(Boolean),
+    modelAnswer: tex(q.modelAnswer),
+    explanation: tex(q.explanation),
+    rubric: (q.rubric ?? []).map(tex).filter(Boolean),
   };
 }
 
@@ -66,12 +106,12 @@ export function normalizeModule(raw, sources = []) {
     if (qq) questions.push(qq);
   }
   return {
-    title: str(raw.title),
-    overview: str(raw.overview),
+    title: tex(raw.title),
+    overview: tex(raw.overview),
     topics,
     flashcards,
     questions,
-    gaps: (raw.gaps ?? []).map(str).filter(Boolean),
+    gaps: (raw.gaps ?? []).map(tex).filter(Boolean),
     sources,
   };
 }
@@ -168,7 +208,7 @@ export function mergeModule(base, raw, sources = [], { now = new Date().toISOStr
   for (const id of fresh) updated.delete(id);
   for (const id of updated) byId.get(id).updatedAt = now;
 
-  const gaps = (raw.gaps ?? []).map(str).filter(Boolean);
+  const gaps = (raw.gaps ?? []).map(tex).filter(Boolean);
   if (replaceGaps && Array.isArray(raw.gaps)) mod.gaps = gaps;
   else mod.gaps = [...new Set([...(mod.gaps ?? []), ...gaps])];
   return { module: mod, added: { topics: addedTopics, updated: updated.size, flashcards: addedCards, questions: addedQuestions } };

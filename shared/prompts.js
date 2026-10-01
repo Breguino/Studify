@@ -27,6 +27,15 @@ export const where = (university, degree) => [university, degree].filter(Boolean
 export const MODULE_INTRO = `Sei un tutor universitario esperto di scienze dell'apprendimento. Trasformi appunti in un modulo di studio
 pensato per il RICHIAMO ATTIVO (domande e prove), non per la rilettura passiva.`;
 
+// Con String.raw i backslash del LaTeX arrivano al modello così come sono scritti qui.
+const FORMULA_RULE = String.raw`8. FORMULE. Ogni formula, variabile con pedice o apice e simbolo matematico va in LaTeX: tra $...$ dentro la frase, tra $$...$$
+   se è a sé (equazioni importanti, definizioni, ogni passaggio di uno svolgimento: una formula per riga, con una riga vuota prima e dopo).
+   Mai pseudo-formule in testo semplice: non "x^2", "sqrt(x)", "beta1", "Δ%Q/Δ%P", ma $x^2$, $\sqrt{x}$, $\beta_1$, $\frac{\Delta\%Q}{\Delta\%P}$.
+   Solo comandi supportati da KaTeX (\frac, \dfrac, \sqrt, \sum_{i=1}^{n}, \int_a^b, \lim_{x\to 0}, \bar{x}, \hat{\beta}, \sigma^2,
+   \mathbb{E}[X], \operatorname{Var}, \text{...}, \cdot, \le, \ge, \neq, \approx, \infty, \partial, \begin{aligned}...\end{aligned},
+   \begin{pmatrix}...\end{pmatrix}, \begin{cases}...\end{cases}); niente pacchetti né macro personalizzate. Decimali all'italiana tra
+   graffe: $0{,}67$. La valuta si scrive «€» o «euro», mai con «$». Trascrivi le formule dei materiali esattamente, con la notazione del docente.`;
+
 export const MODULE_PRINCIPLES = `Principi inderogabili:
 1. FEDELTÀ. Gli appunti dello studente sono la fonte primaria. Non inserire fatti che non sono nei materiali forniti
    (appunti, PDF, ricerca online) salvo che siano conoscenza consolidata e tu sia certo: in tal caso origin="model".
@@ -50,13 +59,14 @@ export const MODULE_PRINCIPLES = `Principi inderogabili:
    - esercizi (eserciziari, temi d'esame, esercitazioni): NON trasformarli in flashcard. Ti dicono che cosa chiede l'esame (alza
      l'importanza degli argomenti su cui vertono) e sono il modello delle domande kind="problem": stesso tipo di esercizio, con
      svolgimento passo-passo in modelAnswer. Se la soluzione è nei materiali, seguila; se non c'è, risolvilo tu e scrivi in
-     explanation "Svolgimento non presente nei materiali: verificalo".`;
+     explanation "Svolgimento non presente nei materiali: verificalo".
+${FORMULA_RULE}`;
 
 export const GRADE_RULES = (language) => `Sei un esaminatore universitario giusto ma esigente. Valuti la risposta dello studente confrontandola con
 la risposta di riferimento e i punti della rubrica. Non premiare la lunghezza né il lessico: conta la correttezza concettuale.
 ${SAFETY_RULES}
 score: 0-1 (1 = completa e corretta). covered/missing: punti della rubrica coperti/mancanti (con parole tue, brevi).
-feedback: 2-4 frasi in ${language}, rivolte allo studente, concrete su cosa correggere.`;
+feedback: 2-4 frasi in ${language}, rivolte allo studente, concrete su cosa correggere. Le formule in LaTeX tra $...$.`;
 
 /** Righe di contesto sull'esame (nome, ateneo, CFU, tipo di prova, livello, tempo). */
 export function examContext(exam) {
@@ -173,3 +183,6 @@ export function materialText(m) {
 /** Istruzione aggiuntiva quando tra i materiali ci sono esercizi. */
 export const EXERCISES_TASK = `- Ci sono materiali di tipo esercizi: almeno metà delle domande siano kind="problem" modellate su quegli esercizi (stesso tipo, dati diversi
   o gli stessi esercizi se sono tipici d'esame), distribuite sugli argomenti a cui si riferiscono.`;
+
+/** Per le risposte JSON scritte come testo (pagina Claude): i backslash del LaTeX vanno raddoppiati, altrimenti \frac diventa un carattere di controllo. */
+export const JSON_LATEX_RULE = String.raw`Nel JSON ogni backslash del LaTeX va scritto doppio: "$\\frac{a}{b}$", "$\\beta_1$" (un solo backslash, come in "\frac", nel JSON diventa un carattere di controllo).`;

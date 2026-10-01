@@ -15,6 +15,8 @@ core.pdfText = async (file) => {
   return { text: hasText(pages) ? pages.map((p) => plainLines([p]).join("\n")).join("\f") : "", pages: numPages };
 };
 core.pdfImages = async (file) => pdfImages(await file.arrayBuffer());
+// Pagine scelte di un PDF come immagini nitide (scala 2: pedici e apici leggibili), per trascrivere le formule.
+core.pdfPageImages = (data, from, to) => pdfImages(data, { from, to, maxPages: 1000, scale: 2 });
 
 (async () => {
   try {
