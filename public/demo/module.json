@@ -1,0 +1,496 @@
+{
+ "title": "Microeconomia — modulo demo",
+ "overview": "Modulo di esempio (contenuto illustrativo) per provare piano, flashcard, quiz e spiegazioni senza appunti propri.",
+ "topics": [
+  {
+   "id": "t1",
+   "title": "Domanda, offerta ed equilibrio",
+   "importance": 3,
+   "difficulty": 1,
+   "summary": "La curva di domanda lega il prezzo alla quantità che i consumatori vogliono acquistare: a parità di altre condizioni, se il prezzo sale la quantità domandata scende. La curva di offerta lega il prezzo alla quantità che i produttori vogliono vendere ed è crescente. L'equilibrio di mercato è il prezzo in cui quantità domandata e offerta coincidono. Se il prezzo è sopra l'equilibrio c'è eccesso di offerta e il prezzo tende a scendere; se è sotto c'è eccesso di domanda e il prezzo tende a salire. Un cambiamento del prezzo muove LUNGO la curva; un cambiamento di reddito, gusti o prezzo dei beni collegati SPOSTA la curva.",
+   "keyConcepts": [
+    {
+     "term": "Equilibrio",
+     "definition": "Prezzo e quantità in cui quantità domandata = quantità offerta."
+    },
+    {
+     "term": "Eccesso di offerta",
+     "definition": "Situazione in cui, al prezzo corrente, i produttori vogliono vendere più di quanto i consumatori vogliono comprare."
+    },
+    {
+     "term": "Bene normale",
+     "definition": "Bene la cui domanda aumenta all'aumentare del reddito."
+    }
+   ],
+   "mustKnow": [
+    "Differenza tra movimento lungo la curva e spostamento della curva",
+    "Cosa succede fuori equilibrio",
+    "Effetto di un aumento di reddito su un bene normale e su uno inferiore"
+   ],
+   "commonMistakes": [
+    "Dire che un aumento del prezzo «sposta» la curva di domanda: la muove solo lungo di sé."
+   ],
+   "origin": "notes",
+   "sourceIds": []
+  },
+  {
+   "id": "t2",
+   "title": "Elasticità",
+   "importance": 3,
+   "difficulty": 2,
+   "summary": "L'elasticità misura quanto reagisce una quantità a una variazione di un'altra, in percentuale. L'elasticità della domanda al prezzo è la variazione percentuale della quantità divisa per la variazione percentuale del prezzo (in valore assoluto). Se è maggiore di 1 la domanda è elastica: un aumento di prezzo riduce i ricavi. Se è minore di 1 è anelastica: un aumento di prezzo aumenta i ricavi. Dipende da disponibilità di sostituti, quota del reddito spesa e orizzonte temporale. L'elasticità cambia lungo una curva di domanda lineare: non coincide con la pendenza.",
+   "keyConcepts": [
+    {
+     "term": "Elasticità al prezzo",
+     "definition": "|Δ%Q / Δ%P|: sensibilità percentuale della quantità domandata al prezzo."
+    },
+    {
+     "term": "Domanda anelastica",
+     "definition": "Elasticità < 1: la quantità reagisce poco al prezzo."
+    }
+   ],
+   "mustKnow": [
+    "Formula dell'elasticità e come interpretarla",
+    "Legame tra elasticità e ricavo totale",
+    "Tre determinanti dell'elasticità"
+   ],
+   "commonMistakes": [
+    "Confondere elasticità e pendenza: una curva lineare ha pendenza costante ma elasticità variabile."
+   ],
+   "origin": "notes",
+   "sourceIds": []
+  },
+  {
+   "id": "t3",
+   "title": "Teoria del consumatore",
+   "importance": 3,
+   "difficulty": 3,
+   "summary": "Il consumatore sceglie il paniere che massimizza l'utilità dato il vincolo di bilancio (reddito e prezzi). L'utilità marginale è decrescente: ogni unità aggiuntiva di un bene dà meno soddisfazione della precedente. Le curve di indifferenza uniscono panieri di pari utilità; la loro pendenza, in valore assoluto, è il saggio marginale di sostituzione (MRS). La scelta ottima si ha dove la curva di indifferenza è tangente al vincolo di bilancio: MRS = Px/Py, ovvero MUx/Px = MUy/Py. Un aumento del prezzo di un bene produce un effetto di sostituzione e un effetto reddito.",
+   "keyConcepts": [
+    {
+     "term": "Vincolo di bilancio",
+     "definition": "Insieme dei panieri acquistabili con il reddito dato: Px·x + Py·y ≤ R."
+    },
+    {
+     "term": "MRS",
+     "definition": "Saggio marginale di sostituzione: quanto y si è disposti a cedere per una unità in più di x, restando sulla stessa curva di indifferenza."
+    },
+    {
+     "term": "Utilità marginale decrescente",
+     "definition": "Ogni unità aggiuntiva di un bene aumenta l'utilità meno della precedente."
+    }
+   ],
+   "mustKnow": [
+    "Condizione di ottimo MRS = Px/Py",
+    "Come si disegna il vincolo di bilancio e cosa lo sposta",
+    "Effetto sostituzione ed effetto reddito"
+   ],
+   "commonMistakes": [
+    "Dire che all'ottimo le utilità sono uguali: sono uguali le utilità marginali per euro speso."
+   ],
+   "origin": "notes",
+   "sourceIds": []
+  },
+  {
+   "id": "t4",
+   "title": "Costi e concorrenza perfetta",
+   "importance": 2,
+   "difficulty": 2,
+   "summary": "Nel breve periodo i costi totali sono somma di costi fissi e variabili. Il costo marginale è l'aumento di costo per produrre un'unità in più e, per l'impresa, la curva dei costi marginali interseca il costo medio nel suo minimo. In concorrenza perfetta l'impresa è price taker: il prezzo è dato e coincide con il ricavo marginale, quindi massimizza il profitto producendo dove P = MC. Nel breve periodo produce se il prezzo copre almeno il costo variabile medio; nel lungo periodo entrano o escono imprese finché il profitto economico è zero e P = costo medio minimo.",
+   "keyConcepts": [
+    {
+     "term": "Price taker",
+     "definition": "Impresa troppo piccola per influenzare il prezzo di mercato: lo prende come dato."
+    },
+    {
+     "term": "Costo marginale",
+     "definition": "Variazione del costo totale per un'unità aggiuntiva prodotta."
+    },
+    {
+     "term": "Condizione di chiusura (breve periodo)",
+     "definition": "L'impresa chiude se P < costo variabile medio minimo."
+    }
+   ],
+   "mustKnow": [
+    "Perché in concorrenza perfetta si produce dove P = MC",
+    "Condizione di chiusura nel breve periodo",
+    "Equilibrio di lungo periodo e profitto zero"
+   ],
+   "commonMistakes": [
+    "Credere che profitto zero significhi nessuna remunerazione: include il costo opportunità del capitale."
+   ],
+   "origin": "notes",
+   "sourceIds": []
+  },
+  {
+   "id": "t5",
+   "title": "Monopolio",
+   "importance": 2,
+   "difficulty": 2,
+   "summary": "Il monopolista è l'unico venditore e fronteggia l'intera curva di domanda: per vendere di più deve abbassare il prezzo su tutte le unità, quindi il ricavo marginale è inferiore al prezzo. Massimizza il profitto dove ricavo marginale = costo marginale e poi fissa il prezzo sulla curva di domanda a quella quantità. Rispetto alla concorrenza produce meno e ad un prezzo più alto, generando una perdita di benessere (deadweight loss). La discriminazione di prezzo permette di appropriarsi di parte del surplus dei consumatori.",
+   "keyConcepts": [
+    {
+     "term": "Ricavo marginale",
+     "definition": "Variazione del ricavo totale per una unità venduta in più; per un monopolista è minore del prezzo."
+    },
+    {
+     "term": "Deadweight loss",
+     "definition": "Perdita netta di surplus totale causata da una quantità scambiata inferiore a quella efficiente."
+    }
+   ],
+   "mustKnow": [
+    "Perché MR < P per il monopolista",
+    "Regola di massimo profitto e come si ricava il prezzo",
+    "Confronto con la concorrenza perfetta"
+   ],
+   "commonMistakes": [
+    "Fissare il prezzo dove MR = MC: lì si decide la quantità, il prezzo si legge sulla domanda."
+   ],
+   "origin": "notes",
+   "sourceIds": []
+  }
+ ],
+ "flashcards": [
+  {
+   "id": "c1",
+   "topicId": "t1",
+   "front": "Cosa succede al prezzo se c'è eccesso di offerta?",
+   "back": "Tende a scendere, finché quantità domandata e offerta si riequilibrano.",
+   "type": "come"
+  },
+  {
+   "id": "c2",
+   "topicId": "t1",
+   "front": "Un aumento del reddito, per un bene normale, cosa fa alla curva di domanda?",
+   "back": "La sposta verso destra (più quantità a ogni prezzo).",
+   "type": "perche"
+  },
+  {
+   "id": "c3",
+   "topicId": "t1",
+   "front": "Differenza tra «variazione della quantità domandata» e «variazione della domanda»",
+   "back": "La prima è un movimento lungo la curva causato dal prezzo; la seconda è uno spostamento della curva causato da altri fattori.",
+   "type": "confronto"
+  },
+  {
+   "id": "c4",
+   "topicId": "t1",
+   "front": "Definisci l'equilibrio di mercato",
+   "back": "Prezzo e quantità in cui quantità domandata = quantità offerta.",
+   "type": "definizione"
+  },
+  {
+   "id": "c5",
+   "topicId": "t1",
+   "front": "Se il prezzo di un sostituto aumenta, cosa accade alla domanda del bene?",
+   "back": "Aumenta (curva a destra): i consumatori passano al bene rimasto più conveniente.",
+   "type": "perche"
+  },
+  {
+   "id": "c6",
+   "topicId": "t2",
+   "front": "Formula dell'elasticità della domanda al prezzo",
+   "back": "|Δ%Q / Δ%P| (variazione percentuale della quantità sulla variazione percentuale del prezzo).",
+   "type": "formula"
+  },
+  {
+   "id": "c7",
+   "topicId": "t2",
+   "front": "Domanda elastica (>1): cosa accade ai ricavi se il prezzo aumenta?",
+   "back": "Diminuiscono: la quantità cala più che proporzionalmente.",
+   "type": "perche"
+  },
+  {
+   "id": "c8",
+   "topicId": "t2",
+   "front": "Domanda anelastica (<1): cosa accade ai ricavi se il prezzo aumenta?",
+   "back": "Aumentano: la quantità cala meno che proporzionalmente.",
+   "type": "perche"
+  },
+  {
+   "id": "c9",
+   "topicId": "t2",
+   "front": "Tre fattori che rendono la domanda più elastica",
+   "back": "Molti sostituti, quota alta del reddito spesa, orizzonte temporale lungo.",
+   "type": "definizione"
+  },
+  {
+   "id": "c10",
+   "topicId": "t2",
+   "front": "Elasticità e pendenza di una domanda lineare: sono la stessa cosa?",
+   "back": "No: la pendenza è costante, l'elasticità cambia lungo la curva (alta a prezzi alti, bassa a prezzi bassi).",
+   "type": "confronto"
+  },
+  {
+   "id": "c11",
+   "topicId": "t3",
+   "front": "Condizione di scelta ottima del consumatore",
+   "back": "MRS = Px/Py, cioè MUx/Px = MUy/Py: la curva di indifferenza è tangente al vincolo di bilancio.",
+   "type": "formula"
+  },
+  {
+   "id": "c12",
+   "topicId": "t3",
+   "front": "Cosa dice l'utilità marginale decrescente?",
+   "back": "Ogni unità aggiuntiva dà meno utilità aggiuntiva della precedente.",
+   "type": "definizione"
+  },
+  {
+   "id": "c13",
+   "topicId": "t3",
+   "front": "Cosa sposta il vincolo di bilancio parallelamente?",
+   "back": "Una variazione del reddito (a prezzi invariati).",
+   "type": "come"
+  },
+  {
+   "id": "c14",
+   "topicId": "t3",
+   "front": "Cosa fa ruotare il vincolo di bilancio?",
+   "back": "Una variazione del prezzo di uno solo dei due beni.",
+   "type": "come"
+  },
+  {
+   "id": "c15",
+   "topicId": "t3",
+   "front": "In cosa consistono effetto sostituzione ed effetto reddito?",
+   "back": "Quando un prezzo cambia: sostituzione = ci si sposta verso il bene diventato relativamente più conveniente; reddito = cambia il potere d'acquisto reale.",
+   "type": "confronto"
+  },
+  {
+   "id": "c16",
+   "topicId": "t4",
+   "front": "Regola di massimo profitto in concorrenza perfetta",
+   "back": "Produrre dove P = MC (con P = MR perché l'impresa è price taker).",
+   "type": "formula"
+  },
+  {
+   "id": "c17",
+   "topicId": "t4",
+   "front": "Perché per un'impresa perfettamente concorrenziale MR = P?",
+   "back": "Perché è price taker: può vendere ogni unità addizionale al prezzo di mercato senza abbassarlo.",
+   "type": "perche"
+  },
+  {
+   "id": "c18",
+   "topicId": "t4",
+   "front": "Quando un'impresa concorrenziale chiude nel breve periodo?",
+   "back": "Se il prezzo è inferiore al costo variabile medio minimo.",
+   "type": "definizione"
+  },
+  {
+   "id": "c19",
+   "topicId": "t4",
+   "front": "Profitto economico di lungo periodo in concorrenza perfetta",
+   "back": "Zero: l'entrata di imprese spinge il prezzo al costo medio minimo.",
+   "type": "perche"
+  },
+  {
+   "id": "c20",
+   "topicId": "t4",
+   "front": "Dove interseca il costo marginale la curva del costo medio?",
+   "back": "Nel punto di minimo del costo medio.",
+   "type": "definizione"
+  },
+  {
+   "id": "c21",
+   "topicId": "t5",
+   "front": "Perché per il monopolista MR < P?",
+   "back": "Per vendere un'unità in più deve abbassare il prezzo su tutte le unità, non solo sull'ultima.",
+   "type": "perche"
+  },
+  {
+   "id": "c22",
+   "topicId": "t5",
+   "front": "Regola di massimo profitto del monopolista",
+   "back": "Produrre dove MR = MC e fissare il prezzo sulla curva di domanda a quella quantità.",
+   "type": "formula"
+  },
+  {
+   "id": "c23",
+   "topicId": "t5",
+   "front": "Rispetto alla concorrenza, il monopolio produce…",
+   "back": "Meno e a un prezzo più alto.",
+   "type": "confronto"
+  },
+  {
+   "id": "c24",
+   "topicId": "t5",
+   "front": "Cos'è il deadweight loss del monopolio?",
+   "back": "La perdita netta di surplus per le transazioni vantaggiose che non avvengono perché la quantità è troppo bassa.",
+   "type": "definizione"
+  },
+  {
+   "id": "c25",
+   "topicId": "t5",
+   "front": "Perché il monopolista non produce mai in tratto anelastico della domanda?",
+   "back": "Perché lì MR è negativo: ridurre la quantità aumenterebbe i ricavi e abbasserebbe i costi.",
+   "type": "perche"
+  }
+ ],
+ "questions": [
+  {
+   "id": "q1",
+   "topicId": "t1",
+   "kind": "mcq",
+   "prompt": "Il prezzo di un bene sale. Quale affermazione è corretta?",
+   "options": [
+    "La curva di domanda si sposta a sinistra",
+    "La quantità domandata diminuisce lungo la stessa curva",
+    "La domanda aumenta",
+    "La curva di offerta si sposta a destra"
+   ],
+   "correctIndex": 1,
+   "modelAnswer": "",
+   "explanation": "Una variazione del prezzo del bene stesso causa un movimento lungo la curva di domanda, non uno spostamento. Gli spostamenti dipendono da altri fattori (reddito, gusti, prezzi di altri beni).",
+   "rubric": []
+  },
+  {
+   "id": "q2",
+   "topicId": "t1",
+   "kind": "open",
+   "prompt": "Spiega cosa accade sul mercato di un bene se il prezzo è fissato sopra l'equilibrio e come si arriva al nuovo equilibrio.",
+   "options": [],
+   "correctIndex": -1,
+   "modelAnswer": "Sopra l'equilibrio la quantità offerta supera quella domandata (eccesso di offerta): i produttori hanno scorte invendute e riducono il prezzo. Al calare del prezzo la quantità domandata cresce e quella offerta cala, finché si raggiunge il prezzo di equilibrio dove le due quantità coincidono.",
+   "explanation": "Il punto chiave è il meccanismo di aggiustamento.",
+   "rubric": [
+    "Individua l'eccesso di offerta",
+    "Collega la pressione al ribasso del prezzo",
+    "Descrive il riequilibrio di quantità domandata e offerta",
+    "Indica la condizione di equilibrio"
+   ]
+  },
+  {
+   "id": "q3",
+   "topicId": "t2",
+   "kind": "mcq",
+   "prompt": "Se l'elasticità della domanda al prezzo è 0,4 e il prezzo aumenta del 10%, la quantità domandata:",
+   "options": [
+    "Diminuisce del 25%",
+    "Diminuisce del 4%",
+    "Diminuisce del 40%",
+    "Aumenta del 4%"
+   ],
+   "correctIndex": 1,
+   "modelAnswer": "",
+   "explanation": "Δ%Q = elasticità × Δ%P = 0,4 × 10% = 4% (in diminuzione). Con domanda anelastica i ricavi aumentano.",
+   "rubric": []
+  },
+  {
+   "id": "q4",
+   "topicId": "t2",
+   "kind": "problem",
+   "prompt": "La domanda è Q = 100 − 2P. Calcola l'elasticità al prezzo nel punto P = 20 e dì se la domanda è elastica o anelastica.",
+   "options": [],
+   "correctIndex": -1,
+   "modelAnswer": "Q(20) = 100 − 40 = 60. dQ/dP = −2. Elasticità = |dQ/dP · P/Q| = 2 · 20/60 = 0,67 < 1, quindi la domanda è anelastica.",
+   "explanation": "L'elasticità puntuale si calcola come |dQ/dP|·P/Q.",
+   "rubric": [
+    "Calcola Q = 60",
+    "Usa dQ/dP = −2",
+    "Elasticità = 2·20/60 ≈ 0,67",
+    "Conclude: anelastica perché < 1"
+   ]
+  },
+  {
+   "id": "q5",
+   "topicId": "t3",
+   "kind": "mcq",
+   "prompt": "All'ottimo del consumatore con due beni vale:",
+   "options": [
+    "MUx = MUy",
+    "MRS = Px/Py",
+    "Px = Py",
+    "Utilità totale dei due beni uguale"
+   ],
+   "correctIndex": 1,
+   "modelAnswer": "",
+   "explanation": "All'ottimo la curva di indifferenza è tangente al vincolo di bilancio: MRS = Px/Py. Equivale a MUx/Px = MUy/Py, non a MUx = MUy.",
+   "rubric": []
+  },
+  {
+   "id": "q6",
+   "topicId": "t3",
+   "kind": "open",
+   "prompt": "Il prezzo del bene x raddoppia, reddito e Py invariati. Descrivi l'effetto sul vincolo di bilancio e sulla scelta del consumatore.",
+   "options": [],
+   "correctIndex": -1,
+   "modelAnswer": "Il vincolo ruota verso l'interno attorno all'intercetta sull'asse y (la quantità massima di x si dimezza). Il consumatore si sposta su una curva di indifferenza più bassa. La variazione di x si scompone in effetto di sostituzione (x diventa relativamente più caro → meno x) ed effetto reddito (potere d'acquisto ridotto).",
+   "explanation": "Serve distinguere rotazione da traslazione.",
+   "rubric": [
+    "Vincolo ruota (non trasla)",
+    "Intercetta su y invariata",
+    "Utilità più bassa",
+    "Distingue sostituzione e reddito"
+   ]
+  },
+  {
+   "id": "q7",
+   "topicId": "t4",
+   "kind": "mcq",
+   "prompt": "Un'impresa concorrenziale ha costo marginale 8 alla quantità corrente e il prezzo di mercato è 12. Cosa dovrebbe fare?",
+   "options": [
+    "Ridurre la produzione",
+    "Aumentare la produzione",
+    "Mantenere la produzione",
+    "Chiudere"
+   ],
+   "correctIndex": 1,
+   "modelAnswer": "",
+   "explanation": "Con P > MC ogni unità addizionale aggiunge più ricavo (12) che costo (8): conviene aumentare la produzione fino a P = MC.",
+   "rubric": []
+  },
+  {
+   "id": "q8",
+   "topicId": "t4",
+   "kind": "open",
+   "prompt": "Spiega perché nel lungo periodo in concorrenza perfetta il profitto economico è nullo.",
+   "options": [],
+   "correctIndex": -1,
+   "modelAnswer": "Se ci sono profitti positivi nuove imprese entrano, l'offerta di mercato aumenta e il prezzo scende; se ci sono perdite escono imprese e il prezzo sale. Il processo termina quando P = costo medio minimo, cioè profitto economico zero (che comprende comunque la remunerazione del costo opportunità).",
+   "explanation": "Il meccanismo è entrata e uscita.",
+   "rubric": [
+    "Entrata in presenza di profitti",
+    "Uscita in presenza di perdite",
+    "Prezzo = costo medio minimo",
+    "Profitto economico ≠ profitto contabile"
+   ]
+  },
+  {
+   "id": "q9",
+   "topicId": "t5",
+   "kind": "mcq",
+   "prompt": "Per un monopolista con domanda lineare, rispetto al prezzo il ricavo marginale è:",
+   "options": [
+    "Uguale",
+    "Maggiore",
+    "Minore",
+    "Indipendente"
+   ],
+   "correctIndex": 2,
+   "modelAnswer": "",
+   "explanation": "Per vendere di più deve abbassare il prezzo su tutte le unità: MR < P. Con domanda lineare MR ha pendenza doppia.",
+   "rubric": []
+  },
+  {
+   "id": "q10",
+   "topicId": "t5",
+   "kind": "problem",
+   "prompt": "Domanda P = 50 − Q, costo marginale costante 10. Trova quantità e prezzo del monopolista.",
+   "options": [],
+   "correctIndex": -1,
+   "modelAnswer": "MR = 50 − 2Q. MR = MC → 50 − 2Q = 10 → Q = 20. Prezzo sulla domanda: P = 50 − 20 = 30.",
+   "explanation": "Q si trova con MR = MC; P si legge sulla domanda.",
+   "rubric": [
+    "Ricava MR = 50 − 2Q",
+    "Pone MR = MC",
+    "Q = 20",
+    "P = 30 dalla domanda"
+   ]
+  }
+ ],
+ "gaps": [
+  "Questo è un modulo dimostrativo: non sostituisce i tuoi appunti né il programma del tuo corso."
+ ],
+ "sources": []
+}

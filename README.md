@@ -1,1 +1,80 @@
 # Studify
+
+Ambiente di studio per chi prepara esami universitari. Parti dai **tuoi appunti** (testo, `.md`, PDF)
+e/o da **materiale cercato online dall'AI**; ottieni un **modulo di studio** con argomenti, flashcard,
+quiz e un **piano a ritroso dalla data d'esame**, costruito con metodi di studio che hanno evidenza
+scientifica.
+
+```
+npm install
+export ANTHROPIC_API_KEY=sk-ant-...    # facoltativa: senza, l'app parte in "modalità base"
+npm start                              # http://127.0.0.1:3000
+npm run demo                           # AI simulata + esame demo: per provare tutto senza chiave
+npm test
+```
+
+Serve Node ≥ 20. Nessun build step: il frontend è JavaScript ES modules servito così com'è.
+
+## Come funziona
+
+1. **Descrivi l'esame**: data, tipo di prova (scritto, test, esercizi, orale, misto), livello di partenza (1-5), ore al giorno.
+2. **Porta i materiali**: incolla/carica appunti e PDF; oppure «Cerca online con l'AI» (ricerca web con fonti e link,
+   che puoi leggere ed eliminare prima di usarla).
+3. **Genera il modulo**: l'AI produce argomenti (con importanza/difficoltà), flashcard atomiche, domande
+   (scelta multipla, aperte, esercizi con rubrica) e un elenco di **lacune** nei materiali.
+4. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
+
+| Sessione | Cosa fa |
+|---|---|
+| Flashcard | Richiamo attivo con ripasso dilazionato (SM-2 semplificato) che **non programma nulla oltre il giorno prima dell'esame**. Le carte nuove sono introdotte solo per argomenti già studiati. |
+| Quiz | Errori recenti per primi, argomenti alternati (interleaving). Risposte aperte: spunti i punti della rubrica o chiedi la correzione all'AI. |
+| Simulazione | Quiz a tempo con correzione **differita**, come all'esame. |
+| Spiega a parole tue | Per scritto aperto/orale: spieghi senza appunti e confronti con i punti chiave. «Simulazione orale» sceglie 3 argomenti pesati per importanza. |
+| Progressi | Stima di preparazione per argomento (flashcard solide + quiz), con i punti dove conviene lavorare. |
+
+### Perché questi metodi (e non gli «stili di apprendimento»)
+
+La scelta dei metodi dipende da **tipo di prova, giorni rimasti e livello di partenza** (`public/js/methods.js`),
+non da «sono visivo/uditivo»: gli studi non mostrano benefici nell'adattare il metodo allo stile dichiarato.
+Si privilegiano le tecniche ad alta utilità (richiamo attivo, ripasso distribuito, prove pratiche) rispetto a
+rilettura ed evidenziazione (Dunlosky et al. 2013; Roediger & Karpicke 2006). Per i principianti il piano parte da
+una prima lettura guidata e da esempi svolti (expertise reversal); con pochi giorni passa in «modalità emergenza»
+(solo richiamo attivo e prove sugli argomenti più probabili).
+
+## Limiti da conoscere
+
+- **Il modulo è una bozza, non una verità.** L'AI può sbagliare. Ogni argomento indica l'origine
+  (*tuoi appunti* / *web* / *conoscenza generale dell'AI — da verificare*); le lacune sono esplicitate. Confronta con il programma del corso.
+- **La «preparazione» è una stima**, non una previsione del voto: non misura quanto il tuo esame sarà simile ai quiz generati.
+- **Ricerca online**: la qualità dipende da ciò che il web offre sul tuo corso; dispense del tuo docente battono qualsiasi ricerca.
+- **Privacy**: i dati restano nel browser (IndexedDB). Il testo dei materiali viene inviato al server locale e da lì all'API di
+  Anthropic solo quando generi un modulo, cerchi online o fai correggere una risposta.
+- **Modalità base** (senza chiave API): argomenti e flashcard ricavati euristicamente dalle definizioni nei tuoi appunti testuali; niente quiz, PDF, né ricerca.
+- Un solo utente per browser, nessun account né sincronizzazione (usa «Dati → Esporta backup»).
+
+## Configurazione
+
+| Variabile | Default | Note |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | – | Senza chiave l'app funziona in modalità base. |
+| `STUDIFY_MODEL` | `claude-opus-5-5` | Puoi usare un modello più economico (es. `claude-sonnet-5-5`). |
+| `PORT` / `HOST` | `3000` / `127.0.0.1` | Con host non-loopback le protezioni same-origin sono disattivate: non esporre il server senza autenticazione, spendi i tuoi crediti API. |
+| `STUDIFY_MOCK` | – | `1` = AI simulata (anche `npm run demo`). |
+
+La generazione di un modulo usa un'unica richiesta (con ragionamento adattivo e output strutturato) e può costare qualche
+dollaro per materiali molto lunghi: parti da pochi appunti per farti un'idea.
+
+## Struttura
+
+```
+server/           index.js (HTTP, job asincroni, sicurezza) · ai.js (Anthropic SDK) · schema.js (zod + normalizzazione)
+public/js/        logica pura (testata): dates, methods, srs, planner, progress, local-builder
+                  stato/UI: store (IndexedDB), domain, api, ui, views/*
+public/demo/      modulo demo (Microeconomia)
+test/             node --test: logica pura + client AI con SDK simulato
+```
+
+## Idee per dopo
+
+Import da Notion/Drive, OCR di foto degli appunti, calendario con più esami in competizione per il tempo,
+calibrazione della fiducia (quanto sei sicuro prima di vedere la risposta), versione sincronizzata multi-dispositivo.
