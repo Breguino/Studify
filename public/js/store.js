@@ -46,7 +46,7 @@ export const delFile = (id) => backend.delFile(id);
 
 /* ------------------------------- esami -------------------------------- */
 
-export const emptyProfile = () => ({ university: "", degree: "", degrees: null, courses: [], sources: [], academicYear: "", caveats: [], fetchedAt: null });
+export const emptyProfile = () => ({ university: "", degree: "", degrees: null, courses: [], sources: [], academicYear: "", caveats: [], fetchedAt: null, studentYear: 0 });
 
 export function profile() {
   state.profile ??= emptyProfile();

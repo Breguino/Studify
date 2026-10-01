@@ -12,9 +12,33 @@ export function findCourse(courses, name) {
   if (n.length < 6) return null;
   const partial = courses.filter((c) => {
     const m = norm(c.name);
-    return m.length >= 6 && (m.includes(n) || n.includes(m));
+    if (m.length < 6) return false;
+    const [short, long] = m.length <= n.length ? [m, n] : [n, m];
+    // «Matematica II» non è «Matematica I»: se la differenza è solo un numero d'ordine sono insegnamenti diversi
+    return long.includes(short) && !NUMERAL_RE.test(long.replace(short, "").trim());
   });
   return partial.length === 1 ? partial[0] : null; // se è ambiguo meglio non scegliere
+}
+
+const NUMERAL_RE = /^(?:i{1,3}|iv|v|[1-6])$/;
+
+/** Abbina i nomi di un orario agli insegnamenti del piano: { nome → insegnamento | null }. */
+export function matchCourses(names, courses) {
+  return new Map(names.map((n) => [n, findCourse(courses, n)]));
+}
+
+/**
+ * Quali insegnamenti di un orario spuntare in automatico per chi frequenta l'anno `year`.
+ * Si tolgono solo quelli che il piano colloca in un altro anno: se non trovo il nome nel piano lo tengo
+ * (sbagliare per eccesso riduce un po' troppo il tempo di studio, sbagliare per difetto lo gonfia).
+ */
+export function defaultTimetableSelection(names, courses, year) {
+  const match = matchCourses(names, courses);
+  const keep = (n) => {
+    const c = match.get(n);
+    return !year || !c || !c.year || c.year === year;
+  };
+  return { include: new Set(names.filter(keep)), match };
 }
 
 export const FORMAT_LABEL = { ...EXAM_TYPES, sconosciuto: "Non indicato" };

@@ -1,6 +1,6 @@
 import * as api from "../api.js";
 import { core } from "../core.js";
-import { findCourse, parseCurriculumTable, parseCurriculumText } from "../curriculum.js";
+import { defaultTimetableSelection, findCourse, parseCurriculumTable, parseCurriculumText, yearLabel } from "../curriculum.js";
 import { addDays, fmtDate, today } from "../dates.js";
 import { BUILDERS, CANON_HEADERS, SCHEMAS, TEMPLATES, autoMap, colName, detectKind, findHeaderRow, looksLikeHeader, tableFrom } from "../importers.js";
 import { go } from "../nav.js";
@@ -310,12 +310,30 @@ export function importView() {
       if (declared) preview = h("div", { class: "stack" }, preview, h("div", { class: `callout ${sum === declared ? "good" : "warn"}` }, sum === declared ? `CFU letti: ${sum} su ${declared} dichiarati dal documento ✓` : `Attenzione: la somma dei CFU letti (${sum}) non coincide con il totale dichiarato dal documento (${declared}). Controlla le righe.`));
       action = h("button", { class: "btn primary", disabled: !res.items.length, onclick: () => done(applyCourses(res.items, st.meta), "#/profile") }, `Importa ${res.items.length} ${res.items.length === 1 ? "insegnamento" : "insegnamenti"}`);
     } else {
-      st.include ??= new Set(res.courses.map((c) => c.name));
+      const prof = store.state.profile;
+      const planCourses = prof?.courses ?? [];
+      const sel = defaultTimetableSelection(res.courses.map((c) => c.name), planCourses, prof?.studentYear || 0);
+      st.include ??= sel.include;
+      const planYears = [...new Set(planCourses.map((c) => c.year).filter(Boolean))].sort();
+      const where = (name) => {
+        const c = sel.match.get(name);
+        if (!planCourses.length) return null;
+        if (!c) return badge("non nel piano", "warn");
+        return c.year ? badge(yearLabel(c.year), prof?.studentYear && c.year !== prof.studentYear ? "" : "good") : null;
+      };
+      const yearPick = planYears.length
+        ? h("label", {}, "Anno che frequenti",
+            h("select", { id: "student-year", onchange: (e) => { store.profile().studentYear = Number(e.target.value); store.save(); st.include = null; redraw(); } },
+              h("option", { value: 0 }, "Non indicato (le seleziono tutte)"),
+              planYears.map((y) => h("option", { value: y, selected: prof?.studentYear === y }, yearLabel(y)))),
+            h("span", { class: "hint" }, "Le lezioni degli insegnamenti che il piano colloca in altri anni vengono tolte dalla selezione: le tue spunte restano modificabili."))
+        : null;
       const until = h("input", { type: "date", id: "import-until", value: st.until, min: today(), onchange: (e) => (st.until = e.target.value) });
       const hasWeekly = res.items.some((l) => l.weekday);
       preview = h("div", { class: "stack" },
         h("p", { class: "muted small", style: { margin: 0 } }, "Spunta gli insegnamenti che frequenti: le loro lezioni riducono il tempo di studio dei giorni in cui cadono."),
-        h("ul", { class: "checklist" }, res.courses.map((c) => h("li", {}, h("label", {}, h("input", { type: "checkbox", checked: st.include.has(c.name), onchange: (e) => { e.target.checked ? st.include.add(c.name) : st.include.delete(c.name); redraw(); } }), h("span", {}, `${c.name} `, h("span", { class: "muted small" }, `(${c.count === 1 ? "1 lezione" : `${c.count} lezioni`})`)))))),
+        yearPick,
+        h("ul", { class: "checklist" }, res.courses.map((c) => h("li", {}, h("label", {}, h("input", { type: "checkbox", checked: st.include.has(c.name), onchange: (e) => { e.target.checked ? st.include.add(c.name) : st.include.delete(c.name); redraw(); } }), h("span", {}, `${c.name} `, h("span", { class: "muted small" }, `(${c.count === 1 ? "1 lezione" : `${c.count} lezioni`}) `), where(c.name)))))),
         (() => {
           const ov = overlaps(res.items.filter((l) => st.include.has(l.course)));
           if (!ov.length) return null;

@@ -19,7 +19,7 @@ export function examFormView(exam) {
   const isNew = !exam;
   const prof = store.state.profile;
   const courses = prof?.courses ?? [];
-  const v = exam ?? { name: "", date: addDays(today(), 30), type: "scritto", level: 2, hoursPerDay: 3, sessionMinutes: 25, language: "italiano", cfu: 0, year: 0 };
+  const v = exam ?? { name: "", date: addDays(today(), 30), type: "scritto", level: 2, hoursPerDay: 3, sessionMinutes: 25, language: "italiano", cfu: 0, year: prof?.studentYear || 0 };
   const university = exam ? exam.university : prof?.university ?? "";
   const degree = exam ? exam.degree : prof?.degree ?? "";
   const f = {};
