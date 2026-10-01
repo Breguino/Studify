@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODEL, aiConfigured, buildModule, curriculum, friendlyError, gradeAnswer, research } from "./ai.js";
+import { MODEL, aiConfigured, buildModule, curriculum, degrees, friendlyError, gradeAnswer, parseCurriculum, research } from "./ai.js";
 import { normalizeModule } from "./schema.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
@@ -151,6 +151,42 @@ async function api(req, res, url) {
     return send(res, 202, { jobId: id });
   }
 
+  if (url.pathname === "/api/degrees") {
+    const university = str(body.university, 200).trim();
+    if (!university) return send(res, 400, { error: "Indica l'ateneo." });
+    const id = startJob("degrees", (p) =>
+      MOCK
+        ? mockRun(p, {
+            found: true, academicYear: "demo", caveats: ["Elenco dimostrativo: non sono i veri corsi dell'ateneo."], sources: [],
+            degrees: [
+              { name: "Ingegneria Informatica (demo)", level: "L", classe: "L-8", url: "" },
+              { name: "Economia e Management (demo)", level: "L", classe: "L-18", url: "" },
+              { name: "Giurisprudenza (demo)", level: "LMCU", classe: "LMG/01", url: "" },
+              { name: "Ingegneria Gestionale (demo)", level: "LM", classe: "LM-31", url: "" },
+            ],
+          })
+        : degrees({ university }, p),
+    );
+    return send(res, 202, { jobId: id });
+  }
+
+  if (url.pathname === "/api/parse-curriculum") {
+    const text = str(body.text, 200_000);
+    if (text.trim().length < 20) return send(res, 400, { error: "Incolla il testo del piano di studi." });
+    const id = startJob("parse-curriculum", (p) =>
+      MOCK
+        ? mockRun(p, {
+            found: true, degreeName: "", academicYear: "", caveats: ["Analisi dimostrativa: con l'AI vera il testo viene letto dal modello."], sources: [],
+            courses: [
+              { name: "Analisi matematica 1", year: 1, cfu: 9, format: "sconosciuto", formatEvidence: "", kind: "obbligatorio", group: "", url: "" },
+              { name: "Insegnamenti a scelta dello studente", year: 3, cfu: 12, format: "sconosciuto", formatEvidence: "", kind: "a_scelta", group: "", url: "" },
+            ],
+          })
+        : parseCurriculum({ text, university: str(body.university, 200), degree: str(body.degree, 200) }),
+    );
+    return send(res, 202, { jobId: id });
+  }
+
   if (url.pathname === "/api/curriculum") {
     const university = str(body.university, 200).trim();
     const degree = str(body.degree, 200).trim();
@@ -160,9 +196,12 @@ async function api(req, res, url) {
         ? mockRun(p, {
             found: true, degreeName: `${degree} (demo)`, academicYear: "demo", caveats: ["Dati dimostrativi: non sono il vero piano di studi."], sources: [],
             courses: [
-              { name: "Analisi matematica 1 (demo)", year: 1, cfu: 9, format: "scritto", formatEvidence: "demo", url: "" },
-              { name: "Diritto privato (demo)", year: 1, cfu: 6, format: "orale", formatEvidence: "demo", url: "" },
-              { name: "Fondamenti di informatica (demo)", year: 1, cfu: 9, format: "sconosciuto", formatEvidence: "", url: "" },
+              { name: "Analisi matematica 1 (demo)", year: 1, cfu: 9, format: "scritto", formatEvidence: "demo", kind: "obbligatorio", group: "", url: "" },
+              { name: "Diritto privato (demo)", year: 2, cfu: 6, format: "orale", formatEvidence: "demo", kind: "obbligatorio", group: "", url: "" },
+              { name: "Fondamenti di informatica (demo)", year: 1, cfu: 9, format: "sconosciuto", formatEvidence: "", kind: "obbligatorio", group: "", url: "" },
+              { name: "Teoria dei giochi (demo)", year: 3, cfu: 6, format: "sconosciuto", formatEvidence: "", kind: "a_scelta", group: "A scelta: area economica", url: "" },
+              { name: "Statistica applicata (demo)", year: 3, cfu: 6, format: "scritto", formatEvidence: "demo", kind: "a_scelta", group: "A scelta: area economica", url: "" },
+              { name: "Insegnamenti a scelta dello studente (demo)", year: 3, cfu: 12, format: "sconosciuto", formatEvidence: "", kind: "a_scelta", group: "", url: "" },
             ],
           })
         : curriculum({ university, degree }, p),

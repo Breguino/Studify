@@ -60,3 +60,13 @@ Conoscenza pregressa dello studente (1 = zero, 5 = ottima): ${exam.level}
 Giorni disponibili: ${exam.daysLeft}
 Lingua del modulo: ${exam.language || "italiano"}`;
 }
+
+/** Regole per estrarre un piano di studi (da ricerca web o da testo incollato dallo studente). */
+export const CURRICULUM_RULES = `Estrai il piano di studi come dati strutturati. Includi solo insegnamenti presenti nel testo.
+year = anno di corso (1, 2, 3...; 0 se non indicato). cfu = crediti (0 se non indicati).
+kind = "a_scelta" per attività/insegnamenti a scelta dello studente o opzionali (tipici del terzo anno), "obbligatorio" per quelli
+previsti dal piano, "sconosciuto" se non è chiaro. Se il testo elenca un gruppo di opzioni a scelta (es. "un esame tra: ..."),
+riporta ogni opzione con kind="a_scelta" e group = nome del gruppo; se indica solo "12 CFU a scelta dello studente" senza elenco,
+inserisci UNA voce "Insegnamenti a scelta dello studente" con quei CFU e kind="a_scelta".
+format = "sconosciuto" salvo che il testo dichiari esplicitamente la modalità d'esame di QUELL'insegnamento (mai dedurla dal nome);
+formatEvidence = frase breve che lo giustifica, altrimenti "".`;

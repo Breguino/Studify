@@ -12,6 +12,10 @@ const persist = () => localStorage.setItem(KEY, JSON.stringify(store));
 window.__dbWrites = 0;
 
 const answer = (prompt) => {
+  if (prompt.includes("<piano_di_studi>")) return { found: true, degreeName: "", academicYear: "", caveats: [], courses: [
+    { name: "Analisi 1", year: 1, cfu: 9, format: "sconosciuto", formatEvidence: "", kind: "obbligatorio", group: "", url: "" },
+    { name: "Teoria dei giochi", year: 3, cfu: 6, format: "sconosciuto", formatEvidence: "", kind: "a_scelta", group: "A scelta: area economica", url: "" },
+    { name: "Statistica applicata", year: 3, cfu: 6, format: "sconosciuto", formatEvidence: "", kind: "a_scelta", group: "A scelta: area economica", url: "" } ] };
   if (prompt.includes("<risposta_studente>")) return { score: 0.75, verdict: "parziale", feedback: "Quasi: manca il punto sul riequilibrio.", covered: ["Individua l'eccesso di offerta"], missing: ["Indica la condizione di equilibrio"] };
   if (prompt.includes("<argomento>")) {
     const t = JSON.parse(prompt.split("<argomento>")[1].split("</argomento>")[0]);

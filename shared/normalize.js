@@ -1,6 +1,9 @@
 // Normalizzazione dei dati generati dall'AI. Nessuna dipendenza: gira sia sul server sia nel browser
 // (la versione pubblicata come pagina Claude la usa senza zod).
 export const FORMATS = ["scritto", "orale", "test", "problemi", "misto", "sconosciuto"];
+// obbligatorio = previsto dal piano; a_scelta = a scelta dello studente (tipico del 3° anno); sconosciuto = non indicato
+export const KINDS = ["obbligatorio", "a_scelta", "sconosciuto"];
+export const LEVELS = ["L", "LM", "LMCU", ""];
 
 const clamp = (n, lo, hi, dflt) => (Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : dflt);
 const str = (s) => (typeof s === "string" ? s.trim() : "");
@@ -84,6 +87,8 @@ export function normalizeCurriculum(raw, seenUrls = new Set()) {
       // un formato dichiarato senza evidenza non è affidabile: lo si scarta
       format: format !== "sconosciuto" && !str(c.formatEvidence) ? "sconosciuto" : format,
       formatEvidence: str(c.formatEvidence),
+      kind: KINDS.includes(c.kind) ? c.kind : "sconosciuto",
+      group: str(c.group).slice(0, 120),
       url,
     });
   }
@@ -94,4 +99,19 @@ export function normalizeCurriculum(raw, seenUrls = new Set()) {
     courses,
     caveats: (raw.caveats ?? []).map(str).filter(Boolean),
   };
+}
+
+/** Elenco dei corsi di studio di un ateneo: nomi unici, livello valido, URL solo se visti nella ricerca. */
+export function normalizeDegrees(raw, seenUrls = new Set()) {
+  const seen = new Set();
+  const items = [];
+  for (const d of raw.degrees ?? []) {
+    const name = str(d.name);
+    const level = LEVELS.includes(d.level) ? d.level : "";
+    const key = `${name.toLowerCase()}|${level}`;
+    if (!name || seen.has(key)) continue;
+    seen.add(key);
+    items.push({ name, level, classe: str(d.classe).slice(0, 20), url: seenUrls.has(d.url) ? d.url : "" });
+  }
+  return { found: !!raw.found, academicYear: str(raw.academicYear), degrees: items, caveats: (raw.caveats ?? []).map(str).filter(Boolean) };
 }

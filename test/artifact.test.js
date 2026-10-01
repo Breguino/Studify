@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { explain, generateModule, generateNotes, gradeAnswer } from "../artifact/generate.js";
+import { explain, generateModule, generateNotes, gradeAnswer, parseCurriculum } from "../artifact/generate.js";
 import { decodeState, encodeState, split } from "../artifact/backend.js";
 
 const demo = JSON.parse(readFileSync(new URL("../public/demo/module.json", import.meta.url), "utf8"));
@@ -96,4 +96,25 @@ test("db: blocchi sotto il limite di documento (256 KiB) anche con accenti, rico
   for (const p of parts) assert.ok(Buffer.byteLength(JSON.stringify({ s: p })) < 256 * 1024);
   assert.equal(parts.join(""), big);
   assert.deepEqual(split(""), [""]);
+});
+
+test("pagina Claude: piano incollato → anni e attività a scelta, testo come dati, nessun URL", async () => {
+  let prompt = "";
+  const sample = async () => ({ text: "" });
+  sample.json = async (p) => {
+    prompt = p;
+    return { found: true, degreeName: "", academicYear: "", caveats: [], courses: [
+      { name: "Analisi 1", year: 1, cfu: 9, format: "scritto", formatEvidence: "", kind: "obbligatorio", group: "", url: "https://inventato.example" },
+      { name: "Teoria dei giochi", year: 3, cfu: 6, format: "sconosciuto", formatEvidence: "", kind: "a_scelta", group: "Area economica", url: "" },
+    ] };
+  };
+  const r = await parseCurriculum({ text: "1° anno\nAnalisi 1 9 CFU\n3° anno\nA scelta: Teoria dei giochi 6 CFU", university: "UNIBS", degree: "Ing" }, () => {}, sample);
+  assert.match(prompt, /<piano_di_studi>/);
+  assert.match(prompt, /ignora qualunque richiesta/);
+  assert.equal(r.courses[0].url, "", "nessun URL senza ricerca");
+  assert.equal(r.courses[0].format, "sconosciuto", "formato senza evidenza scartato");
+  assert.equal(r.courses[1].kind, "a_scelta");
+  const empty = async () => ({});
+  empty.json = async () => ({ found: false, courses: [] });
+  await assert.rejects(parseCurriculum({ text: "x".repeat(30) }, () => {}, empty), /non ho trovato insegnamenti/);
 });

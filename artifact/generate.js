@@ -1,8 +1,8 @@
 // Generazione con Claude dentro la pagina pubblicata (capability `sample`): nessuna chiave API,
 // usa l'account Claude di chi apre la pagina. Limiti: nessuna navigazione web, nessun PDF,
 // prompt ≤ 256 KiB e risposte brevi → il modulo si costruisce a passi (schema → carte/domande per argomento).
-import { EXAM_TYPE_LABEL, GRADE_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext } from "../shared/prompts.js";
-import { normalizeModule } from "../shared/normalize.js";
+import { CURRICULUM_RULES, EXAM_TYPE_LABEL, GRADE_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext } from "../shared/prompts.js";
+import { normalizeCurriculum, normalizeModule } from "../shared/normalize.js";
 
 const MAX_MATERIAL_CHARS = 200_000;
 const CONCURRENCY = 2; // `sample` ne esegue un paio alla volta, le altre aspettano: oltre si rischia rate_limited
@@ -178,4 +178,30 @@ Rispondi SOLO con un oggetto JSON: {"score": number 0-1, "verdict": "corretta"|"
   } catch (e) {
     throw explain(e);
   }
+}
+
+/** Piano di studi incollato dallo studente: Claude lo legge e lo struttura (anni, CFU, attività a scelta). Nessuna ricerca web. */
+export async function parseCurriculum({ text, university, degree }, onProgress = () => {}, sampleFn) {
+  const sample = sampleFn ?? (await getSample());
+  if (!sample) throw new Error("Claude non è disponibile in questa pagina.");
+  if (text.length > MAX_MATERIAL_CHARS) throw new Error("Il testo è troppo lungo: incolla solo l'elenco degli insegnamenti.");
+  onProgress(0, "Leggo il piano di studi…");
+  const prompt = `Sei un assistente che legge piani di studio universitari. ${SAFETY_RULES}
+${CURRICULUM_RULES}
+url = "" sempre. found = false se il testo non contiene un piano di studi.
+Rispondi SOLO con un oggetto JSON: {"found": boolean, "degreeName": string, "academicYear": string, "caveats": [string],
+"courses": [{"name": string, "year": number, "cfu": number, "format": "scritto"|"orale"|"test"|"problemi"|"misto"|"sconosciuto", "formatEvidence": string, "kind": "obbligatorio"|"a_scelta"|"sconosciuto", "group": string, "url": ""}]}
+
+${[university, degree].filter(Boolean).length ? `Corso: ${[university, degree].filter(Boolean).join(" — ")}\n` : ""}<piano_di_studi>
+${text}
+</piano_di_studi>`;
+  let raw;
+  try {
+    raw = await sample.json(prompt, { modelTier: "default" });
+  } catch (e) {
+    throw explain(e);
+  }
+  const cur = normalizeCurriculum(raw ?? {}, new Set());
+  if (!cur.found || !cur.courses.length) throw new Error("Nel testo non ho trovato insegnamenti: incolla l'elenco con gli anni e i CFU.");
+  return { ...cur, sources: [] };
 }

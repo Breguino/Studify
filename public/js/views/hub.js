@@ -28,7 +28,7 @@ export function hubView(exam, tab) {
       h("div", {}, h("h1", { style: { marginBottom: "2px" } }, exam.name),
         h("div", { class: "muted" }, `${fmtDate(exam.date)} · ${dl > 0 ? `tra ${dl} giorni` : dl === 0 ? "oggi" : "già passato"} · ${EXAM_TYPES[exam.type]}`,
           exam.formatSource?.url ? h("span", {}, " (", h("a", { href: exam.formatSource.url, target: "_blank", rel: "noopener noreferrer" }, "fonte del formato"), ")") : null),
-        exam.university ? h("div", { class: "muted small" }, [exam.university, exam.degree, exam.cfu ? `${exam.cfu} CFU` : ""].filter(Boolean).join(" · ")) : null),
+        exam.university ? h("div", { class: "muted small" }, [exam.university, exam.degree, exam.year ? `${exam.year}° anno` : "", exam.cfu ? `${exam.cfu} CFU` : ""].filter(Boolean).join(" · ")) : null),
       h("a", { class: "btn ghost", href: `#/exam/${exam.id}/edit` }, "Modifica")),
     h("nav", { class: "tabs", "aria-label": "Sezioni" }, TABS.map(([k, t]) => h("a", { href: `#/exam/${exam.id}/${k}`, "aria-current": k === tab ? "page" : null }, t))),
     body,

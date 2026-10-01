@@ -1,6 +1,6 @@
 // Sostituisce public/js/api.js nella versione pubblicata come pagina Claude: stessa interfaccia,
 // ma le chiamate vanno a Claude (capability `sample`) invece che al server.
-import { generateModule, generateNotes, getSample, gradeAnswer } from "./generate.js";
+import { generateModule, generateNotes, getSample, gradeAnswer, parseCurriculum } from "./generate.js";
 
 export async function status() {
   const sample = await getSample();
@@ -12,6 +12,7 @@ export async function status() {
 export async function runJob(path, body, onProgress = () => {}) {
   if (path === "/api/module") return generateModule(body, onProgress);
   if (path === "/api/research") return generateNotes(body, onProgress);
+  if (path === "/api/parse-curriculum") return parseCurriculum(body, onProgress);
   throw new Error("Funzione non disponibile in questa versione.");
 }
 

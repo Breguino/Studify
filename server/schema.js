@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { FORMATS } from "../shared/normalize.js";
+import { FORMATS, KINDS, LEVELS } from "../shared/normalize.js";
 
-export { normalizeCurriculum, normalizeModule } from "../shared/normalize.js";
+export { normalizeCurriculum, normalizeDegrees, normalizeModule } from "../shared/normalize.js";
 
 // Schema del "modulo di studio" generato dall'AI. Tutti i campi sono obbligatori
 // (gli output strutturati non gestiscono bene i campi opzionali): dove un campo
@@ -60,9 +60,18 @@ export const CurriculumSchema = z.object({
       cfu: z.number(),
       format: z.enum(FORMATS),
       formatEvidence: z.string(),
+      kind: z.enum(KINDS),
+      group: z.string(),
       url: z.string(),
     }),
   ),
+  caveats: z.array(z.string()),
+});
+
+export const DegreesSchema = z.object({
+  found: z.boolean(),
+  academicYear: z.string(),
+  degrees: z.array(z.object({ name: z.string(), level: z.enum(LEVELS), classe: z.string(), url: z.string() })),
   caveats: z.array(z.string()),
 });
 

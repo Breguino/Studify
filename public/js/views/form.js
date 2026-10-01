@@ -1,5 +1,5 @@
 import { go } from "../nav.js";
-import { examDefaultsFromCourse, FORMAT_LABEL, findCourse } from "../curriculum.js";
+import { coursesForYear, examDefaultsFromCourse, FORMAT_LABEL, findCourse, yearLabel } from "../curriculum.js";
 import { addDays, today } from "../dates.js";
 import { suggestExamType } from "../exam-type.js";
 import { EXAM_TYPES, sessionAdvice } from "../methods.js";
@@ -19,7 +19,7 @@ export function examFormView(exam) {
   const isNew = !exam;
   const prof = store.state.profile;
   const courses = prof?.courses ?? [];
-  const v = exam ?? { name: "", date: addDays(today(), 30), type: "scritto", level: 2, hoursPerDay: 3, sessionMinutes: 25, language: "italiano", cfu: 0 };
+  const v = exam ?? { name: "", date: addDays(today(), 30), type: "scritto", level: 2, hoursPerDay: 3, sessionMinutes: 25, language: "italiano", cfu: 0, year: 0 };
   const university = exam ? exam.university : prof?.university ?? "";
   const degree = exam ? exam.degree : prof?.degree ?? "";
   const f = {};
@@ -36,7 +36,9 @@ export function examFormView(exam) {
       : h("span", {}, "Non hai ancora indicato ateneo e corso di studio: aiutano a trovare materiali e a suggerire il formato d'esame."),
     h("a", { href: "#/profile" }, university || degree ? "Cambia" : "Imposta"));
 
-  const courseList = h("datalist", { id: "courses" }, courses.map((c) => h("option", { value: c.name })));
+  const courseList = h("datalist", { id: "courses" });
+  const fillCourses = (year) => courseList.replaceChildren(...coursesForYear(courses, year).map((c) => h("option", { value: c.name }, `${c.kind === "a_scelta" ? "a scelta · " : ""}${c.cfu ? `${c.cfu} CFU` : ""}`)));
+  const electiveNote = h("p", { class: "muted small", style: { margin: 0 } });
   const nameInput = h("input", { required: true, value: v.name, placeholder: "es. Microeconomia", list: "courses", autocomplete: "off" });
 
   const form = h(
@@ -50,6 +52,7 @@ export function examFormView(exam) {
           university,
           degree,
           cfu: Math.min(60, Math.max(0, Number(f.cfu.value) || 0)),
+          year: Number(f.year.value) || 0,
           date: f.date.value,
           type: f.type.value,
           level: Number(f.level.value),
@@ -73,8 +76,10 @@ export function examFormView(exam) {
     },
     h("h1", {}, isNew ? "Nuovo esame" : "Modifica esame"),
     where,
-    field("name", "Insegnamento / esame", nameInput, courses.length ? "Scegli dal tuo piano di studi per precompilare CFU e tipo di prova." : null),
-    courseList,
+    h("div", { class: "cols" },
+      field("name", "Insegnamento / esame", nameInput, courses.length ? "Scegli dal tuo piano di studi per precompilare CFU e tipo di prova." : null),
+      field("year", "Anno di corso", select({ 0: courses.length ? "Tutti gli anni" : "Non indicato", 1: "1° anno", 2: "2° anno", 3: "3° anno", 4: "4° anno", 5: "5° anno", 6: "6° anno" }, v.year || 0), courses.length ? "Filtra l'elenco degli insegnamenti." : null)),
+    courseList, electiveNote,
     h("div", { class: "cols" },
       field("date", "Data dell'esame", h("input", { type: "date", required: true, value: v.date, min: addDays(today(), 1) })),
       field("type", "Tipo di prova", select(EXAM_TYPES, v.type)),
@@ -106,6 +111,7 @@ export function examFormView(exam) {
     const name = f.name.value;
     if (!name.trim()) return;
     const course = findCourse(courses, name);
+    if (course?.year && !yearTouched) f.year.value = course.year;
     const d = examDefaultsFromCourse(course);
     if (d && !cfuTouched && d.cfu) f.cfu.value = d.cfu;
     if (d?.type) {
@@ -122,6 +128,19 @@ export function examFormView(exam) {
       : "Materia non riconosciuta: ho messo «scritto + orale». Scegli quello del tuo esame.");
   }
   f.name.addEventListener("input", refresh);
+  // L'anno filtra l'elenco; se in quell'anno ci sono attività a scelta lo ricorda (al 3° anno di solito ci sono).
+  let yearTouched = !isNew;
+  const refreshYear = () => {
+    const y = Number(f.year.value) || 0;
+    fillCourses(y);
+    const el = y ? courses.filter((c) => c.year === y && c.kind === "a_scelta") : [];
+    const named = el.filter((c) => !/insegnamenti a scelta|a scelta dello studente/i.test(c.name));
+    electiveNote.textContent = el.length
+      ? `${yearLabel(y)}: ci sono attività a scelta${named.length ? ` (${named.map((c) => c.name).join(", ")})` : ""}. Se hai scelto un altro insegnamento, scrivi il suo nome.`
+      : "";
+  };
+  f.year.addEventListener("change", () => { yearTouched = true; refreshYear(); });
+  refreshYear();
   if (isNew) refresh();
 
   if (!isNew)

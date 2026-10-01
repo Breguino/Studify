@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { EXAM_TYPE_LABEL, GRADE_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, where } from "../shared/prompts.js";
-import { CurriculumSchema, GradeSchema, ModuleSchema, normalizeCurriculum, normalizeModule } from "./schema.js";
+import { CURRICULUM_RULES, EXAM_TYPE_LABEL, GRADE_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, where } from "../shared/prompts.js";
+import { CurriculumSchema, DegreesSchema, GradeSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees, normalizeModule } from "./schema.js";
 
 export const MODEL = process.env.STUDIFY_MODEL || "claude-opus-5-5";
 
@@ -116,8 +116,10 @@ ${SAFETY_RULES}
 Non inventare insegnamenti, CFU o modalità d'esame: riporta solo ciò che leggi nelle pagine trovate.`;
   const prompt = `Trova il piano di studi (manifesto degli studi / offerta formativa) del corso di studio "${degree}" presso "${university}",
 per l'anno accademico più recente disponibile. Preferisci le pagine ufficiali dell'ateneo e del dipartimento.
-Elenca gli insegnamenti con: anno di corso, CFU e, se la scheda dell'insegnamento lo dice esplicitamente, la modalità d'esame
-(scritto, orale, test, esercizi) con l'URL della pagina dove l'hai letta. Indica anche l'anno accademico dei dati.
+Elenca gli insegnamenti per anno di corso con CFU e se sono obbligatori o a scelta; per il terzo anno (o l'ultimo) riporta anche
+le attività a scelta dello studente e, se esiste, l'elenco degli insegnamenti a scelta consigliati dal corso.
+Se la scheda dell'insegnamento dichiara esplicitamente la modalità d'esame (scritto, orale, test, esercizi), indicala con l'URL
+della pagina dove l'hai letta. Indica anche l'anno accademico dei dati.
 Se esistono più curricula, indica quale hai usato. Se non trovi il corso, dillo chiaramente.`;
   const found = await webResearch({ system, prompt, maxUses: 10 }, onProgress);
 
@@ -127,9 +129,8 @@ Se esistono più curricula, indica quale hai usato. Se non trovi il corso, dillo
     thinking: { type: "adaptive" },
     output_config: { effort: "low", format: zodOutputFormat(CurriculumSchema) },
     system: `Estrai dati strutturati dal testo di una ricerca. ${SAFETY_RULES}
-Regole: includi solo insegnamenti elencati nel testo. format = "sconosciuto" salvo che il testo dichiari esplicitamente la modalità
-d'esame di QUELL'insegnamento (mai dedurla dal nome). formatEvidence = frase breve che lo giustifica, altrimenti "". url = pagina
-da cui proviene, scelta SOLO tra gli URL elencati, altrimenti "". year/cfu = 0 se non indicati. found = false se il corso non è stato trovato.`,
+${CURRICULUM_RULES}
+url = pagina da cui proviene, scelta SOLO tra gli URL elencati, altrimenti "". found = false se il corso non è stato trovato.`,
     messages: [{ role: "user", content: `<ricerca>\n${found.notes}\n</ricerca>\n<url_validi>\n${[...found.seenUrls].join("\n")}\n</url_validi>` }],
   });
   assertUsable(msg);
@@ -142,6 +143,65 @@ da cui proviene, scelta SOLO tra gli URL elencati, altrimenti "". year/cfu = 0 s
   const cur = normalizeCurriculum(raw, found.seenUrls);
   if (!cur.found || !cur.courses.length) throw new Error("Non ho trovato il piano di studi online: inserisci gli insegnamenti a mano.");
   return { ...cur, sources: found.sources };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Corsi di studio di un ateneo                                               */
+/* -------------------------------------------------------------------------- */
+
+export async function degrees({ university }, onProgress = () => {}) {
+  const system = `Sei un assistente che consulta i siti ufficiali delle università italiane.
+${SAFETY_RULES}
+Non inventare corsi: riporta solo ciò che leggi nelle pagine trovate.`;
+  const prompt = `Trova l'elenco dei corsi di studio (laurea triennale L, magistrale LM, ciclo unico LMCU) attivi presso "${university}"
+per l'anno accademico più recente. Preferisci la pagina "offerta formativa" del sito ufficiale dell'ateneo.
+Per ciascun corso indica nome, tipo, classe di laurea (es. L-8) se riportata, e l'URL della pagina. Indica l'anno accademico dei dati.
+Se non trovi l'offerta formativa, dillo chiaramente.`;
+  const found = await webResearch({ system, prompt, maxUses: 10 }, onProgress);
+  const msg = await client().messages.create({
+    model: MODEL,
+    max_tokens: 16000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "low", format: zodOutputFormat(DegreesSchema) },
+    system: `Estrai dati strutturati dal testo di una ricerca. ${SAFETY_RULES}
+Includi solo corsi elencati nel testo. level = "L", "LM" o "LMCU" ("" se non chiaro). classe = codice della classe (es. "L-8") o "".
+url = pagina da cui proviene, scelta SOLO tra gli URL elencati, altrimenti "". found = false se l'offerta formativa non è stata trovata.`,
+    messages: [{ role: "user", content: `<ricerca>\n${found.notes}\n</ricerca>\n<url_validi>\n${[...found.seenUrls].join("\n")}\n</url_validi>` }],
+  });
+  assertUsable(msg);
+  let raw;
+  try {
+    raw = DegreesSchema.parse(JSON.parse(textOf(msg.content)));
+  } catch {
+    throw new Error("Non sono riuscito a interpretare l'elenco dei corsi trovato. Scrivi il nome del corso a mano.");
+  }
+  const out = normalizeDegrees(raw, found.seenUrls);
+  if (!out.found || !out.degrees.length) throw new Error("Non ho trovato l'elenco dei corsi online: scrivi il nome del tuo corso a mano.");
+  return { ...out, sources: found.sources };
+}
+
+/** Piano di studi incollato dallo studente (dal sito dell'ateneo, da Esse3, da un PDF): nessuna ricerca web. */
+export async function parseCurriculum({ text, university, degree }) {
+  const msg = await client().messages.create({
+    model: MODEL,
+    max_tokens: 16000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "low", format: zodOutputFormat(CurriculumSchema) },
+    system: `Sei un assistente che legge piani di studio universitari. ${SAFETY_RULES}
+${CURRICULUM_RULES}
+url = "" sempre. found = false se il testo non contiene un piano di studi.`,
+    messages: [{ role: "user", content: `${where(university, degree) ? `Corso: ${where(university, degree)}\n` : ""}<piano_di_studi>\n${text}\n</piano_di_studi>` }],
+  });
+  assertUsable(msg);
+  let raw;
+  try {
+    raw = CurriculumSchema.parse(JSON.parse(textOf(msg.content)));
+  } catch {
+    throw new Error("Non sono riuscito a leggere il piano di studi incollato. Prova a incollare solo l'elenco degli insegnamenti.");
+  }
+  const cur = normalizeCurriculum(raw, new Set());
+  if (!cur.found || !cur.courses.length) throw new Error("Nel testo non ho trovato insegnamenti: incolla l'elenco con gli anni e i CFU.");
+  return { ...cur, sources: [] };
 }
 
 /* -------------------------------------------------------------------------- */

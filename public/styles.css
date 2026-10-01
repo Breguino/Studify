@@ -151,3 +151,6 @@ details > summary { cursor: pointer; }
   .pill { font-size: .72rem; padding: 2px 8px; margin-right: 4px; white-space: nowrap; }
   main { padding-inline: 16px; }
 }
+td select { width: auto; min-width: 5.2rem; padding: 5px 8px; font-size: .88rem; }
+td select[aria-label^="Anno"] { min-width: 4rem; }
+details.card > summary { cursor: pointer; }

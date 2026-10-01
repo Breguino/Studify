@@ -9,7 +9,7 @@ import { buildLocalModule } from "../public/js/local-builder.js";
 import { normalizeModule } from "../server/schema.js";
 import { findExamFormat, suggestExamType } from "../public/js/exam-type.js";
 import { UNIVERSITIES, resolveUniversity } from "../public/js/universities.js";
-import { examDefaultsFromCourse, findCourse } from "../public/js/curriculum.js";
+import { coursesForYear, examDefaultsFromCourse, findCourse, groupByYear, parseCurriculumText } from "../public/js/curriculum.js";
 
 test("date: aritmetica sui giorni e cambio ora legale", () => {
   assert.equal(daysBetween("2026-03-28", "2026-03-30"), 2); // attraversa il cambio d'ora
@@ -239,4 +239,51 @@ test("piano di studi: abbinamento insegnamento, ambiguo → nessuno", () => {
   assert.equal(findCourse(courses, "Fisica"), null);
   assert.deepEqual(examDefaultsFromCourse(courses[0]), { cfu: 9, type: "scritto", evidence: "prova scritta", url: "https://u/x" });
   assert.equal(examDefaultsFromCourse(courses[1]).type, null, "formato sconosciuto → si ricade sull'euristica");
+});
+
+test("piano incollato: anni, CFU, tabelle, attività a scelta e segnaposto", () => {
+  const text = `Piano di studi — Ingegneria Informatica (L-8)
+1° anno
+Analisi matematica 1 - 9 CFU
+Fisica generale (9 CFU)
+Fondamenti di informatica\t9\tING-INF/05
+Secondo anno
+- Diritto privato 6 CFU
+[12345] Basi di dati (I semestre) 9 CFU
+Anno 3
+Insegnamenti a scelta dello studente 12 CFU
+A scelta (un esame tra i seguenti):
+- Teoria dei giochi 6 CFU
+- Statistica applicata 6 CFU
+
+Prova finale 3 CFU
+Totale CFU 180`;
+  const { courses, years } = parseCurriculumText(text);
+  assert.deepEqual(years, [1, 2, 3]);
+  const by = (n) => courses.find((c) => c.name === n);
+  assert.equal(by("Analisi matematica 1").cfu, 9);
+  assert.equal(by("Fisica generale").year, 1);
+  assert.equal(by("Fondamenti di informatica").cfu, 9, "riga a tabella con SSD");
+  assert.equal(by("Diritto privato").year, 2);
+  assert.equal(by("Basi di dati").cfu, 9, "codice e semestre rimossi");
+  assert.equal(by("Insegnamenti a scelta dello studente").kind, "a_scelta");
+  assert.equal(by("Teoria dei giochi").kind, "a_scelta");
+  assert.match(by("Teoria dei giochi").group, /A scelta/);
+  assert.equal(by("Prova finale").kind, "obbligatorio", "la riga vuota chiude il gruppo a scelta");
+  assert.ok(!courses.some((c) => /totale/i.test(c.name)), "righe di totale escluse");
+  assert.equal(parseCurriculumText("niente di utile qui").courses.length, 0);
+});
+
+test("raggruppamento per anno: obbligatori, gruppi a scelta, anno non indicato in fondo", () => {
+  const cs = [
+    { name: "A", year: 1, kind: "obbligatorio" }, { name: "B", year: 3, kind: "obbligatorio" },
+    { name: "C", year: 3, kind: "a_scelta", group: "Area economica" }, { name: "D", year: 3, kind: "a_scelta", group: "Area economica" },
+    { name: "E", year: 3, kind: "a_scelta", group: "" }, { name: "F", year: 0, kind: "sconosciuto" },
+  ];
+  const g = groupByYear(cs);
+  assert.deepEqual(g.map((x) => x.label), ["1° anno", "3° anno", "Anno non indicato"]);
+  assert.equal(g[1].required.length, 1);
+  assert.deepEqual(g[1].electives.map((e) => [e.group, e.courses.length]), [["Area economica", 2], ["A scelta dello studente", 1]]);
+  assert.deepEqual(coursesForYear(cs, 3).map((c) => c.name), ["B", "C", "D", "E", "F"], "anno + senza anno");
+  assert.equal(coursesForYear(cs, 0).length, 6);
 });
