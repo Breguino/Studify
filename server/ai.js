@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, moduleDigest, where } from "../shared/prompts.js";
+import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXERCISES_TASK, EXTEND_RULES, MATERIAL_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, where } from "../shared/prompts.js";
 import { CurriculumSchema, DegreesSchema, ExamFormatSchema, GradeSchema, ImportRowsSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeImportRows, normalizeModule } from "./schema.js";
 
 export const MODEL = process.env.STUDIFY_MODEL || "claude-opus-5-5";
@@ -321,24 +321,26 @@ const extendTask = (exam, type) => `${EXTEND_RULES}
 
 function buildUserContent({ exam, materials, research: res, existing }, task = fullTask) {
   const content = [];
+  const docs = [];
   for (const m of materials) {
-    if (m.kind === "pdf" && m.data)
-      content.push({
-        type: "document",
-        title: m.title,
-        source: { type: "base64", media_type: "application/pdf", data: m.data },
-      });
+    if (m.kind === "pdf" && m.data) {
+      const title = `${MATERIAL_LABEL[m.role] ?? "Materiale"} — ${m.title}${m.pages ? ` (pagine ${m.pages})` : ""}`;
+      docs.push(title);
+      content.push({ type: "document", title, source: { type: "base64", media_type: "application/pdf", data: m.data } });
+    }
   }
   const parts = existing ? [moduleDigest(existing), "Materiali NUOVI da integrare nel modulo (anche i PDF allegati sono nuovi):"] : [];
+  if (docs.length) parts.push(`Documenti PDF allegati (tipo — titolo):\n${docs.map((d) => `- ${d}`).join("\n")}`);
   for (const m of materials) {
-    if (m.kind !== "pdf" && m.text) parts.push(`<appunti_studente titolo="${m.title.replace(/"/g, "'")}">\n${m.text}\n</appunti_studente>`);
+    if (m.kind !== "pdf" && m.text) parts.push(materialText(m));
   }
   if (res?.notes) {
     parts.push(`<ricerca_online>\n${res.notes}\n</ricerca_online>`);
     parts.push(`<fonti_online>\n${res.sources.map((s) => `${s.id}: ${s.title} — ${s.url}`).join("\n")}\n</fonti_online>`);
   }
   const type = exam.type in EXAM_TYPE_LABEL ? exam.type : "misto";
-  parts.push(`${examContext(exam)}\n\n${task(exam, type)}`);
+  const exercises = materials.some((m) => m.role === "esercizi");
+  parts.push(`${examContext(exam)}\n\n${task(exam, type)}${exercises ? `\n${EXERCISES_TASK}` : ""}`);
   content.push({ type: "text", text: parts.join("\n\n") });
   return content;
 }

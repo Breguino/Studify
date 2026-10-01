@@ -1,7 +1,7 @@
 // Generazione con Claude dentro la pagina pubblicata (capability `sample`): nessuna chiave API,
 // usa l'account Claude di chi apre la pagina. Limiti: nessuna navigazione web, nessun PDF,
 // prompt ≤ 256 KiB e risposte brevi → il modulo si costruisce a passi (schema → carte/domande per argomento).
-import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, moduleDigest } from "../shared/prompts.js";
+import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXERCISES_TASK, EXTEND_RULES, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest } from "../shared/prompts.js";
 import { normalizeCurriculum, normalizeExamFormat, normalizeImportRows, normalizeModule } from "../shared/normalize.js";
 
 const MAX_MATERIAL_CHARS = 200_000;
@@ -47,7 +47,7 @@ async function pool(items, n, fn) {
 
 function materialBlock({ materials, research }) {
   const parts = [];
-  for (const m of materials) if (m.kind !== "pdf" && m.text) parts.push(`<appunti_studente titolo="${String(m.title).replace(/"/g, "'")}">\n${m.text}\n</appunti_studente>`);
+  for (const m of materials) if (m.kind !== "pdf" && m.text) parts.push(materialText(m));
   if (research?.notes)
     parts.push(research.generated
       ? `<traccia_ai_non_verificata>\n${research.notes}\n</traccia_ai_non_verificata>`
@@ -63,7 +63,8 @@ const OUTLINE_SHAPE = `Rispondi SOLO con un oggetto JSON (nessun testo prima o d
    "summary": string (3-5 frasi con parole tue), "keyConcepts": [{"term": string, "definition": string}] (2-5),
    "mustKnow": [string] (3-5), "commonMistakes": [string] (1-3),
    "origin": "notes"|"model",
-   "excerpt": string (passaggio COPIATO alla lettera dai materiali su cui si basa l'argomento, max 1000 caratteri; "" se origin è "model")}]}
+   "excerpt": string (passaggio COPIATO alla lettera dai materiali su cui si basa l'argomento, max 1000 caratteri; "" se origin è "model"),
+   "exercises": string (1-3 esercizi COPIATI dai materiali di tipo esercizi che riguardano l'argomento, con la soluzione se c'è, max 2000 caratteri; "" se non ce ne sono)}]}
 Regole di forma: da 5 a 12 argomenti, in ordine logico. origin="notes" se il contenuto viene dai materiali dello studente;
 "model" solo per ciò che non è nei materiali (conoscenza generale, di cui sei certo). Il contenuto della <traccia_ai_non_verificata>
 è una bozza senza fonti: ciò che proviene solo da lì ha origin="model".`;
@@ -75,6 +76,12 @@ const TOPIC_SHAPE = (type, n) => `Rispondi SOLO con un oggetto JSON (nessun test
    "rubric": [string] (3-6 punti se open/problem, [] se mcq)}] (${n.questions})
 Mix delle domande per questa prova (${EXAM_TYPE_LABEL[type]}): ${QUESTION_MIX[type]}.`;
 
+/** Esercizi dei materiali su questo argomento: modello per le domande «problem» (il passo 2 non vede i materiali interi). */
+const exerciseBlock = (t) =>
+  typeof t.exercises === "string" && t.exercises.trim()
+    ? `<esercizi_dai_materiali>\n${t.exercises.slice(0, 2500)}\n</esercizi_dai_materiali>\nUsa questi esercizi come modello: almeno metà delle domande siano kind="problem" dello stesso tipo, con svolgimento in modelAnswer (se la soluzione non c'è, risolvilo e scrivi in explanation "Svolgimento non presente nei materiali: verificalo"). Non farne flashcard.\n`
+    : "";
+
 /**
  * Modulo di studio a passi. `onProgress(chars, label)`: l'etichetta descrive il passo.
  * @returns {Promise<object>} modulo normalizzato (stesso formato del server)
@@ -85,7 +92,7 @@ export async function generateModule({ exam, materials, research }, onProgress =
   const type = exam.type in EXAM_TYPE_LABEL ? exam.type : "misto";
   const body = materialBlock({ materials, research });
   if (!body.trim()) throw new Error(materials.some((m) => m.kind === "pdf") ? "I PDF non sono supportati in questa versione: incolla il testo degli appunti." : "Aggiungi almeno un materiale testuale.");
-  if (body.length > MAX_MATERIAL_CHARS) throw new Error(`Materiale troppo esteso per questa versione (${Math.round(body.length / 1000)}k caratteri, max ${MAX_MATERIAL_CHARS / 1000}k): dividilo in più esami.`);
+  if (body.length > MAX_MATERIAL_CHARS) throw new Error(`Materiale troppo esteso per una volta (${Math.round(body.length / 1000)}k caratteri, max ${MAX_MATERIAL_CHARS / 1000}k, circa 60-80 pagine di libro): nei materiali scegli le pagine da usare e aggiungi il resto dopo con «Aggiungi al modulo».`);
 
   // Passo 1: argomenti
   onProgress(0, "Passo 1: leggo i materiali e individuo gli argomenti…");
@@ -107,7 +114,7 @@ export async function generateModule({ exam, materials, research }, onProgress =
   const failed = [];
   const perTopic = await pool(topics, CONCURRENCY, async (t) => {
     onProgress(0, `Passo 2: carte e domande — argomento ${Math.min(done + 1, topics.length)}/${topics.length}…`);
-    const prompt = `${RULES}\n\n${examContext(exam)}\n\n<argomento>\n${JSON.stringify({ title: t.title, summary: t.summary, keyConcepts: t.keyConcepts, mustKnow: t.mustKnow, excerpt: t.excerpt ?? "" })}\n</argomento>\n\nCompito: crea flashcard e domande SOLO su questo argomento, fedeli all'estratto e al riassunto (non aggiungere fatti che non vi compaiono).\n${TOPIC_SHAPE(type, { cards: "6-9 flashcard", questions: "3-5 domande" })}`;
+    const prompt = `${RULES}\n\n${examContext(exam)}\n\n<argomento>\n${JSON.stringify({ title: t.title, summary: t.summary, keyConcepts: t.keyConcepts, mustKnow: t.mustKnow, excerpt: t.excerpt ?? "" })}\n</argomento>\n${exerciseBlock(t)}\nCompito: crea flashcard e domande SOLO su questo argomento, fedeli all'estratto e al riassunto (non aggiungere fatti che non vi compaiono).\n${TOPIC_SHAPE(type, { cards: "6-9 flashcard", questions: "3-5 domande" })}`;
     try {
       const r = await sample.json(prompt, { modelTier: "default" });
       return { flashcards: Array.isArray(r?.flashcards) ? r.flashcards : [], questions: Array.isArray(r?.questions) ? r.questions : [] };
@@ -139,7 +146,8 @@ const EXTEND_OUTLINE_SHAPE = `Rispondi SOLO con un oggetto JSON (nessun testo pr
  "topics": [{"id": string (l'id esistente, es. "t3", se lo approfondisci; "n1", "n2"… se è nuovo), "title": string,
    "importance": 1|2|3, "difficulty": 1|2|3, "summary": string, "keyConcepts": [{"term": string, "definition": string}] (solo voci nuove),
    "mustKnow": [string] (solo voci nuove), "commonMistakes": [string] (solo voci nuove), "origin": "notes"|"model",
-   "excerpt": string (passaggio COPIATO alla lettera dai MATERIALI NUOVI su cui si basa, max 1000 caratteri)}]}
+   "excerpt": string (passaggio COPIATO alla lettera dai MATERIALI NUOVI su cui si basa, max 1000 caratteri),
+   "exercises": string (1-3 esercizi COPIATI dai materiali nuovi di tipo esercizi sull'argomento, con soluzione se c'è, max 2000 caratteri; "" se non ce ne sono)}]}
 Al massimo 8 argomenti in tutto (nuovi + approfonditi). Carte e domande verranno chieste dopo, argomento per argomento.`;
 
 /**
@@ -182,7 +190,7 @@ export async function extendModule({ exam, materials, research, existing }, onPr
   const perTopic = await pool(topics, CONCURRENCY, async (t) => {
     const old = known.has(t.id);
     const have = old ? (existing.flashcards ?? []).filter((c) => c.topicId === t.id).map((c) => `- ${c.front}`).join("\n") : "";
-    const prompt = `${RULES}\n\n${examContext(exam)}\n\n<argomento>\n${JSON.stringify({ title: t.title, summary: t.summary, keyConcepts: t.keyConcepts, mustKnow: t.mustKnow, excerpt: t.excerpt ?? "" })}\n</argomento>\n${old ? `<carte_esistenti>\n${have}\n</carte_esistenti>\n` : ""}\nCompito: crea flashcard e domande SOLO ${old ? "sui contenuti NUOVI dell'estratto, senza ripetere le carte esistenti (nemmeno con parole diverse)" : "su questo argomento"}, fedeli all'estratto e al riassunto (non aggiungere fatti che non vi compaiono).\n${TOPIC_SHAPE(type, old ? { cards: "2-5 flashcard", questions: "1-3 domande" } : { cards: "6-9 flashcard", questions: "3-5 domande" })}`;
+    const prompt = `${RULES}\n\n${examContext(exam)}\n\n<argomento>\n${JSON.stringify({ title: t.title, summary: t.summary, keyConcepts: t.keyConcepts, mustKnow: t.mustKnow, excerpt: t.excerpt ?? "" })}\n</argomento>\n${exerciseBlock(t)}${old ? `<carte_esistenti>\n${have}\n</carte_esistenti>\n` : ""}\nCompito: crea flashcard e domande SOLO ${old ? "sui contenuti NUOVI dell'estratto, senza ripetere le carte esistenti (nemmeno con parole diverse)" : "su questo argomento"}, fedeli all'estratto e al riassunto (non aggiungere fatti che non vi compaiono).\n${TOPIC_SHAPE(type, old ? { cards: "2-5 flashcard", questions: "1-3 domande" } : { cards: "6-9 flashcard", questions: "3-5 domande" })}`;
     try {
       const r = await sample.json(prompt, { modelTier: "default" });
       return { flashcards: Array.isArray(r?.flashcards) ? r.flashcards : [], questions: Array.isArray(r?.questions) ? r.questions : [] };
@@ -200,7 +208,7 @@ export async function extendModule({ exam, materials, research, existing }, onPr
   return {
     delta: {
       gaps: [...gaps, ...failed.map((f) => `Per «${f}» non sono riuscito a generare carte e domande: ripeti l'aggiornamento.`)],
-      topics: topics.map(({ excerpt, ...t }) => ({ ...t, sourceIds: [] })),
+      topics: topics.map(({ excerpt, exercises, ...t }) => ({ ...t, sourceIds: [] })),
       flashcards: perTopic.flatMap((r, i) => r.flashcards.map((c) => ({ ...c, topicId: topics[i].id }))),
       questions: perTopic.flatMap((r, i) => r.questions.map((q) => ({ ...q, topicId: topics[i].id }))),
     },

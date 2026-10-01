@@ -4,18 +4,28 @@ import { daysLeft } from "../domain.js";
 import { findExamFormat } from "../exam-type.js";
 import { EXAM_TYPES } from "../methods.js";
 import { buildLocalModule, localDelta } from "../local-builder.js";
-import { applyUpdate, compactModule, pendingMaterials, updateSummary } from "../module-update.js";
+import { applyUpdate, compactModule, markSent, parseRange, pendingMaterials, sliceText, unsentPages, updateSummary } from "../module-update.js";
+import { officeText } from "../office-text.js";
+import { extractPdfPages } from "../pdf-pages.js";
+import { readPdf } from "../pdf-text.js";
+import { guessRole, roleOf, ROLES } from "../material-roles.js";
 import * as store from "../store.js";
 import { fmtDate, today } from "../dates.js";
 import { badge, confirmDialog, h, readFileAs, toast, uid } from "../ui.js";
 
-const MAX_PDF_TOTAL = 24 * 1024 * 1024;
-const KIND = { notes: "Appunti", pdf: "PDF", web: "Ricerca online" };
+const MAX_PDF_TOTAL = 300 * 1024 * 1024; // archiviati nel browser: anche libri interi, poi se ne scelgono le pagine
+// Per una richiesta all'AI (limiti dell'API: 600 pagine e 32 MB; il server accetta 40 MB di richiesta in base64)
+const MAX_SEND_PAGES = 600;
+const MAX_SEND_BYTES = 28 * 1024 * 1024;
+const KIND = { notes: "Testo", pdf: "PDF", web: "Ricerca online" }; // il formato; il tipo (libro, esercizi…) è a parte
 
 // Operazioni lunghe in corso, per esame: sopravvivono ai re-render della pagina.
 const jobs = new Map();
 
 const now = () => new Date().toISOString();
+// Ridisegno dopo l'evento: un campo con il focus rimosso durante «change» farebbe scattare un secondo ridisegno annidato.
+const rerenderSoon = () => setTimeout(() => core.rerender());
+const chars = (n) => (n < 1000 ? `${n} caratteri` : `~${Math.round(n / 1000)}k caratteri`);
 const kb = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 function jobLine(exam, kind, label) {
@@ -51,9 +61,10 @@ async function addFiles(exam, files) {
     if ((/\.pdf$/i.test(file.name) || file.type === "application/pdf") && core.ai.pdf === false && core.pdfText) {
       // pagina Claude: il PDF non si può inviare, ma il testo si estrae qui e diventa un appunto
       try {
-        const text = await core.pdfText(file);
-        if (text.trim().length < 80) toast(`«${file.name}»: PDF senza testo selezionabile (scansione): incolla il testo a mano.`, "error");
-        else exam.materials.push({ id: uid(), kind: "notes", title: `${name} (da PDF)`, text, size: text.length, addedAt: now() });
+        if (file.size > 8 * 1024 * 1024) toast(`Leggo «${file.name}»: per un libro può volerci qualche decina di secondi…`);
+        const { text, pages } = await core.pdfText(file);
+        if (text.replace(/\f/g, "").trim().length < 80) toast(`«${file.name}»: PDF senza testo selezionabile (scansione): incolla il testo a mano.`, "error");
+        else exam.materials.push({ id: uid(), kind: "notes", role: guessRole(file.name, true), title: `${name} (da PDF)`, text, size: text.length, numPages: pages, addedAt: now() });
       } catch (e) {
         toast(`«${file.name}»: ${e.message}`, "error");
       }
@@ -65,12 +76,28 @@ async function addFiles(exam, files) {
       const dataUrl = await readFileAs(file, "dataurl");
       const fileId = uid();
       await store.putFile(fileId, dataUrl.slice(dataUrl.indexOf(",") + 1));
-      exam.materials.push({ id: uid(), kind: "pdf", title: name, fileId, size: file.size, addedAt: now() });
+      let numPages;
+      try {
+        numPages = (await readPdf(await file.arrayBuffer(), { maxPages: 0 })).numPages;
+      } catch {
+        /* il conteggio serve solo a scegliere le pagine */
+      }
+      exam.materials.push({ id: uid(), kind: "pdf", role: guessRole(file.name, true), title: name, fileId, size: file.size, numPages, addedAt: now() });
       pdfTotal += file.size;
+    } else if (/\.(docx|pptx)$/i.test(file.name)) {
+      try {
+        const { text, pages } = await officeText(await file.arrayBuffer(), file.name);
+        if (text.replace(/\f/g, "").trim().length < 20) toast(`«${file.name}»: nessun testo trovato (solo immagini?).`, "error");
+        else exam.materials.push({ id: uid(), kind: "notes", role: guessRole(file.name, /\.pptx$/i.test(file.name)), title: name, text, size: text.length, numPages: pages || undefined, addedAt: now() });
+      } catch (e) {
+        toast(`«${file.name}»: ${e.message}`, "error");
+      }
+    } else if (/\.(doc|ppt)$/i.test(file.name)) {
+      toast(`«${file.name}»: il vecchio formato Office non è supportato. Salvalo come .docx/.pptx o PDF.`, "error");
     } else if (/\.(txt|md|markdown)$/i.test(file.name) || file.type.startsWith("text/")) {
       const text = await readFileAs(file, "text");
-      exam.materials.push({ id: uid(), kind: "notes", title: name, text, size: text.length, addedAt: now() });
-    } else toast(`«${file.name}»: formato non supportato (usa .txt, .md o .pdf).`, "error");
+      exam.materials.push({ id: uid(), kind: "notes", role: guessRole(file.name), title: name, text, size: text.length, addedAt: now() });
+    } else toast(`«${file.name}»: formato non supportato (usa .pdf, .docx, .pptx, .txt o .md).`, "error");
   }
   store.save();
   core.rerender();
@@ -86,15 +113,29 @@ async function removeMaterial(exam, m) {
 const hasProgress = (exam) => exam.module && (Object.keys(exam.srs).length || Object.keys(exam.qstats).length || Object.keys(exam.learned).length);
 const examInfo = (exam) => ({ name: exam.name, type: exam.type, level: exam.level, daysLeft: daysLeft(exam), language: exam.language, university: exam.university, degree: exam.degree, cfu: exam.cfu });
 
-/** Materiali nel formato delle API (i PDF letti dall'archivio, la ricerca online a parte). */
-async function payload(list) {
+/**
+ * Materiali nel formato delle API: dei PDF e dei testi divisi in pagine si mandano solo le pagine scelte
+ * (con `onlyNew`, solo quelle non ancora nel modulo). Controlla i limiti di una richiesta prima di partire.
+ */
+async function payload(list, { onlyNew = false } = {}) {
   const materials = [];
   let research = null;
+  let pages = 0;
+  let bytes = 0;
   for (const m of list) {
+    const range = onlyNew ? unsentPages(m) : parseRange(m.pages, m.numPages) ? m.pages : null;
+    const r = parseRange(range, m.numPages);
     if (m.kind === "web") research = { notes: m.text, sources: m.sources, generated: !!m.generated };
-    else if (m.kind === "pdf") materials.push({ kind: "pdf", title: m.title, data: await store.getFile(m.fileId) });
-    else materials.push({ kind: "notes", title: m.title, text: m.text });
+    else if (m.kind === "pdf") {
+      let data = await store.getFile(m.fileId);
+      if (r && extractPdfPages && (r.from > 1 || r.to < (m.numPages ?? Infinity))) data = await extractPdfPages(data, r.from, r.to);
+      pages += r ? r.to - r.from + 1 : m.numPages ?? 0;
+      bytes += data.length;
+      materials.push({ kind: "pdf", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", data });
+    } else materials.push({ kind: "notes", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", text: sliceText(m.text, range) });
   }
+  if (pages > MAX_SEND_PAGES || bytes > MAX_SEND_BYTES)
+    throw new Error(`Troppo materiale PDF per una volta (${pages} pagine, ${kb(bytes * 0.75)}): il limite è ${MAX_SEND_PAGES} pagine e ~${kb(MAX_SEND_BYTES * 0.75)}. Nel materiale scegli le pagine (es. i capitoli del programma) e aggiungi il resto dopo con «Aggiungi al modulo».`);
   return { materials, research };
 }
 
@@ -103,6 +144,7 @@ async function generate(exam) {
   await run(exam, "module", async (onProgress) => {
     const mod = await api.runJob("/api/module", { exam: examInfo(exam), ...(await payload(exam.materials)) }, onProgress);
     resetProgress(exam, mod);
+    exam.materials.forEach(markSent);
     toast("Modulo pronto!", "ok");
   });
 }
@@ -117,29 +159,52 @@ async function update(exam) {
   const pending = pendingMaterials(exam);
   if (!pending.length) return;
   await run(exam, "update", async (onProgress) => {
-    const res = await api.runJob("/api/module-extend", { exam: examInfo(exam), ...(await payload(pending)), existing: compactModule(exam.module) }, onProgress);
+    const res = await api.runJob("/api/module-extend", { exam: examInfo(exam), ...(await payload(pending, { onlyNew: true })), existing: compactModule(exam.module) }, onProgress);
     toast(updateSummary(applyUpdate(exam, res, pending.map((m) => m.id))), "ok");
+    pending.forEach(markSent);
   });
 }
 
 function updateLocal(exam) {
   const pending = pendingMaterials(exam);
-  const text = pending.filter((m) => m.kind === "notes").map((m) => m.text).join("\n\n");
+  const text = pending.filter((m) => m.kind === "notes" && roleOf(m) !== "esercizi").map((m) => sliceText(m.text, unsentPages(m))).join("\n\n");
   if (!text.trim()) return toast("La modalità base usa solo appunti testuali (non PDF).", "error");
   toast(updateSummary(applyUpdate(exam, { delta: localDelta(text, "Appunti nuovi"), mode: "local" }, pending.map((m) => m.id))), "ok");
+  pending.forEach(markSent);
   store.save();
   core.rerender();
 }
 
 function generateLocal(exam) {
-  const text = exam.materials.filter((m) => m.kind === "notes").map((m) => m.text).join("\n\n");
+  const text = exam.materials.filter((m) => m.kind === "notes" && roleOf(m) !== "esercizi").map((m) => sliceText(m.text, m.pages)).join("\n\n");
   if (!text.trim()) return toast("La modalità base funziona solo con appunti testuali (non PDF).", "error");
   const mod = buildLocalModule(text, exam.name);
   if (!mod.topics.length) return toast("Non ho trovato argomenti: aggiungi titoli (#, 1., MAIUSCOLO) agli appunti.", "error");
   resetProgress(exam, mod);
+  exam.materials.forEach(markSent);
   store.save();
   toast(`Modulo base: ${mod.topics.length} argomenti, ${mod.flashcards.length} flashcard.`, "ok");
   core.rerender();
+}
+
+/** «Pagine 45–120 di 380»: per libri e slide si sceglie la parte da usare (vuoto = tutte). */
+function pagePicker(m) {
+  const r = parseRange(m.pages, m.numPages);
+  const unit = m.fileId || m.title.endsWith("(da PDF)") ? "pagine" : "slide";
+  const num = (v, label) => h("input", { type: "number", min: 1, max: m.numPages, value: v ?? "", placeholder: label, "aria-label": `${label} (${m.title})`, style: { width: "78px", padding: "4px 8px" },
+    onchange: (e) => {
+      const box = e.target.parentElement.querySelectorAll("input");
+      const a = Number(box[0].value) || 1;
+      const b = Number(box[1].value) || m.numPages;
+      m.pages = a <= 1 && b >= m.numPages ? null : `${Math.min(a, b)}-${Math.max(a, b)}`;
+      store.save();
+      rerenderSoon();
+    } });
+  const count = r ? r.to - r.from + 1 : m.numPages;
+  return h("label", { class: "small muted page-pick", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } },
+    unit === "pagine" ? "Pagine" : "Slide", num(r?.from, "da"), "–", num(r?.to, "a"), `di ${m.numPages}`,
+    h("span", {}, r ? ` · ne uso ${count}` : " · tutte"),
+    m.kind === "notes" ? h("span", {}, ` (${chars(sliceText(m.text, m.pages).length)})`) : null);
 }
 
 export function materialsTab(exam) {
@@ -149,21 +214,25 @@ export function materialsTab(exam) {
 
   /* --- incolla appunti --- */
   const title = h("input", { placeholder: "Titolo (es. Lezione 3 — Elasticità)" });
+  const pasteRole = h("select", { id: "paste-role", "aria-label": "Tipo di materiale" }, Object.entries(ROLES).map(([k, t]) => h("option", { value: k }, t)));
   const text = h("textarea", { placeholder: "Incolla qui i tuoi appunti…" });
   const paste = h("form", { class: "stack", onsubmit: (e) => {
     e.preventDefault();
     if (!text.value.trim()) return toast("Incolla del testo.", "error");
-    exam.materials.push({ id: uid(), kind: "notes", title: title.value.trim() || `Appunti ${exam.materials.length + 1}`, text: text.value, size: text.value.length, addedAt: now() });
+    exam.materials.push({ id: uid(), kind: "notes", role: pasteRole.value, title: title.value.trim() || `${ROLES[pasteRole.value]} ${exam.materials.length + 1}`, text: text.value, size: text.value.length, addedAt: now() });
     store.save();
     core.rerender();
-  } }, h("h3", {}, "Incolla appunti"), title, text, h("div", {}, h("button", { class: "btn", type: "submit" }, "Aggiungi")));
+  } }, h("h3", {}, "Incolla appunti, esercizi o parti di libro"), h("div", { class: "row", style: { gap: "8px", flexWrap: "nowrap" } }, title, pasteRole), text, h("div", {}, h("button", { class: "btn", type: "submit" }, "Aggiungi")));
 
   /* --- carica file --- */
-  const input = h("input", { type: "file", multiple: true, accept: core.ai.pdf === false && !core.pdfText ? ".txt,.md,.markdown,text/plain" : ".txt,.md,.markdown,.pdf,application/pdf,text/plain", hidden: true });
+  const input = h("input", { type: "file", multiple: true, accept: `${core.ai.pdf === false && !core.pdfText ? "" : ".pdf,application/pdf,"}.docx,.pptx,.txt,.md,.markdown,text/plain`, hidden: true });
   input.addEventListener("change", () => addFiles(exam, [...input.files]));
   const drop = h("div", { class: "file-drop", tabindex: 0, role: "button", onclick: () => input.click(), onkeydown: (e) => (e.key === "Enter" || e.key === " ") && input.click(),
     ondragover: (e) => e.preventDefault(), ondrop: (e) => { e.preventDefault(); addFiles(exam, [...e.dataTransfer.files]); } },
-    h("b", {}, "Carica file"), h("div", { class: "small" }, core.ai.pdf === false ? (core.pdfText ? ".txt, .md o .pdf (di un PDF si legge il testo; le scansioni no)" : ".txt o .md (i PDF non sono supportati qui: copia il testo e incollalo)") : ".txt, .md o .pdf (anche dispense scansionate non testuali: il PDF viene letto dall'AI)"), input);
+    h("b", {}, "Carica libro, dispense, slide, esercizi"), h("div", { class: "small" }, core.ai.pdf === false
+      ? (core.pdfText ? ".pdf, .docx, .pptx, .txt, .md: di un PDF si legge il testo (le scansioni no; le formule possono uscire male)" : ".docx, .pptx, .txt o .md (i PDF non sono supportati qui: copia il testo e incollalo)")
+      : ".pdf (anche scansioni e formule: il PDF viene letto dall'AI), .docx, .pptx, .txt, .md"),
+      h("div", { class: "small muted" }, "Di un libro scegli poi le pagine dei capitoli del programma."), input);
 
   /* --- ricerca online (o, senza web, traccia dal programma) --- */
   const webOk = core.ai.web !== false;
@@ -201,7 +270,11 @@ export function materialsTab(exam) {
   const list = hasContent
     ? h("div", { class: "stack", style: { gap: "8px" } }, exam.materials.map((m) =>
         h("div", { class: "card flat" },
-          h("div", { class: "row between" }, h("div", {}, h("b", {}, m.title), " ", badge(KIND[m.kind], m.kind === "web" ? "brand" : ""), " ", isPending.has(m.id) ? badge("non ancora nel modulo", "warn") : null, " ", h("span", { class: "muted small" }, kb(m.size))),
+          h("div", { class: "row between" }, h("div", {}, h("b", {}, m.title), " ", badge(KIND[m.kind], m.kind === "web" ? "brand" : ""), " ", isPending.has(m.id) ? badge("non ancora nel modulo", "warn") : null, " ", h("span", { class: "muted small" }, kb(m.size)),
+              m.kind !== "web" ? h("div", { class: "row", style: { gap: "6px", marginTop: "4px" } }, h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Tipo",
+                h("select", { class: "role-select", "aria-label": `Tipo di ${m.title}`, onchange: (e) => { m.role = e.target.value; store.save(); rerenderSoon(); } },
+                  Object.entries(ROLES).map(([k, t]) => h("option", { value: k, selected: roleOf(m) === k }, t)))),
+                m.numPages > 1 ? pagePicker(m) : null) : null),
             h("button", { class: "btn small danger", onclick: () => removeMaterial(exam, m), "aria-label": `Rimuovi ${m.title}` }, "Rimuovi")),
           m.kind === "web" ? h("details", {}, h("summary", { class: "small" }, m.generated ? "Anteprima (bozza dalla conoscenza di Claude, senza fonti)" : `Anteprima e ${m.sources.length} fonti`),
             h("pre", { style: { whiteSpace: "pre-wrap", maxHeight: "260px", overflow: "auto", font: "inherit", fontSize: ".9rem" } }, m.text),

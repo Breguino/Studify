@@ -30,12 +30,14 @@ export function splitPhases(N) {
 /**
  * `busy(date)` = minuti occupati da lezioni quel giorno (riducono il tempo di studio; mai sotto 30');
  * `lessons(date)` = elenco delle lezioni, solo per mostrarle.
- * @param {{examDate:string, examType:string, level:number, hoursPerDay:number,
- *          topics:Array, learned?:Record<string,boolean>, today:string, busy?:Function, lessons?:Function}} p
+ * `start` = primo giorno di studio (finestra scelta dallo studente, es. una settimana prima); di default oggi.
+ * @param {{examDate:string, examType:string, level:number, hoursPerDay:number, topics:Array,
+ *          learned?:Record<string,boolean>, today:string, start?:string, busy?:Function, lessons?:Function}} p
  */
-export function buildPlan({ examDate, examType, level, hoursPerDay, topics, learned = {}, today, busy = () => 0, lessons = () => [] }) {
-  const N = daysBetween(today, examDate); // giorni di studio: oggi … giorno prima dell'esame
-  if (N <= 0) return { builtOn: today, days: [], skipped: [], phases: null };
+export function buildPlan({ examDate, examType, level, hoursPerDay, topics, learned = {}, today, start = today, busy = () => 0, lessons = () => [] }) {
+  if (start < today) start = today;
+  const N = daysBetween(start, examDate); // giorni di studio: primo giorno … giorno prima dell'esame
+  if (N <= 0) return { builtOn: today, start, days: [], skipped: [], phases: null };
 
   const budget = Math.round(hoursPerDay * 60);
   const pendingCount = topics.filter((t) => !learned[t.id]).length;
@@ -47,7 +49,7 @@ export function buildPlan({ examDate, examType, level, hoursPerDay, topics, lear
   ph.learn = learnDays;
   const days = Array.from({ length: N }, (_, i) => {
     const phase = i < ph.learn ? "learn" : i < ph.learn + ph.consolidate ? "consolidate" : i < N - ph.light ? "simulate" : "light";
-    const date = addDays(today, i);
+    const date = addDays(start, i);
     const free = Math.max(0, budget - busy(date));
     return { date, phase, tasks: [], lessons: lessons(date), avail: free, usable: Math.max(30, free) };
   });
@@ -138,5 +140,5 @@ export function buildPlan({ examDate, examType, level, hoursPerDay, topics, lear
     d.minutes = d.tasks.reduce((s, t) => s + t.minutes, 0);
     d.overload = d.minutes > d.usable * 1.15;
   }
-  return { builtOn: today, days, skipped, phases: ph };
+  return { builtOn: today, start, days, skipped, phases: ph };
 }

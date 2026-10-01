@@ -6,6 +6,7 @@ import { readiness, topicStats } from "./progress.js";
 import { buildQueue, dailyNewLimit } from "./srs.js";
 import { busyMinutes, lessonsOn } from "./timetable.js";
 import * as store from "./store.js";
+import { studyStart, windowDays } from "./workload.js";
 import { save } from "./store.js";
 
 export const daysLeft = (exam) => daysBetween(today(), exam.date);
@@ -13,7 +14,7 @@ export const daysLeft = (exam) => daysBetween(today(), exam.date);
 export function ensurePlan(exam, force = false) {
   if (!exam.module) return null;
   const tt = store.state.profile?.timetable ?? null;
-  const stamp = `${exam.moduleBuiltAt}|${tt?.importedAt ?? ""}|${tt?.until ?? ""}`;
+  const stamp = `${exam.moduleBuiltAt}|${exam.moduleUpdatedAt ?? ""}|${tt?.importedAt ?? ""}|${tt?.until ?? ""}|${exam.date}|${exam.studyDays ?? 0}`;
   if (force || !exam.plan || exam.plan.builtOn !== today() || exam.plan.stamp !== stamp) {
     exam.plan = {
       ...buildPlan({
@@ -24,6 +25,7 @@ export function ensurePlan(exam, force = false) {
         topics: exam.module.topics,
         learned: exam.learned,
         today: today(),
+        start: studyStart(exam, today()),
         busy: (d) => busyMinutes(tt, d),
         lessons: (d) => lessonsOn(tt, d),
       }),
@@ -45,7 +47,7 @@ export function setDone(exam, task, value = true) {
 export function methodsFor(exam) {
   return recommendMethods({
     examType: exam.type,
-    daysLeft: daysLeft(exam),
+    daysLeft: windowDays(exam, today()), // i giorni che lo studente si dà, non quelli che mancano
     level: exam.level,
     hoursPerDay: exam.hoursPerDay,
     topicCount: exam.module?.topics.length ?? 0,
@@ -68,7 +70,7 @@ export function flashQueue(exam, { topicId, includeAll = false, extra = 0 } = {}
   const all = topicId ? mod.flashcards.filter((c) => c.topicId === topicId) : mod.flashcards;
   const freshPool = all.filter((c) => eligible(c));
   const newCount = freshPool.filter((c) => !exam.srs[c.id]?.due).length;
-  const limit = dailyNewLimit(newCount, Math.max(1, daysLeft(exam))) + extra;
+  const limit = dailyNewLimit(newCount, Math.max(1, windowDays(exam, today()))) + extra;
   const withNew = buildQueue(all, exam.srs, today(), { newLimit: 0, topicImportance: importance });
   const fresh = buildQueue(freshPool, exam.srs, today(), { newLimit: limit, topicImportance: importance }).fresh;
   const excluded = all.filter((c) => !eligible(c) && !exam.srs[c.id]?.due).length;

@@ -258,3 +258,25 @@ test("examFormatFromText: niente web, scheda come dato, citazione verificata sul
   setClient(fake([reply({ format: "orale", evidence: "L'esame è orale" })], []));
   assert.equal((await examFormatFromText({ text, course: "Statistica" })).found, false, "citazione non presente nel testo → scartata");
 });
+
+test("buildModule: tipi di materiale, pagine dei PDF e regola sugli esercizi nel prompt", async () => {
+  const calls = [];
+  setClient(fake([{ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(rawModule) }] }], calls));
+  await buildModule({
+    exam: { name: "Statistica", type: "problemi", level: 2, daysLeft: 7, language: "italiano" },
+    materials: [
+      { kind: "pdf", role: "libro", title: "Manuale", pages: "45-80", data: "QUJD" },
+      { kind: "notes", role: "esercizi", title: "Temi d'esame", text: "Esercizio 1: calcola la media" },
+      { kind: "notes", role: "appunti", title: "Lezione 3", text: "media e varianza" },
+    ],
+    research: null,
+  });
+  const content = calls[0].messages[0].content;
+  assert.equal(content[0].title, "Libro — Manuale (pagine 45-80)");
+  const text = content.at(-1).text;
+  assert.match(text, /Documenti PDF allegati[\s\S]*- Libro — Manuale \(pagine 45-80\)/);
+  assert.match(text, /<esercizi titolo="Temi d'esame">\nEsercizio 1/);
+  assert.match(text, /<appunti_studente titolo="Lezione 3">/);
+  assert.match(text, /almeno metà delle domande siano kind="problem"/);
+  assert.match(calls[0].system, /esercizi \(eserciziari, temi d'esame, esercitazioni\): NON trasformarli in flashcard/);
+});

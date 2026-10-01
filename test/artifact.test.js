@@ -179,3 +179,23 @@ test("pagina Claude: tipo di prova dalla scheda incollata, citazione verificata"
   reply = { ...reply, evidence: "esame solo orale" };
   assert.equal((await examFormatFromText({ text, course: "x" }, () => {}, sample)).format, "sconosciuto");
 });
+
+test("pagina Claude: gli esercizi passano dal passo 1 al passo 2 dell'argomento", async () => {
+  const prompts = [];
+  const sample = async () => ({ text: "" });
+  sample.json = async (p) => {
+    prompts.push(p);
+    if (p.includes("<argomento>")) return { flashcards: [{ front: "f", back: "b", type: "definizione" }], questions: [] };
+    return { title: "T", overview: "O", gaps: [], topics: [
+      { title: "Media", summary: "s", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "e", exercises: "Es. 3: calcola la media di 2, 4, 6. Soluzione: 4" },
+      { title: "Varianza", summary: "s", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "e", exercises: "" } ] };
+  };
+  const mod = await generateModule({ exam: { ...exam, type: "problemi" }, materials: [{ kind: "notes", role: "esercizi", title: "Eserciziario", text: "Es. 3: calcola la media di 2, 4, 6." }], research: null }, () => {}, sample);
+  assert.match(prompts[0], /<esercizi titolo="Eserciziario">/);
+  assert.match(prompts[0], /"exercises": string/);
+  const media = prompts.find((p) => p.includes('"title":"Media"'));
+  assert.match(media, /<esercizi_dai_materiali>\nEs\. 3: calcola la media/);
+  assert.match(media, /Non farne flashcard/);
+  assert.ok(!prompts.find((p) => p.includes('"title":"Varianza"')).includes("<esercizi_dai_materiali>"));
+  assert.ok(!("exercises" in mod.topics[0]) && !("excerpt" in mod.topics[0]), "estratti ed esercizi non finiscono nel modulo");
+});

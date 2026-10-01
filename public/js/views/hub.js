@@ -1,9 +1,10 @@
 import { go } from "../nav.js";
-import { daysLeft, ensurePlan, flashQueue, isDone, methodsFor, setDone, taskHref } from "../domain.js";
+import { daysLeft, dueCount, ensurePlan, flashQueue, isDone, methodsFor, setDone, taskHref } from "../domain.js";
 import { daysBetween, fmtDate, fmtDay, today } from "../dates.js";
 import { METHODS, EXAM_TYPES } from "../methods.js";
 import { PHASES } from "../planner.js";
 import { fmtLesson } from "../timetable.js";
+import { studyStart, windowDays } from "../workload.js";
 import * as store from "../store.js";
 import { badge, emptyState, h, paras } from "../ui.js";
 import { core } from "../core.js";
@@ -32,6 +33,7 @@ export function hubView(exam, tab) {
         h("div", { class: "muted" }, `${fmtDate(exam.date)}${exam.dateTentative ? " (data provvisoria)" : ""}${apHere?.time ? ` ore ${apHere.time}` : ""}${apHere?.room ? ` · ${apHere.room}` : ""} · ${dl > 0 ? `tra ${exam.dateTentative ? "circa " : ""}${dl} giorni` : dl === 0 ? "oggi" : "già passato"} · ${EXAM_TYPES[exam.type]}`,
           exam.formatSource?.url ? h("span", {}, " (", h("a", { href: exam.formatSource.url, target: "_blank", rel: "noopener noreferrer" }, "fonte del formato"), ")") : null),
         exam.dateTentative ? h("div", { class: "muted small" }, "Gli appelli non sono ancora usciti: quando escono ", h("a", { href: "#/import" }, "importali"), " (o cambia la data da «Modifica») e il piano si ricalcola.") : null,
+        exam.studyDays ? h("div", { class: "muted small" }, `Studio ${studyStart(exam, today()) > today() ? `dal ${fmtDate(studyStart(exam, today()))}` : "in corso"}: ${windowDays(exam, today())} giorni prima dell'esame, ${exam.hoursPerDay} h al giorno.`) : null,
         others.length ? h("div", { class: "muted small" }, `Altri appelli: ${others.map((a) => fmtDate(a.date)).join(", ")} (cambia da «Modifica»)`) : null,
         exam.university ? h("div", { class: "muted small" }, [exam.university, exam.degree, exam.year ? `${exam.year}° anno` : "", exam.cfu ? `${exam.cfu} CFU` : ""].filter(Boolean).join(" · ")) : null),
       h("a", { class: "btn ghost", href: `#/exam/${exam.id}/edit` }, "Modifica")),
@@ -69,7 +71,9 @@ function todayTab(exam) {
 
   const plan = ensurePlan(exam);
   const m = methodsFor(exam);
-  const [first, ...rest] = plan.days;
+  const waiting = plan.start && plan.start > today(); // la finestra di studio non è ancora iniziata
+  const [first, ...rest] = waiting ? [null, ...plan.days] : plan.days;
+  const due = dueCount(exam);
   const tasks = first?.tasks ?? [];
   const minutes = tasks.reduce((s, t) => s + t.minutes, 0);
   const budget = exam.hoursPerDay * 60;
@@ -77,13 +81,17 @@ function todayTab(exam) {
   return h("div", { class: "stack" },
     ...m.warnings.map((w) => h("div", { class: "callout warn" }, w)),
     plan.skipped.length ? h("div", { class: "callout warn" }, h("b", {}, "Rimandati per mancanza di tempo: "), plan.skipped.map((id) => exam.module.topics.find((t) => t.id === id)?.title).join(", "), ". Li affronterai se avanza tempo.") : null,
+    waiting ? h("div", { class: "callout" }, h("b", {}, `Lo studio di ${exam.name} inizia ${fmtDay(plan.start)}`),
+      ` (tra ${daysBetween(today(), plan.start)} ${daysBetween(today(), plan.start) === 1 ? "giorno" : "giorni"}): ti sei dato ${plan.days.length} giorni prima dell'esame. `,
+      due ? h("span", {}, "Nel frattempo hai ", h("a", { href: `#/exam/${exam.id}/flash` }, `${due} flashcard da ripassare`), ": bastano pochi minuti e tengono vivo quello che hai già studiato.") : "Fino ad allora nessuna attività per questo esame, salvo gli appunti nuovi da aggiungere al modulo.",
+      " Per cambiare la finestra usa «Modifica».") : null,
     h("div", { class: "row between" },
-      h("div", {}, h("h2", { style: { marginBottom: 0 } }, `Oggi · ${fmtDay(today())}`), h("span", { class: "muted small" }, first ? `${PHASES[first.phase]} · ~${minutes} min su ${first.lessons?.length ? first.usable : Math.round(budget)} disponibili` : "")),
+      h("div", {}, h("h2", { style: { marginBottom: 0 } }, waiting ? "Il piano" : `Oggi · ${fmtDay(today())}`), h("span", { class: "muted small" }, first ? `${PHASES[first.phase]} · ~${minutes} min su ${first.lessons?.length ? first.usable : Math.round(budget)} disponibili` : "")),
       h("button", { class: "btn small", onclick: () => { ensurePlan(exam, true); core.rerender(); } }, "Ricalcola piano")),
     first?.lessons?.length ? h("div", { class: "callout" }, h("b", {}, "Oggi hai lezione: "), first.lessons.map(fmtLesson).join(" · "), first.avail > 0 ? `. Tempo di studio rimasto: ~${first.avail} min.` : ". Poco tempo di studio oggi: solo un po' di flashcard.") : null,
     first?.overload ? h("div", { class: "callout warn" }, "Il carico di oggi supera il tempo che hai indicato: fai prima le attività in cima.") : null,
     h("div", { class: "stack", style: { gap: "8px" } }, tasks.map((t) => taskRow(exam, t))),
-    rest.length ? h("div", {}, h("h2", { style: { marginTop: "18px" } }, "Prossimi giorni"), h("div", { class: "stack", style: { gap: "8px" } },
+    rest.length ? h("div", {}, h("h2", { style: { marginTop: "18px" } }, waiting ? `Dal ${fmtDate(plan.start)}` : "Prossimi giorni"), h("div", { class: "stack", style: { gap: "8px" } },
       rest.map((d) => h("details", { class: "day" },
         h("summary", {}, h("b", {}, fmtDay(d.date)), badge(PHASES[d.phase], d.phase === "simulate" ? "warn" : "brand"), h("span", { class: "muted small" }, `~${d.minutes} min`), d.lessons?.length ? badge(`lezioni ${d.lessons.length}`) : null, d.overload ? badge("carico alto", "warn") : null),
         h("ul", {}, d.lessons?.length ? h("li", {}, `Lezioni: ${d.lessons.map(fmtLesson).join(" · ")}`) : null, d.tasks.filter((t) => t.kind !== "flash").map((t) => h("li", {}, t.title))))))) : null,

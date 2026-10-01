@@ -273,6 +273,8 @@ async function api(req, res, url) {
   if (url.pathname === "/api/module" || url.pathname === "/api/module-extend") {
     const materials = (Array.isArray(body.materials) ? body.materials : []).slice(0, 40).map((m) => ({
       kind: ["pdf", "notes", "web"].includes(m.kind) ? m.kind : "notes",
+      role: ["appunti", "libro", "dispense", "esercizi", "altro"].includes(m.role) ? m.role : "appunti",
+      pages: /^\d{1,4}-\d{1,4}$/.test(m.pages ?? "") ? m.pages : "",
       title: str(m.title, 200) || "Appunti",
       text: str(m.text, 2_000_000),
       data: m.kind === "pdf" && typeof m.data === "string" ? m.data : "",
@@ -324,8 +326,13 @@ async function api(req, res, url) {
 }
 
 // pdf.js (lettura dei PDF nel browser): solo i due file necessari, serviti da node_modules.
-const VENDOR = { "/vendor/pdfjs/pdf.min.mjs": "pdf.min.mjs", "/vendor/pdfjs/pdf.worker.min.mjs": "pdf.worker.min.mjs" };
-const VENDOR_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "node_modules", "pdfjs-dist", "legacy", "build");
+// pdf-lib (estrazione di pagine dai PDF, nel browser): un file autonomo.
+const NODE_MODULES = join(dirname(fileURLToPath(import.meta.url)), "..", "node_modules");
+const VENDOR = {
+  "/vendor/pdfjs/pdf.min.mjs": join("pdfjs-dist", "legacy", "build", "pdf.min.mjs"),
+  "/vendor/pdfjs/pdf.worker.min.mjs": join("pdfjs-dist", "legacy", "build", "pdf.worker.min.mjs"),
+  "/vendor/pdf-lib/pdf-lib.esm.min.js": join("pdf-lib", "dist", "pdf-lib.esm.min.js"),
+};
 
 // Codice condiviso server/browser (fuori da public/): solo i file elencati.
 const SHARED = { "/shared/normalize.js": "normalize.js" };
@@ -335,9 +342,9 @@ async function serveStatic(req, res, url) {
   if (SHARED[url.pathname]) return send(res, 200, await readFile(join(SHARED_DIR, SHARED[url.pathname])), { "Content-Type": MIME[".js"] });
   if (VENDOR[url.pathname]) {
     try {
-      return send(res, 200, await readFile(join(VENDOR_DIR, VENDOR[url.pathname])), { "Content-Type": MIME[".js"], "Cache-Control": "public, max-age=86400" });
+      return send(res, 200, await readFile(join(NODE_MODULES, VENDOR[url.pathname])), { "Content-Type": MIME[".js"], "Cache-Control": "public, max-age=86400" });
     } catch {
-      return send(res, 404, "pdf.js non installato (npm install)");
+      return send(res, 404, "Libreria non installata (npm install)");
     }
   }
   let rel = decodeURIComponent(url.pathname);

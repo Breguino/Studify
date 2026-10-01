@@ -80,9 +80,23 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
    Un **piano di studi in PDF** (tabella «SSD | insegnamento | CFU | quadrimestre» con sezioni «INSEGNAMENTI 2° ANNO» e blocco «Altre attività»)
    viene riconosciuto da solo, senza AI: anni, CFU, attività a scelta, corso e anno accademico; la somma dei CFU letti è confrontata con il
    «Totale» dichiarato dal documento (collaudato sul piano 2026-27 di Economia e analisi dei dati: 24 voci, 180/180 CFU). Ha anche la «lettura rapida» senza AI. Errori e righe scartate sono elencati con il numero di riga del tuo file.
-1. **Descrivi l'esame**: data, tipo di prova (scritto, test, esercizi, orale, misto), livello di partenza (1-5), ore al giorno.
-2. **Porta i materiali**: incolla/carica appunti e PDF; oppure «Cerca online con l'AI» (ricerca web con fonti e link,
-   che puoi leggere ed eliminare prima di usarla).
+1. **Descrivi l'esame**: data, tipo di prova (scritto, test, esercizi, orale, misto), livello di partenza (1-5), ore al giorno e
+   **quanto tempo ti dai** (es. una settimana prima dell'esame: prima di allora il piano non propone attività per quell'esame).
+   Il form confronta le ore disponibili nella finestra (tolte le lezioni) con l'ordine di grandezza dato dai CFU: per legge
+   1 CFU = 25 ore di lavoro complessivo, lezioni comprese, quindi circa 15-18 ore di studio individuale per CFU partendo da zero.
+   È una stima, non una regola (chi ha studiato durante il semestre ne usa meno), ma rende visibile quando una settimana per un
+   esame da 9 CFU copre una piccola parte del lavoro. Segnala anche le finestre che si sovrappongono con altri esami.
+2. **Porta i materiali**: carica o incolla **libro, dispense/slide, esercizi e appunti** (`.pdf`, `.docx`, `.pptx`, `.txt`, `.md`),
+   oppure «Cerca online con l'AI» (ricerca web con fonti e link, che puoi leggere ed eliminare prima di usarla).
+   - Ogni materiale ha un **tipo** (indovinato dal nome del file, modificabile) che cambia come l'AI lo usa: gli **appunti** dicono
+     cosa ha sottolineato il docente (importanza), **libro e dispense** sono la fonte per definizioni e approfondimenti, gli
+     **esercizi** (eserciziari, temi d'esame) non diventano flashcard ma il modello delle domande-esercizio, con svolgimento
+     (se la soluzione non è nei materiali, l'AI lo risolve e lo segnala come da verificare).
+   - Di un **libro** (o di un PDF/una presentazione lunghi) si scelgono le **pagine**: un libro intero non sta in una richiesta
+     (limiti dell'API: 600 pagine e 32 MB; ogni pagina costa ~1.500-3.000 token) e il programma di solito ne copre una parte.
+     Con il server le pagine scelte vengono estratte nel browser (pdf-lib) e all'AI arriva solo quel PDF, figure e formule
+     comprese; nella pagina Claude si usa il testo di quelle pagine (circa 60-80 pagine per volta; le formule possono uscire male).
+     Allargando l'intervallo dopo (es. da 1-40 a 1-80) «Aggiungi al modulo» manda solo le pagine nuove.
 3. **Genera il modulo**: l'AI produce argomenti (con importanza/difficoltà), flashcard atomiche, domande
    (scelta multipla, aperte, esercizi con rubrica) e un elenco di **lacune** nei materiali.
    **Durante il semestre non serve aspettare di avere tutto:** dopo ogni lezione aggiungi gli appunti e premi «Aggiungi al

@@ -43,7 +43,14 @@ export const MODULE_PRINCIPLES = `Principi inderogabili:
 5. ARGOMENTI. Ordina in sequenza logica (prerequisiti prima). summary = spiegazione chiara in 4-8 frasi, con parole tue.
    mustKnow = 3-7 punti che lo studente deve saper dire senza appunti. commonMistakes = errori tipici.
    importance 3 = quasi certamente chiesto all'esame, 1 = marginale. difficulty 3 = concetti difficili.
-6. Gli id che usi (t1, c1, q1...) servono solo come riferimenti incrociati. sourceIds: usa solo gli id delle fonti elencate.`;
+6. Gli id che usi (t1, c1, q1...) servono solo come riferimenti incrociati. sourceIds: usa solo gli id delle fonti elencate.
+7. TIPI DI MATERIALE (indicati dal tag o dal titolo del documento):
+   - appunti: ciò che il docente ha spiegato e sottolineato a lezione → usali soprattutto per decidere l'importanza degli argomenti;
+   - libro e dispense: la fonte per definizioni, dimostrazioni e approfondimenti;
+   - esercizi (eserciziari, temi d'esame, esercitazioni): NON trasformarli in flashcard. Ti dicono che cosa chiede l'esame (alza
+     l'importanza degli argomenti su cui vertono) e sono il modello delle domande kind="problem": stesso tipo di esercizio, con
+     svolgimento passo-passo in modelAnswer. Se la soluzione è nei materiali, seguila; se non c'è, risolvilo tu e scrivi in
+     explanation "Svolgimento non presente nei materiali: verificalo".`;
 
 export const GRADE_RULES = (language) => `Sei un esaminatore universitario giusto ma esigente. Valuti la risposta dello studente confrontandola con
 la risposta di riferimento e i punti della rubrica. Non premiare la lunghezza né il lessico: conta la correttezza concettuale.
@@ -151,3 +158,18 @@ entrambi obbligatori o comunque parte del voto); "sconosciuto" se il testo non i
 uno scritto con orale facoltativo resta il tipo dello scritto (indicalo in details). Non dedurre la modalità dal nome della materia.
 evidence = la frase sulla modalità d'esame COPIATA alla lettera dal testo (max 300 caratteri); "" se non c'è.
 details = in breve durata, parti, prove intermedie, orale facoltativo. caveats: differenze tra docenti/canali, anno accademico vecchio, dubbi.`;
+
+/** Tag con cui ogni tipo di materiale testuale entra nel prompt. */
+export const MATERIAL_TAG = { appunti: "appunti_studente", libro: "libro", dispense: "dispense", esercizi: "esercizi", altro: "materiale" };
+export const MATERIAL_LABEL = { appunti: "Appunti", libro: "Libro", dispense: "Dispense", esercizi: "Esercizi", altro: "Materiale" };
+
+/** Blocco di testo di un materiale per il prompt (pagine indicate se è un estratto). */
+export function materialText(m) {
+  const tag = MATERIAL_TAG[m.role] ?? MATERIAL_TAG.appunti;
+  const pages = m.pages ? ` pagine="${m.pages}"` : "";
+  return `<${tag} titolo="${String(m.title ?? "").replace(/"/g, "'")}"${pages}>\n${m.text}\n</${tag}>`;
+}
+
+/** Istruzione aggiuntiva quando tra i materiali ci sono esercizi. */
+export const EXERCISES_TASK = `- Ci sono materiali di tipo esercizi: almeno metà delle domande siano kind="problem" modellate su quegli esercizi (stesso tipo, dati diversi
+  o gli stessi esercizi se sono tipici d'esame), distribuite sugli argomenti a cui si riferiscono.`;

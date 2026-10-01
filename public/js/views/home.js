@@ -33,7 +33,8 @@ function examCard(exam) {
   const dl = daysLeft(exam);
   const { ready } = statsFor(exam);
   const plan = ensurePlan(exam);
-  const todayTasks = plan?.days[0]?.tasks.filter((t) => t.kind !== "rest") ?? [];
+  const waiting = plan?.start && plan.start > today(); // finestra di studio non ancora iniziata
+  const todayTasks = (!waiting && plan?.days[0]?.tasks.filter((t) => t.kind !== "rest")) || [];
   const doneCount = todayTasks.filter((t) => isDone(exam, t)).length;
   const due = dueCount(exam);
   return h(
@@ -46,7 +47,7 @@ function examCard(exam) {
           "div",
           { class: "stack", style: { gap: "8px" } },
           h("div", { class: "progress-line" }, h("span", { class: "small muted" }, "Preparazione"), bar(ready ?? 0, { label: "preparazione stimata" }), h("b", { class: "small" }, pct(ready))),
-          h("div", { class: "small muted" }, todayTasks.length ? `Oggi: ${doneCount}/${todayTasks.length} attività` : "Oggi: nessuna attività", due ? ` · ${due} flashcard da ripassare` : ""),
+          h("div", { class: "small muted" }, waiting ? `Studio dal ${fmtDate(plan.start)} (${plan.days.length} giorni)` : todayTasks.length ? `Oggi: ${doneCount}/${todayTasks.length} attività` : "Oggi: nessuna attività", due ? ` · ${due} flashcard da ripassare` : ""),
         )
       : badge("Modulo da creare", "warn"),
   );
