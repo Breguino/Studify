@@ -1,9 +1,10 @@
+import { go } from "../nav.js";
 import { examDefaultsFromCourse, FORMAT_LABEL, findCourse } from "../curriculum.js";
 import { addDays, today } from "../dates.js";
 import { suggestExamType } from "../exam-type.js";
 import { EXAM_TYPES, sessionAdvice } from "../methods.js";
 import * as store from "../store.js";
-import { h, toast } from "../ui.js";
+import { confirmDialog, h, toast } from "../ui.js";
 
 const LEVELS = {
   1: "1 · Parto da zero",
@@ -61,12 +62,12 @@ export function examFormView(exam) {
         if (!data.date || data.date <= today()) return toast("La data d'esame deve essere futura.", "error");
         if (isNew) {
           const created = store.newExam(data);
-          location.hash = `#/exam/${created.id}/materials`;
+          go(`#/exam/${created.id}/materials`);
         } else {
           Object.assign(exam, data);
           exam.plan = null; // il piano dipende da data, tipo e ore
           store.save();
-          location.hash = `#/exam/${exam.id}`;
+          go(`#/exam/${exam.id}`);
         }
       },
     },
@@ -128,9 +129,9 @@ export function examFormView(exam) {
       h("hr", { style: { width: "100%", border: 0, borderTop: "1px solid var(--line)" } }),
       h("button", {
         class: "btn danger", type: "button", onclick: async () => {
-          if (!confirm(`Eliminare «${exam.name}» con tutti i materiali e i progressi?`)) return;
+          if (!(await confirmDialog(`Eliminare «${exam.name}» con tutti i materiali e i progressi?`, { ok: "Elimina", danger: true }))) return;
           await store.deleteExam(exam.id);
-          location.hash = "#/";
+          go("#/");
         },
       }, "Elimina esame"),
     );

@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light;
   --bg: #f6f7fb; --surface: #ffffff; --surface-2: #f0f2f8; --text: #1b1f2a; --muted: #5d6578;
   --line: #e1e5ef; --brand: #4f46e5; --brand-ink: #ffffff; --brand-soft: #eceaff;
   --good: #168a52; --good-soft: #e3f6ec; --warn: #b4690e; --warn-soft: #fff2dc; --bad: #c2362f; --bad-soft: #fdeceb;
@@ -6,15 +7,23 @@
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0f1218; --surface: #181c25; --surface-2: #1f2430; --text: #e8ebf3; --muted: #9aa3b8;
     --line: #2a3040; --brand: #8b83ff; --brand-ink: #10121a; --brand-soft: #25234a;
     --good: #4cc38a; --good-soft: #14281f; --warn: #e5a14a; --warn-soft: #2e2413; --bad: #ef6f68; --bad-soft: #301a19;
     --shadow: none;
+    color-scheme: dark;
   }
 }
+:root[data-theme="dark"] {
+    --bg: #0f1218; --surface: #181c25; --surface-2: #1f2430; --text: #e8ebf3; --muted: #9aa3b8;
+    --line: #2a3040; --brand: #8b83ff; --brand-ink: #10121a; --brand-soft: #25234a;
+    --good: #4cc38a; --good-soft: #14281f; --warn: #e5a14a; --warn-soft: #2e2413; --bad: #ef6f68; --bad-soft: #301a19;
+    --shadow: none;
+    color-scheme: dark;
+}
 * { box-sizing: border-box; }
-html { color-scheme: light dark; }
+
 body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 var(--font); }
 h1, h2, h3 { line-height: 1.25; margin: 0 0 .5em; }
 h1 { font-size: 1.7rem; } h2 { font-size: 1.25rem; } h3 { font-size: 1.05rem; }
@@ -133,3 +142,12 @@ details > summary { cursor: pointer; }
 .option[disabled] { opacity: 1; cursor: default; color: var(--text); }
 .option[disabled]:not(.correct):not(.wrong) { opacity: .65; }
 .inline-form > input, .inline-form > select { width: auto; flex: 1 1 150px; } .inline-form > input[type=number] { flex: 0 0 90px; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(10, 12, 20, .5); display: grid; place-items: center; padding: 16px; z-index: 30; }
+.modal { max-width: 420px; width: 100%; }
+@media (max-width: 520px) {
+  .topbar { padding: 10px 16px; gap: 8px; }
+  .topbar nav { flex-wrap: nowrap; gap: 0; }
+  .topbar .btn { padding: 6px 8px; font-size: .9rem; }
+  .pill { font-size: .72rem; padding: 2px 8px; margin-right: 4px; white-space: nowrap; }
+  main { padding-inline: 16px; }
+}

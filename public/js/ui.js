@@ -80,3 +80,16 @@ export const shuffle = (arr, rng = Math.random) => {
   }
   return a;
 };
+
+/** Conferma dentro la pagina (nelle pagine Claude `confirm()` è bloccato e risponde sempre «no»). */
+export function confirmDialog(message, { ok = "Continua", cancel = "Annulla", danger = false } = {}) {
+  return new Promise((resolve) => {
+    const previous = document.activeElement;
+    const done = (v) => { overlay.remove(); previous?.focus?.(); resolve(v); };
+    const okBtn = h("button", { class: `btn ${danger ? "danger" : "primary"}`, onclick: () => done(true) }, ok);
+    const overlay = h("div", { class: "modal-backdrop", role: "presentation", onclick: (e) => e.target === overlay && done(false), onkeydown: (e) => e.key === "Escape" && done(false) },
+      h("div", { class: "modal card", role: "alertdialog", "aria-modal": "true", "aria-label": message }, h("p", {}, message), h("div", { class: "row", style: { justifyContent: "flex-end" } }, h("button", { class: "btn", onclick: () => done(false) }, cancel), okBtn)));
+    document.body.append(overlay);
+    okBtn.focus();
+  });
+}

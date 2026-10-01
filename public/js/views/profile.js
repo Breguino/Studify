@@ -79,11 +79,12 @@ export function profileView() {
       h("label", {}, "Corso di studio", degree)),
     h("div", { class: "card stack" },
       h("h3", {}, "Piano di studi"),
-      h("p", { class: "muted small", style: { margin: 0 } }, core.ai.ai
+      core.ai.web === false ? null : h("p", { class: "muted small", style: { margin: 0 } }, core.ai.ai
         ? "L'AI cerca il piano di studi sui siti ufficiali e, dove la scheda lo dichiara, la prova d'esame di ogni insegnamento (con link). Dove non lo trova, resta «Non indicato»: non lo deduce dal nome."
         : "La ricerca col piano di studi richiede l'AI. Puoi comunque inserire gli insegnamenti a mano."),
       busy ? h("div", { class: "callout row" }, h("span", { class: "spinner" }), (busy.el = h("span", {}, "Consulto i siti dell'ateneo…")), h("span", { class: "muted small" }, "può richiedere qualche minuto")) : null,
-      h("div", {}, h("button", { class: "btn primary", disabled: !core.ai.ai || !!busy, onclick: () => { commit(); findCurriculum(p); } }, p.fetchedAt ? "Cerca di nuovo" : "Trova il piano di studi")),
+      core.ai.web === false ? h("div", { class: "callout" }, "In questa versione Claude non può consultare i siti dell'ateneo: inserisci gli insegnamenti a mano qui sotto (nome, CFU e prova d'esame, se la conosci).") : null,
+      core.ai.web === false ? null : h("div", {}, h("button", { class: "btn primary", disabled: !core.ai.ai || !!busy, onclick: () => { commit(); findCurriculum(p); } }, p.fetchedAt ? "Cerca di nuovo" : "Trova il piano di studi")),
       p.fetchedAt ? h("div", { class: "callout warn" }, h("b", {}, "Da verificare. "), `Dati trovati sul web il ${p.fetchedAt}${p.academicYear ? ` (anno accademico: ${p.academicYear})` : ""}${p.degreeFound ? ` per «${p.degreeFound}»` : ""}. Possono essere di un anno precedente o di un altro curriculum: confrontali con la tua guida dello studente.`,
         p.caveats?.length ? h("ul", {}, p.caveats.map((c) => h("li", {}, c))) : null) : null,
       rows,

@@ -1,15 +1,19 @@
+import { go } from "../nav.js";
 import { daysLeft, dueCount, ensurePlan, isDone, statsFor } from "../domain.js";
 import { fmtDate, addDays, today } from "../dates.js";
 import { EXAM_TYPES } from "../methods.js";
 import * as store from "../store.js";
-import { badge, bar, emptyState, h, pct, toast } from "../ui.js";
+import { badge, bar, confirmDialog, emptyState, h, pct, toast } from "../ui.js";
 import { core } from "../core.js";
 
 async function createDemo() {
   try {
-    const res = await fetch("/demo/module.json");
-    if (!res.ok) throw new Error();
-    const module = await res.json();
+    let module = core.demoModule; // incorporato nella versione pubblicata come pagina Claude
+    if (!module) {
+      const res = await fetch("/demo/module.json");
+      if (!res.ok) throw new Error();
+      module = await res.json();
+    }
     const exam = store.newExam({
       name: "Microeconomia (demo)",
       date: addDays(today(), 21),
@@ -19,7 +23,7 @@ async function createDemo() {
       module,
       moduleBuiltAt: new Date().toISOString(),
     });
-    location.hash = `#/exam/${exam.id}`;
+    go(`#/exam/${exam.id}`);
   } catch {
     toast("Impossibile caricare l'esame demo (serve il server).", "error");
   }
@@ -85,11 +89,11 @@ export function settingsView() {
   fileInput.addEventListener("change", async () => {
     const f = fileInput.files[0];
     if (!f) return;
-    if (!confirm("L'importazione sostituisce tutti i dati attuali. Continuare?")) return;
+    if (!(await confirmDialog("L'importazione sostituisce tutti i dati attuali. Continuare?", { ok: "Importa", danger: true }))) return;
     try {
       await store.importAll(await f.text());
       toast("Backup importato.", "ok");
-      location.hash = "#/";
+      go("#/");
       core.rerender();
     } catch (e) {
       toast(e.message, "error");
@@ -102,8 +106,14 @@ export function settingsView() {
     h("p", { class: "muted" }, "Tutto resta nel tuo browser (IndexedDB). Nessun account: solo il testo dei materiali viene inviato al server locale quando generi un modulo."),
     h("div", { class: "row" },
       h("button", { class: "btn", onclick: async () => {
-        const blob = new Blob([await store.exportAll()], { type: "application/json" });
-        const a = h("a", { href: URL.createObjectURL(blob), download: `studify-backup-${today()}.json` });
+        const json = await store.exportAll();
+        const filename = `studify-backup-${today()}.json`;
+        if (core.downloads) {
+          try { await core.downloads({ filename, data: json }); toast("Backup salvato.", "ok"); } catch (e) { if (e?.code !== "declined") toast("Salvataggio del file non riuscito.", "error"); }
+          return;
+        }
+        const blob = new Blob([json], { type: "application/json" });
+        const a = h("a", { href: URL.createObjectURL(blob), download: filename });
         a.click();
         URL.revokeObjectURL(a.href);
       } }, "Esporta backup"),

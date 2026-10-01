@@ -15,6 +15,28 @@ npm test
 
 Serve Node ≥ 20. Nessun build step: il frontend è JavaScript ES modules servito così com'è.
 
+## Versione per Claude (senza installare nulla)
+
+Lo stesso Studify si può pubblicare come **pagina Claude** (artifact): niente Node, niente chiave API.
+Usa l'account Claude di chi apre la pagina e salva i dati nel suo spazio privato.
+
+```
+npm run build:artifact     # crea dist/studify.html (un solo file, ~115 KB, senza dipendenze)
+```
+
+Si pubblica con le capacità `sample` (Claude), `db` + `user` (archivio privato per utente) e `downloads` (backup).
+Differenze rispetto alla versione con server:
+
+| | Server (`npm start`) | Pagina Claude |
+|---|---|---|
+| Generazione modulo | una richiesta, PDF compresi | a passi (schema → carte e domande per argomento); solo testo, max ~200k caratteri |
+| Ricerca web / piano di studi dal sito dell'ateneo | sì | **no** (Claude non può navigare): al suo posto una «traccia dal programma» marcata *non verificata*; insegnamenti a mano |
+| Dati | IndexedDB nel browser | `db` privato per utente (non visibile agli altri nemmeno se condividi la pagina) |
+| Costo | la tua chiave API | uso del tuo account Claude |
+
+`npm run build:harness` crea `dist/harness.html`: la pagina con un `window.claude` finto, per provarla in un browser normale.
+I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `artifact/api.js` e `artifact/backend.js` in fase di build.
+
 ## Come funziona
 
 0. **Ateneo e corso di studio** (scheda «Ateneo»): scegli l'ateneo (anche con la sigla: `UNIBS`, `POLIMI`, `UNIBO`…) e scrivi il corso.
@@ -74,7 +96,10 @@ dollaro per materiali molto lunghi: parti da pochi appunti per farti un'idea.
 ## Struttura
 
 ```
-server/           index.js (HTTP, job asincroni, sicurezza) · ai.js (Anthropic SDK) · schema.js (zod + normalizzazione)
+server/           index.js (HTTP, job asincroni, sicurezza) · ai.js (Anthropic SDK) · schema.js (zod)
+shared/           prompts.js, normalize.js: usati sia dal server sia dalla pagina Claude (nessuna dipendenza)
+artifact/         versione pagina Claude: generate.js (sample), backend.js (db), api.js, entry.js, template, fake-claude (prove)
+scripts/          build-artifact.mjs (esbuild)
 public/js/        logica pura (testata): dates, methods, srs, planner, progress, local-builder
                   stato/UI: store (IndexedDB), domain, api, ui, views/*
 public/demo/      modulo demo (Microeconomia)

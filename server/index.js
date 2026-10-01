@@ -120,7 +120,7 @@ async function api(req, res, url) {
   if (!sameOriginOk(req)) return send(res, 403, { error: "Origine non consentita." });
 
   if (req.method === "GET" && url.pathname === "/api/status")
-    return send(res, 200, { ai: MOCK || aiConfigured(), mock: MOCK, model: MOCK ? "demo" : MODEL });
+    return send(res, 200, { ai: MOCK || aiConfigured(), mock: MOCK, model: MOCK ? "demo" : MODEL, web: true, pdf: true });
 
   if (req.method === "GET" && url.pathname.startsWith("/api/jobs/")) {
     const job = jobs.get(url.pathname.split("/").pop());

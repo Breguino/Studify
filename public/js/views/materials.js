@@ -5,7 +5,7 @@ import { findExamFormat } from "../exam-type.js";
 import { EXAM_TYPES } from "../methods.js";
 import { buildLocalModule } from "../local-builder.js";
 import * as store from "../store.js";
-import { badge, h, readFileAs, toast, uid } from "../ui.js";
+import { badge, confirmDialog, h, readFileAs, toast, uid } from "../ui.js";
 
 const MAX_PDF_TOTAL = 24 * 1024 * 1024;
 const KIND = { notes: "Appunti", pdf: "PDF", web: "Ricerca online" };
@@ -28,9 +28,9 @@ async function run(exam, kind, fn) {
   jobs.set(exam.id, { kind, el: null, started: Date.now() });
   core.rerender();
   try {
-    await fn((chars) => {
+    await fn((chars, label) => {
       const j = jobs.get(exam.id);
-      if (j?.el) j.el.textContent = `${kind === "research" ? "Ricerca in corso" : "Generazione in corso"}… ~${Math.round(chars / 1000)}k caratteri prodotti`;
+      if (j?.el) j.el.textContent = label ?? `${kind === "research" ? "Ricerca in corso" : "Generazione in corso"}… ~${Math.round(chars / 1000)}k caratteri prodotti`;
     });
   } catch (e) {
     toast(e.message, "error");
@@ -73,7 +73,7 @@ async function removeMaterial(exam, m) {
 
 async function generate(exam) {
   const hasProgress = exam.module && (Object.keys(exam.srs).length || Object.keys(exam.qstats).length || Object.keys(exam.learned).length);
-  if (hasProgress && !confirm("Rigenerare il modulo azzera flashcard, quiz e argomenti già svolti per questo esame. Continuare?")) return;
+  if (hasProgress && !(await confirmDialog("Rigenerare il modulo azzera flashcard, quiz e argomenti già svolti per questo esame. Continuare?", { ok: "Rigenera", danger: true }))) return;
   await run(exam, "module", async (onProgress) => {
     const materials = [];
     let research = null;
@@ -123,25 +123,32 @@ export function materialsTab(exam) {
   } }, h("h3", {}, "Incolla appunti"), title, text, h("div", {}, h("button", { class: "btn", type: "submit" }, "Aggiungi")));
 
   /* --- carica file --- */
-  const input = h("input", { type: "file", multiple: true, accept: ".txt,.md,.markdown,.pdf,application/pdf,text/plain", hidden: true });
+  const input = h("input", { type: "file", multiple: true, accept: core.ai.pdf === false ? ".txt,.md,.markdown,text/plain" : ".txt,.md,.markdown,.pdf,application/pdf,text/plain", hidden: true });
   input.addEventListener("change", () => addFiles(exam, [...input.files]));
   const drop = h("div", { class: "file-drop", tabindex: 0, role: "button", onclick: () => input.click(), onkeydown: (e) => (e.key === "Enter" || e.key === " ") && input.click(),
     ondragover: (e) => e.preventDefault(), ondrop: (e) => { e.preventDefault(); addFiles(exam, [...e.dataTransfer.files]); } },
-    h("b", {}, "Carica file"), h("div", { class: "small" }, ".txt, .md o .pdf (anche dispense scansionate non testuali: il PDF viene letto dall'AI)"), input);
+    h("b", {}, "Carica file"), h("div", { class: "small" }, core.ai.pdf === false ? ".txt o .md (i PDF non sono supportati qui: copia il testo e incollalo)" : ".txt, .md o .pdf (anche dispense scansionate non testuali: il PDF viene letto dall'AI)"), input);
 
-  /* --- ricerca online --- */
-  const focus = h("textarea", { placeholder: "Programma o argomenti da cercare (facoltativo). Es.: elasticità, teoria del consumatore, monopolio", style: { minHeight: "80px" } });
+  /* --- ricerca online (o, senza web, traccia dal programma) --- */
+  const webOk = core.ai.web !== false;
+  const focus = h("textarea", { placeholder: webOk ? "Programma o argomenti da cercare (facoltativo). Es.: elasticità, teoria del consumatore, monopolio" : "Incolla qui il programma del corso o elenca gli argomenti. Es.: elasticità, teoria del consumatore, monopolio", style: { minHeight: "80px" } });
+  const hasWeb = exam.materials.some((m) => m.kind === "web");
   const researchBox = h("div", { class: "card stack" },
-    h("h3", {}, "Cerca materiale online con l'AI"),
-    h("p", { class: "muted small", style: { margin: 0 } }, "L'AI cerca dispense e fonti autorevoli e le riassume con i link. Leggi sempre il risultato prima di fidarti: puoi eliminarlo se non è pertinente."),
+    h("h3", {}, webOk ? "Cerca materiale online con l'AI" : "Traccia di studio dal programma"),
+    h("p", { class: "muted small", style: { margin: 0 } }, webOk
+      ? "L'AI cerca dispense e fonti autorevoli e le riassume con i link. Leggi sempre il risultato prima di fidarti: puoi eliminarlo se non è pertinente."
+      : "Qui Claude non può navigare sul web. Dal programma che indichi può scrivere una traccia di studio dalla sua conoscenza generale: è una bozza NON verificata e senza fonti, da confrontare con il tuo corso."),
     focus,
-    jobLine(exam, "research", "Ricerca in corso"),
-    h("div", {}, h("button", { class: "btn", disabled: !ai || busy, onclick: () => run(exam, "research", async (p) => {
-      const r = await api.runJob("/api/research", { examName: exam.name, university: exam.university, degree: exam.degree, focus: focus.value, language: exam.language }, p);
-      exam.materials = exam.materials.filter((m) => m.kind !== "web");
-      exam.materials.push({ id: uid(), kind: "web", title: "Ricerca online", text: r.notes, sources: r.sources, size: r.notes.length });
-      toast(`Trovate ${r.sources.length} fonti.`, "ok");
-    }) }, exam.materials.some((m) => m.kind === "web") ? "Ripeti la ricerca" : "Cerca online"), !ai ? h("span", { class: "muted small" }, " Richiede l'AI (ANTHROPIC_API_KEY).") : null));
+    jobLine(exam, "research", webOk ? "Ricerca in corso" : "Scrittura in corso"),
+    h("div", {}, h("button", { class: "btn", disabled: !ai || busy, onclick: () => {
+      if (!webOk && !focus.value.trim()) return toast("Indica il programma o gli argomenti da cui partire.", "error");
+      return run(exam, "research", async (p) => {
+        const r = await api.runJob("/api/research", { examName: exam.name, university: exam.university, degree: exam.degree, focus: focus.value, language: exam.language }, p);
+        exam.materials = exam.materials.filter((m) => m.kind !== "web");
+        exam.materials.push({ id: uid(), kind: "web", title: webOk ? "Ricerca online" : "Traccia AI (non verificata)", text: r.notes, sources: r.sources, size: r.notes.length, generated: !webOk });
+        toast(webOk ? `Trovate ${r.sources.length} fonti.` : "Traccia pronta: leggila prima di usarla.", "ok");
+      });
+    } }, hasWeb ? (webOk ? "Ripeti la ricerca" : "Rigenera la traccia") : (webOk ? "Cerca online" : "Genera la traccia")), !ai ? h("span", { class: "muted small" }, " Richiede l'AI (ANTHROPIC_API_KEY).") : null));
 
   /* --- formato d'esame trovato dalla ricerca online --- */
   const web = exam.materials.find((m) => m.kind === "web");
@@ -158,7 +165,7 @@ export function materialsTab(exam) {
         h("div", { class: "card flat" },
           h("div", { class: "row between" }, h("div", {}, h("b", {}, m.title), " ", badge(KIND[m.kind], m.kind === "web" ? "brand" : ""), " ", h("span", { class: "muted small" }, kb(m.size))),
             h("button", { class: "btn small danger", onclick: () => removeMaterial(exam, m), "aria-label": `Rimuovi ${m.title}` }, "Rimuovi")),
-          m.kind === "web" ? h("details", {}, h("summary", { class: "small" }, `Anteprima e ${m.sources.length} fonti`),
+          m.kind === "web" ? h("details", {}, h("summary", { class: "small" }, m.generated ? "Anteprima (bozza dalla conoscenza di Claude, senza fonti)" : `Anteprima e ${m.sources.length} fonti`),
             h("pre", { style: { whiteSpace: "pre-wrap", maxHeight: "260px", overflow: "auto", font: "inherit", fontSize: ".9rem" } }, m.text),
             h("ul", { class: "source-list" }, m.sources.map((s) => h("li", {}, h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer" }, s.title || s.url))))) : null)))
     : h("p", { class: "muted" }, "Nessun materiale ancora. Aggiungi appunti, file o fai partire una ricerca online.");

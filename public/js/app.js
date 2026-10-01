@@ -1,6 +1,8 @@
 import * as api from "./api.js";
 import { core } from "./core.js";
+import { backend } from "./backend.js";
 import * as store from "./store.js";
+import { currentHash } from "./nav.js";
 import { clear, h, toast } from "./ui.js";
 import { homeView, settingsView } from "./views/home.js";
 import { examFormView } from "./views/form.js";
@@ -12,7 +14,7 @@ import { explainView, quizView } from "./views/quiz.js";
 const main = document.getElementById("main");
 
 function parse() {
-  const [path, qs = ""] = location.hash.replace(/^#\/?/, "").split("?");
+  const [path, qs = ""] = currentHash().replace(/^#\/?/, "").split("?");
   return { seg: path.split("/").filter(Boolean).map(decodeURIComponent), query: new URLSearchParams(qs) };
 }
 
@@ -54,7 +56,7 @@ function renderAiPill() {
   const pill = document.getElementById("ai-pill");
   const s = core.ai;
   pill.className = `pill ${s.ai ? "on" : ""}`;
-  pill.textContent = s.mock ? "AI: demo" : s.ai ? "AI attiva" : "Modalità base";
+  pill.textContent = s.label ?? (s.mock ? "AI: demo" : s.ai ? "AI attiva" : "Modalità base");
   pill.title = s.ai
     ? `Modello: ${s.model}`
     : s.offline
@@ -65,10 +67,17 @@ function renderAiPill() {
 core.rerender = render;
 addEventListener("hashchange", render);
 
-(async function boot() {
+let lastSaveToast = 0;
+store.setSaveErrorHandler(() => {
+  if (Date.now() - lastSaveToast < 60000) return;
+  lastSaveToast = Date.now();
+  toast("Non riesco a salvare le ultime modifiche: esporta un backup da «Dati» per non perderle.", "error");
+});
+
+export async function boot() {
   await store.init();
   core.ai = await api.status();
   renderAiPill();
-  if (!store.isPersistent()) toast("Salvataggio locale non disponibile (navigazione privata?): i dati andranno persi alla chiusura.", "error");
+  if (!store.isPersistent()) toast(backend.noPersistMessage ?? "Salvataggio locale non disponibile (navigazione privata?): i dati andranno persi alla chiusura.", "error");
   render();
-})();
+}

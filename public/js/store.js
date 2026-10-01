@@ -1,71 +1,48 @@
 // Stato dell'app. In memoria + persistenza su IndexedDB (i PDF superano la quota di localStorage).
 // Lo stato è un unico oggetto serializzabile; i file binari stanno in uno store separato.
+import { backend } from "./backend.js";
 import { today } from "./dates.js";
 
-const DB = "studify";
 const VERSION = 1;
-let db = null;
+
 let persistent = false;
 let timer = null;
+let onSaveError = null;
+export const setSaveErrorHandler = (fn) => { onSaveError = fn; };
 
 export const state = { version: VERSION, exams: [], profile: null };
-
-const open = () =>
-  new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 1);
-    req.onupgradeneeded = () => {
-      req.result.createObjectStore("kv");
-      req.result.createObjectStore("files");
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-
-const tx = (store, mode, fn) =>
-  new Promise((resolve, reject) => {
-    const t = db.transaction(store, mode);
-    const r = fn(t.objectStore(store));
-    t.oncomplete = () => resolve(r?.result);
-    t.onerror = () => reject(t.error);
-    t.onabort = () => reject(t.error);
-  });
 
 export const isPersistent = () => persistent;
 
 export async function init() {
-  try {
-    db = await open();
-    const saved = await tx("kv", "readonly", (s) => s.get("state"));
-    if (saved && Array.isArray(saved.exams)) Object.assign(state, saved);
-    persistent = true;
-    navigator.storage?.persist?.().catch(() => {});
-  } catch {
-    persistent = false; // es. finestra privata: l'app funziona ma i dati vanno persi alla chiusura
-  }
+  const r = await backend.init();
+  if (r.state && Array.isArray(r.state.exams)) Object.assign(state, r.state);
+  persistent = r.persistent;
 }
 
 /** Salvataggio con debounce: chiamalo dopo ogni modifica. */
 export function save() {
   if (!persistent) return;
   clearTimeout(timer);
-  timer = setTimeout(flush, 60);
+  timer = setTimeout(flush, backend.debounceMs);
 }
 
 export async function flush() {
   if (!persistent) return;
+  clearTimeout(timer);
   try {
-    await tx("kv", "readwrite", (s) => s.put(JSON.parse(JSON.stringify(state)), "state"));
+    await backend.write(state);
   } catch (e) {
     console.error("salvataggio fallito", e);
+    onSaveError?.(e);
   }
 }
 addEventListener("pagehide", flush);
 addEventListener("visibilitychange", () => document.visibilityState === "hidden" && flush());
 
-export const putFile = (id, data) => (persistent ? tx("files", "readwrite", (s) => s.put(data, id)) : (memFiles.set(id, data), Promise.resolve()));
-export const getFile = (id) => (persistent ? tx("files", "readonly", (s) => s.get(id)) : Promise.resolve(memFiles.get(id)));
-export const delFile = (id) => (persistent ? tx("files", "readwrite", (s) => s.delete(id)) : (memFiles.delete(id), Promise.resolve()));
-const memFiles = new Map();
+export const putFile = (id, data) => backend.putFile(id, data);
+export const getFile = (id) => backend.getFile(id);
+export const delFile = (id) => backend.delFile(id);
 
 /* ------------------------------- esami -------------------------------- */
 

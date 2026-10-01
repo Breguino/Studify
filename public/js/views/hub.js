@@ -1,3 +1,4 @@
+import { go } from "../nav.js";
 import { daysLeft, ensurePlan, flashQueue, isDone, methodsFor, setDone, taskHref } from "../domain.js";
 import { fmtDate, fmtDay, today } from "../dates.js";
 import { METHODS, EXAM_TYPES } from "../methods.js";
@@ -121,7 +122,7 @@ export function topicView(exam, tid, query) {
     if (taskId) exam.done[taskId] = true;
     store.logActivity(exam);
     store.save();
-    location.hash = `#/exam/${exam.id}/quiz?mode=topics&topics=${t.id}`;
+    go(`#/exam/${exam.id}/quiz?mode=topics&topics=${t.id}`);
   } }, exam.learned[t.id] ? "Rifai un quiz su questo argomento" : "Ho studiato: mettimi alla prova");
 
   return h("div", { class: "stack", style: { maxWidth: "760px" } },

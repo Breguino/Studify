@@ -11,10 +11,15 @@
   "scripts": {
     "start": "node server/index.js",
     "demo": "STUDIFY_MOCK=1 node server/index.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "build:artifact": "node scripts/build-artifact.mjs",
+    "build:harness": "node scripts/build-artifact.mjs --harness"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
     "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   }
 }
