@@ -4,13 +4,17 @@ import { buildPlan } from "./planner.js";
 import { recommendMethods } from "./methods.js";
 import { readiness, topicStats } from "./progress.js";
 import { buildQueue, dailyNewLimit } from "./srs.js";
+import { busyMinutes, lessonsOn } from "./timetable.js";
+import * as store from "./store.js";
 import { save } from "./store.js";
 
 export const daysLeft = (exam) => daysBetween(today(), exam.date);
 
 export function ensurePlan(exam, force = false) {
   if (!exam.module) return null;
-  if (force || !exam.plan || exam.plan.builtOn !== today() || exam.plan.stamp !== exam.moduleBuiltAt) {
+  const tt = store.state.profile?.timetable ?? null;
+  const stamp = `${exam.moduleBuiltAt}|${tt?.importedAt ?? ""}|${tt?.until ?? ""}`;
+  if (force || !exam.plan || exam.plan.builtOn !== today() || exam.plan.stamp !== stamp) {
     exam.plan = {
       ...buildPlan({
         examDate: exam.date,
@@ -20,8 +24,10 @@ export function ensurePlan(exam, force = false) {
         topics: exam.module.topics,
         learned: exam.learned,
         today: today(),
+        busy: (d) => busyMinutes(tt, d),
+        lessons: (d) => lessonsOn(tt, d),
       }),
-      stamp: exam.moduleBuiltAt,
+      stamp,
     };
     save();
   }

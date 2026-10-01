@@ -28,10 +28,12 @@ export function splitPhases(N) {
 }
 
 /**
+ * `busy(date)` = minuti occupati da lezioni quel giorno (riducono il tempo di studio; mai sotto 30');
+ * `lessons(date)` = elenco delle lezioni, solo per mostrarle.
  * @param {{examDate:string, examType:string, level:number, hoursPerDay:number,
- *          topics:Array, learned?:Record<string,boolean>, today:string}} p
+ *          topics:Array, learned?:Record<string,boolean>, today:string, busy?:Function, lessons?:Function}} p
  */
-export function buildPlan({ examDate, examType, level, hoursPerDay, topics, learned = {}, today }) {
+export function buildPlan({ examDate, examType, level, hoursPerDay, topics, learned = {}, today, busy = () => 0, lessons = () => [] }) {
   const N = daysBetween(today, examDate); // giorni di studio: oggi … giorno prima dell'esame
   if (N <= 0) return { builtOn: today, days: [], skipped: [], phases: null };
 
@@ -45,13 +47,19 @@ export function buildPlan({ examDate, examType, level, hoursPerDay, topics, lear
   ph.learn = learnDays;
   const days = Array.from({ length: N }, (_, i) => {
     const phase = i < ph.learn ? "learn" : i < ph.learn + ph.consolidate ? "consolidate" : i < N - ph.light ? "simulate" : "light";
-    return { date: addDays(today, i), phase, tasks: [] };
+    const date = addDays(today, i);
+    const free = Math.max(0, budget - busy(date));
+    return { date, phase, tasks: [], lessons: lessons(date), avail: free, usable: Math.max(30, free) };
   });
   const add = (day, t) => day.tasks.push({ ...t, id: `${day.date}|${t.kind}|${t.key ?? ""}`, date: day.date });
 
   // --- argomenti da studiare, con selezione per importanza se il tempo non basta
   const pending = topics.filter((t) => !learned[t.id]).map((t) => ({ ...t, minutes: topicMinutes(t, level) }));
-  const capacity = ph.learn * budget * 0.6;
+  // Nei giorni quasi pieni di lezioni (meno del 30% del tempo libero) non si introducono argomenti nuovi.
+  const learnIdx = days.slice(0, ph.learn).map((_, i) => i);
+  let eligible = learnIdx.filter((i) => days[i].avail >= budget * 0.3);
+  if (!eligible.length) eligible = learnIdx;
+  const capacity = eligible.reduce((sum, i) => sum + days[i].usable * 0.6, 0);
   let selected = pending;
   let skipped = [];
   if (pending.reduce((s, t) => s + t.minutes, 0) > capacity) {
@@ -68,14 +76,17 @@ export function buildPlan({ examDate, examType, level, hoursPerDay, topics, lear
     skipped = pending.filter((t) => !keep.has(t.id)).map((t) => t.id);
   }
 
-  // --- distribuzione sequenziale sui giorni di comprensione (in ordine di programma)
+  // --- distribuzione sui giorni di comprensione (in ordine di programma), più argomenti nei giorni più liberi
   const total = selected.reduce((s, t) => s + t.minutes, 0);
-  const target = total / Math.max(ph.learn, 1) || 1;
+  const weights = eligible.map((i) => days[i].usable);
+  const wsum = weights.reduce((a, b) => a + b, 0) || 1;
   let cum = 0;
   const learnByDay = Array.from({ length: ph.learn }, () => []);
   for (const t of selected) {
-    const idx = Math.min(ph.learn - 1, Math.floor((cum + t.minutes / 2) / target));
-    learnByDay[idx].push(t);
+    const pos = ((cum + t.minutes / 2) / (total || 1)) * wsum;
+    let k = 0;
+    for (let acc = weights[0] ?? 0; k < eligible.length - 1 && acc < pos; acc += weights[k + 1]) k++;
+    learnByDay[eligible[k] ?? 0].push(t);
     cum += t.minutes;
   }
 
@@ -125,7 +136,7 @@ export function buildPlan({ examDate, examType, level, hoursPerDay, topics, lear
 
   for (const d of days) {
     d.minutes = d.tasks.reduce((s, t) => s + t.minutes, 0);
-    d.overload = d.minutes > budget * 1.15;
+    d.overload = d.minutes > d.usable * 1.15;
   }
   return { builtOn: today, days, skipped, phases: ph };
 }

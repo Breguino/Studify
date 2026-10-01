@@ -6,6 +6,7 @@ import { currentHash } from "./nav.js";
 import { clear, h, toast } from "./ui.js";
 import { homeView, settingsView } from "./views/home.js";
 import { examFormView } from "./views/form.js";
+import { importView } from "./views/import.js";
 import { profileView } from "./views/profile.js";
 import { hubView, topicView } from "./views/hub.js";
 import { flashView } from "./views/flash.js";
@@ -25,6 +26,7 @@ function route() {
   if (a === "new") return examFormView(null);
   if (a === "settings") return settingsView();
   if (a === "profile") return profileView();
+  if (a === "import") return importView();
   if (a === "exam") {
     const exam = store.getExam(id);
     if (!exam) return h("div", { class: "empty" }, h("h3", {}, "Esame non trovato"), h("a", { class: "btn", href: "#/" }, "Torna alla home"));

@@ -63,6 +63,7 @@ export function newExam(fields) {
     degree: "",
     cfu: 0,
     year: 0,
+    appelli: [], // altri appelli importati: [{date, time, room}]
     formatSource: null,
     date: "",
     type: "scritto",

@@ -7,6 +7,7 @@ import { buildPlan, splitPhases } from "../public/js/planner.js";
 import { pickQuestions, readiness, recordScore, topicStats, weakTopics } from "../public/js/progress.js";
 import { buildLocalModule } from "../public/js/local-builder.js";
 import { normalizeModule } from "../server/schema.js";
+import { weekdayOf } from "../public/js/tabular.js";
 import { findExamFormat, suggestExamType } from "../public/js/exam-type.js";
 import { UNIVERSITIES, resolveUniversity } from "../public/js/universities.js";
 import { coursesForYear, examDefaultsFromCourse, findCourse, groupByYear, parseCurriculumText } from "../public/js/curriculum.js";
@@ -286,4 +287,19 @@ test("raggruppamento per anno: obbligatori, gruppi a scelta, anno non indicato i
   assert.deepEqual(g[1].electives.map((e) => [e.group, e.courses.length]), [["Area economica", 2], ["A scelta dello studente", 1]]);
   assert.deepEqual(coursesForYear(cs, 3).map((c) => c.name), ["B", "C", "D", "E", "F"], "anno + senza anno");
   assert.equal(coursesForYear(cs, 0).length, 6);
+});
+
+test("piano con lezioni: giorni occupati ricevono meno studio, mai sotto 30 minuti, lezioni passate al giorno", () => {
+  const busy = (d) => (weekdayOf(d) === 1 ? 240 : 0); // ogni lunedì 4 ore di lezione, con 3 ore di studio disponibili
+  const plain = buildPlan({ ...base, examDate: "2026-02-01", today: "2026-01-01" });
+  const withBusy = buildPlan({ ...base, examDate: "2026-02-01", today: "2026-01-01", busy, lessons: (d) => (weekdayOf(d) === 1 ? [{ course: "A", start: "09:00", end: "13:00", room: "" }] : []) });
+  const mondays = withBusy.days.filter((d) => weekdayOf(d.date) === 1);
+  assert.ok(mondays.length >= 3);
+  assert.ok(mondays.every((d) => d.avail === 0 && d.usable === 30 && d.lessons.length === 1));
+  const learnMin = (days) => days.flatMap((d) => d.tasks).filter((t) => t.kind === "learn").reduce((s, t) => s + t.minutes, 0);
+  const learnDays = withBusy.days.filter((d) => d.phase === "learn");
+  assert.equal(learnMin(learnDays.filter((d) => weekdayOf(d.date) === 1)), 0, "nessun argomento nuovo nei giorni di lezione piena");
+  assert.equal(learnMin(withBusy.days), learnMin(plain.days), "ma tutti gli argomenti restano pianificati");
+  assert.ok(plain.days.every((d) => d.lessons.length === 0 && d.avail === 180));
+  assert.ok(withBusy.days.filter((d) => weekdayOf(d.date) === 1).every((d) => d.minutes <= 30 * 1.15 || d.overload), "il carico che non ci sta è segnalato");
 });

@@ -3,6 +3,7 @@ import { daysLeft, ensurePlan, flashQueue, isDone, methodsFor, setDone, taskHref
 import { fmtDate, fmtDay, today } from "../dates.js";
 import { METHODS, EXAM_TYPES } from "../methods.js";
 import { PHASES } from "../planner.js";
+import { fmtLesson } from "../timetable.js";
 import * as store from "../store.js";
 import { badge, emptyState, h, paras } from "../ui.js";
 import { core } from "../core.js";
@@ -20,14 +21,17 @@ const TABS = [
 export function hubView(exam, tab) {
   if (!TABS.some(([k]) => k === tab)) tab = "today";
   const dl = daysLeft(exam);
+  const apHere = exam.appelli?.find((a) => a.date === exam.date);
+  const others = (exam.appelli ?? []).filter((a) => a.date !== exam.date && a.date >= today());
   const body = { today: todayTab, materials: materialsTab, module: moduleTab, methods: methodsTab, progress: progressTab }[tab](exam);
   return h(
     "div",
     { class: "stack", style: { gap: "0" } },
     h("div", { class: "row between" },
       h("div", {}, h("h1", { style: { marginBottom: "2px" } }, exam.name),
-        h("div", { class: "muted" }, `${fmtDate(exam.date)} · ${dl > 0 ? `tra ${dl} giorni` : dl === 0 ? "oggi" : "già passato"} · ${EXAM_TYPES[exam.type]}`,
+        h("div", { class: "muted" }, `${fmtDate(exam.date)}${apHere?.time ? ` ore ${apHere.time}` : ""}${apHere?.room ? ` · ${apHere.room}` : ""} · ${dl > 0 ? `tra ${dl} giorni` : dl === 0 ? "oggi" : "già passato"} · ${EXAM_TYPES[exam.type]}`,
           exam.formatSource?.url ? h("span", {}, " (", h("a", { href: exam.formatSource.url, target: "_blank", rel: "noopener noreferrer" }, "fonte del formato"), ")") : null),
+        others.length ? h("div", { class: "muted small" }, `Altri appelli: ${others.map((a) => fmtDate(a.date)).join(", ")} (cambia da «Modifica»)`) : null,
         exam.university ? h("div", { class: "muted small" }, [exam.university, exam.degree, exam.year ? `${exam.year}° anno` : "", exam.cfu ? `${exam.cfu} CFU` : ""].filter(Boolean).join(" · ")) : null),
       h("a", { class: "btn ghost", href: `#/exam/${exam.id}/edit` }, "Modifica")),
     h("nav", { class: "tabs", "aria-label": "Sezioni" }, TABS.map(([k, t]) => h("a", { href: `#/exam/${exam.id}/${k}`, "aria-current": k === tab ? "page" : null }, t))),
@@ -73,14 +77,15 @@ function todayTab(exam) {
     ...m.warnings.map((w) => h("div", { class: "callout warn" }, w)),
     plan.skipped.length ? h("div", { class: "callout warn" }, h("b", {}, "Rimandati per mancanza di tempo: "), plan.skipped.map((id) => exam.module.topics.find((t) => t.id === id)?.title).join(", "), ". Li affronterai se avanza tempo.") : null,
     h("div", { class: "row between" },
-      h("div", {}, h("h2", { style: { marginBottom: 0 } }, `Oggi · ${fmtDay(today())}`), h("span", { class: "muted small" }, first ? `${PHASES[first.phase]} · ~${minutes} min su ${Math.round(budget)} disponibili` : "")),
+      h("div", {}, h("h2", { style: { marginBottom: 0 } }, `Oggi · ${fmtDay(today())}`), h("span", { class: "muted small" }, first ? `${PHASES[first.phase]} · ~${minutes} min su ${first.lessons?.length ? first.usable : Math.round(budget)} disponibili` : "")),
       h("button", { class: "btn small", onclick: () => { ensurePlan(exam, true); core.rerender(); } }, "Ricalcola piano")),
+    first?.lessons?.length ? h("div", { class: "callout" }, h("b", {}, "Oggi hai lezione: "), first.lessons.map(fmtLesson).join(" · "), first.avail > 0 ? `. Tempo di studio rimasto: ~${first.avail} min.` : ". Poco tempo di studio oggi: solo un po' di flashcard.") : null,
     first?.overload ? h("div", { class: "callout warn" }, "Il carico di oggi supera il tempo che hai indicato: fai prima le attività in cima.") : null,
     h("div", { class: "stack", style: { gap: "8px" } }, tasks.map((t) => taskRow(exam, t))),
     rest.length ? h("div", {}, h("h2", { style: { marginTop: "18px" } }, "Prossimi giorni"), h("div", { class: "stack", style: { gap: "8px" } },
       rest.map((d) => h("details", { class: "day" },
-        h("summary", {}, h("b", {}, fmtDay(d.date)), badge(PHASES[d.phase], d.phase === "simulate" ? "warn" : "brand"), h("span", { class: "muted small" }, `~${d.minutes} min`), d.overload ? badge("carico alto", "warn") : null),
-        h("ul", {}, d.tasks.filter((t) => t.kind !== "flash").map((t) => h("li", {}, t.title))))))) : null,
+        h("summary", {}, h("b", {}, fmtDay(d.date)), badge(PHASES[d.phase], d.phase === "simulate" ? "warn" : "brand"), h("span", { class: "muted small" }, `~${d.minutes} min`), d.lessons?.length ? badge(`lezioni ${d.lessons.length}`) : null, d.overload ? badge("carico alto", "warn") : null),
+        h("ul", {}, d.lessons?.length ? h("li", {}, `Lezioni: ${d.lessons.map(fmtLesson).join(" · ")}`) : null, d.tasks.filter((t) => t.kind !== "flash").map((t) => h("li", {}, t.title))))))) : null,
   );
 }
 

@@ -48,6 +48,15 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
      la lettura rapida senza AI), o inserire gli insegnamenti a mano. Anno, tipo (obbligatorio / a scelta), CFU e prova si correggono riga per riga.
    - creando un esame scegli **anno** e **insegnamento**: CFU, tipo di prova e anno si precompilano.
    I dati trovati sul web sono sempre segnalati «da verificare» (a.a., fonti): la prova d'esame resta «Non indicato» se la scheda non la dichiara.
+0b. **Importa da CSV o Excel** (pulsante «Importa CSV / Excel»): tre tipi di file, riconosciuti dalle intestazioni (colonne correggibili a mano):
+   - **appelli d'esame**: insegnamento, data, ora, aula, tipo di prova, CFU, anno. Più date per lo stesso insegnamento = più appelli (si sceglie
+     da «Modifica»); le date già passate vengono ignorate; l'esame esistente con lo stesso nome viene aggiornato, non duplicato;
+   - **piano di studi**: insegnamento, anno, CFU, tipo (obbligatorio / a scelta), prova;
+   - **orari delle lezioni**: insegnamento, giorno (lunedì… o una data), inizio e fine (o «09:00-11:00»), aula. Le lezioni riducono il tempo di studio
+     dei giorni in cui cadono (mai sotto 30') e nei giorni quasi pieni non si introducono argomenti nuovi. Le lezioni settimanali valgono fino
+     alla data indicata.
+   Si legge `.xlsx` (date e orari anche con formato Excel), `.csv`/`.tsv` (delimitatore e codifica Windows-1252 riconosciuti) o testo copiato da Excel.
+   Il vecchio `.xls` e i PDF non sono supportati. Errori e righe scartate sono elencati con il numero di riga del tuo file.
 1. **Descrivi l'esame**: data, tipo di prova (scritto, test, esercizi, orale, misto), livello di partenza (1-5), ore al giorno.
 2. **Porta i materiali**: incolla/carica appunti e PDF; oppure «Cerca online con l'AI» (ricerca web con fonti e link,
    che puoi leggere ed eliminare prima di usarla).
@@ -107,7 +116,7 @@ server/           index.js (HTTP, job asincroni, sicurezza) · ai.js (Anthropic 
 shared/           prompts.js, normalize.js: usati sia dal server sia dalla pagina Claude (nessuna dipendenza)
 artifact/         versione pagina Claude: generate.js (sample), backend.js (db), api.js, entry.js, template, fake-claude (prove)
 scripts/          build-artifact.mjs (esbuild)
-public/js/        logica pura (testata): dates, methods, srs, planner, progress, local-builder
+public/js/        logica pura (testata): dates, methods, srs, planner, progress, local-builder, tabular (CSV/xlsx), importers, timetable
                   stato/UI: store (IndexedDB), domain, api, ui, views/*
 public/demo/      modulo demo (Microeconomia)
 test/             node --test: logica pura + client AI con SDK simulato

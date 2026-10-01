@@ -1,6 +1,6 @@
 import { go } from "../nav.js";
 import { coursesForYear, examDefaultsFromCourse, FORMAT_LABEL, findCourse, yearLabel } from "../curriculum.js";
-import { addDays, today } from "../dates.js";
+import { addDays, fmtDate, today } from "../dates.js";
 import { suggestExamType } from "../exam-type.js";
 import { EXAM_TYPES, sessionAdvice } from "../methods.js";
 import * as store from "../store.js";
@@ -81,7 +81,12 @@ export function examFormView(exam) {
       field("year", "Anno di corso", select({ 0: courses.length ? "Tutti gli anni" : "Non indicato", 1: "1° anno", 2: "2° anno", 3: "3° anno", 4: "4° anno", 5: "5° anno", 6: "6° anno" }, v.year || 0), courses.length ? "Filtra l'elenco degli insegnamenti." : null)),
     courseList, electiveNote,
     h("div", { class: "cols" },
-      field("date", "Data dell'esame", h("input", { type: "date", required: true, value: v.date, min: addDays(today(), 1) })),
+      h("div", { class: "stack", style: { gap: "6px" } },
+        field("date", "Data dell'esame", h("input", { type: "date", required: true, value: v.date, min: addDays(today(), 1) })),
+        v.appelli?.filter((a) => a.date >= today()).length > 1
+          ? h("label", {}, "Appello", h("select", { id: "appello", onchange: (e) => { if (e.target.value) f.date.value = e.target.value; } },
+              v.appelli.filter((a) => a.date >= today()).map((a) => h("option", { value: a.date, selected: a.date === v.date }, `${fmtDate(a.date)}${a.time ? ` ore ${a.time}` : ""}${a.room ? ` · ${a.room}` : ""}`))), h("span", { class: "hint" }, "Altri appelli importati: scegli quello a cui ti presenti."))
+          : null),
       field("type", "Tipo di prova", select(EXAM_TYPES, v.type)),
     ),
     h("div", { class: "cols" },

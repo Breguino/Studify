@@ -40,7 +40,7 @@ function examCard(exam) {
     "a",
     { class: "card stack", href: `#/exam/${exam.id}` },
     h("div", { class: "row between" }, h("h3", {}, exam.name), badge(dl > 0 ? `tra ${dl} g` : dl === 0 ? "oggi" : "passato", dl <= 3 && dl >= 0 ? "bad" : dl <= 10 ? "warn" : "")),
-    h("div", { class: "muted small" }, `${fmtDate(exam.date)} · ${EXAM_TYPES[exam.type]}`),
+    h("div", { class: "muted small" }, `${fmtDate(exam.date)}${exam.appelli?.find((a) => a.date === exam.date)?.time ? ` ore ${exam.appelli.find((a) => a.date === exam.date).time}` : ""} · ${EXAM_TYPES[exam.type]}${exam.appelli?.length > 1 ? ` · ${exam.appelli.length} appelli` : ""}`),
     exam.module
       ? h(
           "div",
@@ -57,7 +57,7 @@ export function homeView() {
   return h(
     "div",
     { class: "stack" },
-    h("div", { class: "row between" }, h("h1", {}, "I tuoi esami"), h("a", { class: "btn primary", href: "#/new" }, "+ Nuovo esame")),
+    h("div", { class: "row between" }, h("h1", {}, "I tuoi esami"), h("div", { class: "row" }, h("a", { class: "btn", href: "#/import" }, "Importa CSV / Excel"), h("a", { class: "btn primary", href: "#/new" }, "+ Nuovo esame"))),
     exams.length
       ? h("div", { class: "grid" }, exams.map(examCard))
       : h(
