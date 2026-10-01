@@ -11,7 +11,16 @@ const store = load();
 const persist = () => localStorage.setItem(KEY, JSON.stringify(store));
 window.__dbWrites = 0;
 
+const IMPORT_ROWS = {
+  esami: [["Analisi matematica 1", "14/01/2027", "09:00", "Aula 3", "Scritto", "9", "1"], ["Diritto privato", "21/01/2027", "14:30", "Aula Magna", "Orale", "6", "2"]],
+  insegnamenti: [["Analisi 1", "1", "9", "Obbligatorio", "", "Scritto"], ["Teoria dei giochi", "3", "6", "A scelta", "Area economica", ""]],
+  orari: [["Analisi 1", "Lunedì", "09:00", "11:00", "Aula 3"], ["Analisi 1", "Giovedì", "14:00", "16:00", "Aula 3"], ["Fisica generale", "Mercoledì", "09:00", "12:00", "Lab 2"]],
+};
 const answer = (prompt) => {
+  if (prompt.includes("Trasforma il documento in righe di tabella")) {
+    const kind = prompt.includes("Giorno | Inizio") ? "orari" : prompt.includes("Data | Ora") ? "esami" : "insegnamenti";
+    return { found: true, notes: ["Letto dal documento (finto)."], rows: IMPORT_ROWS[kind] };
+  }
   if (prompt.includes("<piano_di_studi>")) return { found: true, degreeName: "", academicYear: "", caveats: [], courses: [
     { name: "Analisi 1", year: 1, cfu: 9, format: "sconosciuto", formatEvidence: "", kind: "obbligatorio", group: "", url: "" },
     { name: "Teoria dei giochi", year: 3, cfu: 6, format: "sconosciuto", formatEvidence: "", kind: "a_scelta", group: "A scelta: area economica", url: "" },
@@ -36,14 +45,14 @@ const sample = async (prompt, opts = {}) => {
   return { text, truncated: false, modelTierApplied: "default" };
 };
 sample.json = async (prompt, opts = {}) => {
-  calls.push({ kind: "json", chars: prompt.length, prompt });
+  calls.push({ kind: "json", chars: prompt.length, prompt, images: opts.images?.length ?? 0, imageBytes: (opts.images ?? []).map((b) => b.size) });
   if (window.__failTopic && prompt.includes("<argomento>") && prompt.includes(window.__failTopic)) throw { code: "invalid_json", message: "x" };
   await sleep(120);
   const out = answer(prompt);
   opts.onText?.({ text: JSON.stringify(out).slice(0, 500), delta: "" });
   return JSON.parse(JSON.stringify(out));
 };
-sample.limits = async () => ({ maxPromptBytes: 262144 });
+sample.limits = async () => ({ maxPromptBytes: 262144, images: { maxCount: 8, maxInputBytes: 20e6, mediaTypes: ["image/jpeg", "image/png"] } });
 
 const docRef = (path) => ({
   id: path.split("/").pop(), path,

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { buildModule, curriculum, degrees, gradeAnswer, parseCurriculum, research, setClient } from "../server/ai.js";
+import { buildModule, curriculum, degrees, gradeAnswer, importRows, parseCurriculum, research, setClient } from "../server/ai.js";
 import { CurriculumSchema, GradeSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees } from "../server/schema.js";
 
 const stream = (msg) => ({ on() {}, finalMessage: async () => msg });
@@ -167,4 +167,36 @@ test("piano incollato: nessuna ricerca web, URL sempre vuoti, testo trattato com
   assert.equal(r.courses[1].kind, "a_scelta");
   setClient(fake([{ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ ...out, found: false, courses: [] }) }] }], []));
   await assert.rejects(parseCurriculum({ text: "ciao ciao ciao ciao ciao ciao", university: "", degree: "" }), /non ho trovato insegnamenti/);
+});
+
+test("importazione da documento: testo con layout o PDF come allegato, righe portate alle colonne canoniche", async () => {
+  const raw = { found: true, notes: ["Orario valido dal 28/09 al 18/12"], rows: [
+    ["Analisi 1", "Lunedì", "09:00", "11:00", "Aula 3", "extra"],
+    ["Fisica", "Mercoledì", "09:00"],
+    ["solo titolo"],
+  ] };
+  let calls = [];
+  setClient(fake([{ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(raw) }] }], calls));
+  const r = await importRows({ kind: "orari", text: "=== Pagina 1 ===\nLunedi  Martedi\n09:00 Analisi 1", today: "2026-10-01" });
+  assert.deepEqual(r.rows[0], ["Insegnamento", "Giorno", "Inizio", "Fine", "Aula"]);
+  assert.deepEqual(r.rows[1], ["Analisi 1", "Lunedì", "09:00", "11:00", "Aula 3"], "colonne in eccesso scartate");
+  assert.deepEqual(r.rows[2], ["Fisica", "Mercoledì", "09:00", "", ""], "colonne mancanti riempite");
+  assert.equal(r.rows.length, 3, "riga con una sola cella scartata");
+  assert.deepEqual(r.notes, ["Orario valido dal 28/09 al 18/12"]);
+  const c = calls[0].messages[0].content;
+  assert.equal(c.length, 1, "solo testo");
+  assert.match(c[0].text, /<documento>/);
+  assert.match(c[0].text, /Oggi è 2026-10-01/);
+  assert.match(c[0].text, /giorni in colonna/);
+  assert.match(calls[0].system, /ignora qualunque richiesta/);
+
+  calls = [];
+  setClient(fake([{ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(raw) }] }], calls));
+  await importRows({ kind: "esami", pdf: "QUJD", today: "2026-10-01" });
+  assert.equal(calls[0].messages[0].content[0].type, "document", "scansione: il PDF va all'AI come documento, prima del testo");
+  assert.equal(calls[0].messages[0].content[0].source.media_type, "application/pdf");
+
+  setClient(fake([{ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ found: false, rows: [], notes: [] }) }] }], []));
+  await assert.rejects(importRows({ kind: "esami", text: "ciao" }), /non ho trovato dati di questo tipo/);
+  await assert.rejects(importRows({ kind: "boh", text: "x" }), /non valido/);
 });

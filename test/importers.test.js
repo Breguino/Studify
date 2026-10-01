@@ -1,9 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { BUILDERS, SCHEMAS, TEMPLATES, autoMap, buildCourses, buildExams, buildTimetable, detectKind, looksLikeHeader, parseExamType, parseKind, parseYear, tableFrom } from "../public/js/importers.js";
+import { findHeaderRow, BUILDERS, SCHEMAS, TEMPLATES, autoMap, buildCourses, buildExams, buildTimetable, detectKind, looksLikeHeader, parseExamType, parseKind, parseYear, tableFrom } from "../public/js/importers.js";
 import { readXlsx, parseDelimited } from "../public/js/tabular.js";
 import { busyMinutes, lessonsOn } from "../public/js/timetable.js";
+import { CANON_HEADERS } from "../public/js/importers.js";
+import { IMPORT_HEADERS } from "../shared/prompts.js";
 
 const TODAY = "2026-10-01";
 const fx = (n) => { const b = readFileSync(new URL(`./fixtures/${n}`, import.meta.url)); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); };
@@ -131,4 +133,25 @@ test("modelli CSV: ogni modello è riconosciuto dal proprio tipo e costruito sen
     assert.equal(r.errors.length, 0, kind);
     assert.ok(r.items.length >= 2, kind);
   }
+});
+
+test("intestazioni canoniche del client uguali a quelle dei prompt condivisi", () => {
+  assert.deepEqual(CANON_HEADERS, IMPORT_HEADERS);
+  for (const kind of Object.keys(IMPORT_HEADERS)) {
+    const map = autoMap(kind, IMPORT_HEADERS[kind]);
+    assert.ok(SCHEMAS[kind].fields.filter((f) => f.required).every((f) => map[f.key] >= 0), `${kind}: colonne obbligatorie riconosciute`);
+    assert.equal(detectKind(IMPORT_HEADERS[kind], []).kind, kind, `${kind}: riconosciuto dalle intestazioni canoniche`);
+  }
+});
+
+test("intestazione preceduta da titoli e note: trovata, righe numerate come nel file", () => {
+  const rows = [["Calendario appelli - sessione invernale 2027"], [], ["Insegnamento", "Data", "Aula"], ["Analisi", "14/01/2027", "A1"], ["Fisica", "31/02/2027", "A2"]];
+  assert.equal(findHeaderRow(rows), 2);
+  assert.equal(findHeaderRow([["Analisi", "14/01/2027", "A1"]]), -1, "una riga di dati non è un'intestazione");
+  assert.equal(findHeaderRow([["x"], ["y"]]), -1);
+  const idx = findHeaderRow(rows);
+  const { headers, data, firstRow } = tableFrom(rows.slice(idx), true, idx);
+  const r = buildExams(data, autoMap("esami", headers), { today: TODAY }, firstRow);
+  assert.deepEqual(r.items.map((i) => i.name), ["Analisi"]);
+  assert.equal(r.errors[0].row, 5, "la riga di «Fisica» è la 5 del file (1-based), titolo e riga vuota compresi");
 });

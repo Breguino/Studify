@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { CURRICULUM_RULES, EXAM_TYPE_LABEL, GRADE_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, where } from "../shared/prompts.js";
-import { CurriculumSchema, DegreesSchema, GradeSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees, normalizeModule } from "./schema.js";
+import { CURRICULUM_RULES, EXAM_TYPE_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, where } from "../shared/prompts.js";
+import { CurriculumSchema, DegreesSchema, GradeSchema, ImportRowsSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees, normalizeImportRows, normalizeModule } from "./schema.js";
 
 export const MODEL = process.env.STUDIFY_MODEL || "claude-opus-5-5";
 
@@ -202,6 +202,39 @@ url = "" sempre. found = false se il testo non contiene un piano di studi.`,
   const cur = normalizeCurriculum(raw, new Set());
   if (!cur.found || !cur.courses.length) throw new Error("Nel testo non ho trovato insegnamenti: incolla l'elenco con gli anni e i CFU.");
   return { ...cur, sources: [] };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Importazione da PDF / testo (appelli, piano di studi, orari)               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Legge un documento (testo estratto dal PDF con il layout a colonne, oppure il PDF stesso se è una scansione)
+ * e lo trasforma in righe di tabella con le colonne canoniche del tipo richiesto.
+ */
+export async function importRows({ kind, text, pdf, today }) {
+  if (!IMPORT_HEADERS[kind]) throw new Error("Tipo di importazione non valido.");
+  const content = [];
+  if (pdf) content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: pdf } });
+  content.push({ type: "text", text: `${IMPORT_RULES(kind, today)}\n\n${text ? `<documento>\n${text}\n</documento>` : "Il documento è il PDF allegato."}` });
+  const msg = await client().messages.create({
+    model: MODEL,
+    max_tokens: 32000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "low", format: zodOutputFormat(ImportRowsSchema) },
+    system: `Sei un assistente che legge documenti universitari e li trasforma in tabelle. ${SAFETY_RULES}`,
+    messages: [{ role: "user", content }],
+  });
+  assertUsable(msg);
+  let raw;
+  try {
+    raw = ImportRowsSchema.parse(JSON.parse(textOf(msg.content)));
+  } catch {
+    throw new Error("Non sono riuscito a interpretare il documento. Prova con un CSV o con meno pagine.");
+  }
+  const out = normalizeImportRows(raw, IMPORT_HEADERS[kind]);
+  if (!out.found) throw new Error("Nel documento non ho trovato dati di questo tipo: controlla di aver scelto il tipo giusto.");
+  return out;
 }
 
 /* -------------------------------------------------------------------------- */

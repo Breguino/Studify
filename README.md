@@ -13,7 +13,7 @@ npm run demo                           # AI simulata + esame demo: per provare t
 npm test
 ```
 
-Serve Node ≥ 20. Nessun build step: il frontend è JavaScript ES modules servito così com'è.
+Serve Node ≥ 20 (≥ 22.13 per eseguire i test, che leggono PDF con pdf.js). Nessun build step: il frontend è JavaScript ES modules servito così com'è; pdf.js (`pdfjs-dist`) viene servito da `node_modules` solo quando si apre un PDF.
 
 ## Versione per Claude (senza installare nulla)
 
@@ -21,7 +21,7 @@ Lo stesso Studify si può pubblicare come **pagina Claude** (artifact): niente N
 Usa l'account Claude di chi apre la pagina e salva i dati nel suo spazio privato.
 
 ```
-npm run build:artifact     # crea dist/studify.html (un solo file, ~115 KB, senza dipendenze)
+npm run build:artifact     # crea dist/studify.html (un solo file, ~1,9 MB: include pdf.js)
 ```
 
 Si pubblica con le capacità `sample` (Claude), `db` + `user` (archivio privato per utente) e `downloads` (backup).
@@ -29,7 +29,7 @@ Differenze rispetto alla versione con server:
 
 | | Server (`npm start`) | Pagina Claude |
 |---|---|---|
-| Generazione modulo | una richiesta, PDF compresi | a passi (schema → carte e domande per argomento); solo testo, max ~200k caratteri |
+| Generazione modulo | una richiesta, PDF compresi (anche scansioni) | a passi (schema → carte e domande per argomento); max ~200k caratteri; di un PDF si usa il testo (le scansioni no) |
 | Ricerca web: corsi dell'ateneo, piano di studi, materiali | sì | **no** (Claude non può navigare): il piano si **incolla** (letto da Claude) o si scrive; al posto dei materiali web una «traccia dal programma» marcata *non verificata* |
 | Dati | IndexedDB nel browser | `db` privato per utente (non visibile agli altri nemmeno se condividi la pagina) |
 | Costo | la tua chiave API | uso del tuo account Claude |
@@ -55,8 +55,13 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
    - **orari delle lezioni**: insegnamento, giorno (lunedì… o una data), inizio e fine (o «09:00-11:00»), aula. Le lezioni riducono il tempo di studio
      dei giorni in cui cadono (mai sotto 30') e nei giorni quasi pieni non si introducono argomenti nuovi. Le lezioni settimanali valgono fino
      alla data indicata.
-   Si legge `.xlsx` (date e orari anche con formato Excel), `.csv`/`.tsv` (delimitatore e codifica Windows-1252 riconosciuti) o testo copiato da Excel.
-   Il vecchio `.xls` e i PDF non sono supportati. Errori e righe scartate sono elencati con il numero di riga del tuo file.
+   Si legge `.xlsx` (date e orari anche con formato Excel), `.csv`/`.tsv` (delimitatore e codifica Windows-1252 riconosciuti), **`.pdf`** e testo
+   copiato da Excel. Titoli e note sopra la tabella vengono saltati. Il vecchio `.xls` non è supportato.
+   **PDF**: il testo posizionato viene ricostruito in righe e colonne (intestazioni ripetute a ogni pagina e numeri di pagina esclusi): gli
+   elenchi di appelli si importano così, senza AI. Per gli **orari a griglia** (giorni in colonna, fasce orarie in riga) e le impaginazioni
+   complesse c'è «Leggi con l'AI», che riceve il testo con le colonne allineate; per i **PDF scansionati** (senza testo) l'AI riceve il PDF
+   (versione con server) o le pagine come immagini (pagina Claude). Il risultato passa dalla stessa anteprima e dagli stessi controlli dei CSV.
+   Il piano di studi in PDF ha anche la «lettura rapida» senza AI. Errori e righe scartate sono elencati con il numero di riga del tuo file.
 1. **Descrivi l'esame**: data, tipo di prova (scritto, test, esercizi, orale, misto), livello di partenza (1-5), ore al giorno.
 2. **Porta i materiali**: incolla/carica appunti e PDF; oppure «Cerca online con l'AI» (ricerca web con fonti e link,
    che puoi leggere ed eliminare prima di usarla).

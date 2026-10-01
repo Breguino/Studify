@@ -13,7 +13,7 @@ const harness = process.argv.includes("--harness");
 const swap = {
   name: "swap-platform-modules",
   setup(b) {
-    b.onResolve({ filter: /(^|\/)(api|backend)\.js$/ }, (args) => {
+    b.onResolve({ filter: /(^|\/)(api|backend|pdf-text)\.js$/ }, (args) => {
       if (!args.importer.includes("/public/js/")) return null;
       return { path: join(ROOT, "artifact", args.path.split("/").pop()) };
     });

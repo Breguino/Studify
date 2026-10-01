@@ -70,3 +70,32 @@ riporta ogni opzione con kind="a_scelta" e group = nome del gruppo; se indica so
 inserisci UNA voce "Insegnamenti a scelta dello studente" con quei CFU e kind="a_scelta".
 format = "sconosciuto" salvo che il testo dichiari esplicitamente la modalità d'esame di QUELL'insegnamento (mai dedurla dal nome);
 formatEvidence = frase breve che lo giustifica, altrimenti "".`;
+
+/** Colonne canoniche per tipo di importazione: l'AI restituisce righe in questo ordine, poi passano dagli stessi importatori dei CSV. */
+export const IMPORT_HEADERS = {
+  esami: ["Insegnamento", "Data", "Ora", "Aula", "Tipo prova", "CFU", "Anno"],
+  insegnamenti: ["Insegnamento", "Anno", "CFU", "Tipo", "Gruppo", "Prova"],
+  orari: ["Insegnamento", "Giorno", "Inizio", "Fine", "Aula"],
+};
+
+const IMPORT_KIND_RULES = {
+  esami: `Il documento è un calendario di appelli d'esame. Una riga per ogni appello (se un insegnamento ha più date, più righe).
+Data = GG/MM/AAAA. Ora = HH:MM. Tipo prova = scritto, orale, test, esercizi o la combinazione indicata (altrimenti vuoto).`,
+  insegnamenti: `Il documento è un piano di studi. Una riga per insegnamento. Anno = anno di corso (numero). Tipo = "Obbligatorio" oppure
+"A scelta" (attività/insegnamenti a scelta dello studente o opzionali). Gruppo = nome del gruppo di opzioni a scelta, se c'è.
+Se sono indicati solo "12 CFU a scelta dello studente" senza elenco, scrivi UNA riga "Insegnamenti a scelta dello studente" con quei CFU.`,
+  orari: `Il documento è un orario delle lezioni. Una riga per ogni blocco di lezione. Giorno = nome del giorno (Lunedì…Sabato) oppure
+una data GG/MM/AAAA. Inizio e Fine = HH:MM. Se l'orario è a griglia (giorni in colonna, fasce orarie in riga) usa la posizione
+delle colonne per assegnare il giorno e unisci le fasce consecutive dello stesso insegnamento nella stessa colonna in un unico blocco
+(inizio della prima fascia, fine dell'ultima). Ignora pause, intestazioni e note.`,
+};
+
+export const IMPORT_RULES = (kind, today) => `Trasforma il documento in righe di tabella con ESATTAMENTE queste colonne, in quest'ordine:
+${IMPORT_HEADERS[kind].join(" | ")}
+${IMPORT_KIND_RULES[kind]}
+Regole generali: copia i valori dal documento senza inventare nulla; cella sconosciuta = "". Includi tutte le righe pertinenti, anche di più
+pagine, ma non righe di titolo, note o totali. Se una data non ha l'anno e il documento indica un periodo o un anno accademico, completala;
+altrimenti riportala com'è scritta. Oggi è ${today}.
+In "notes" scrivi in italiano le cose importanti che lo studente deve sapere (periodo di validità dell'orario, curricula multipli, parti
+illeggibili, ambiguità). found = false se il documento non contiene dati di questo tipo.
+${SAFETY_RULES}`;

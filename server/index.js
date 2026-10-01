@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODEL, aiConfigured, buildModule, curriculum, degrees, friendlyError, gradeAnswer, parseCurriculum, research } from "./ai.js";
+import { MODEL, aiConfigured, buildModule, curriculum, degrees, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
+import { IMPORT_HEADERS } from "../shared/prompts.js";
 import { normalizeModule } from "./schema.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
@@ -120,7 +121,7 @@ async function api(req, res, url) {
   if (!sameOriginOk(req)) return send(res, 403, { error: "Origine non consentita." });
 
   if (req.method === "GET" && url.pathname === "/api/status")
-    return send(res, 200, { ai: MOCK || aiConfigured(), mock: MOCK, model: MOCK ? "demo" : MODEL, web: true, pdf: true });
+    return send(res, 200, { ai: MOCK || aiConfigured(), mock: MOCK, model: MOCK ? "demo" : MODEL, web: true, pdf: true, pdfRead: true });
 
   if (req.method === "GET" && url.pathname.startsWith("/api/jobs/")) {
     const job = jobs.get(url.pathname.split("/").pop());
@@ -183,6 +184,28 @@ async function api(req, res, url) {
             ],
           })
         : parseCurriculum({ text, university: str(body.university, 200), degree: str(body.degree, 200) }),
+    );
+    return send(res, 202, { jobId: id });
+  }
+
+  if (url.pathname === "/api/import-rows") {
+    const kind = str(body.kind, 20);
+    if (!IMPORT_HEADERS[kind]) return send(res, 400, { error: "Tipo di importazione non valido." });
+    const text = str(body.text, 400_000);
+    const pdf = typeof body.pdf === "string" && /^[A-Za-z0-9+/=]+$/.test(body.pdf.slice(0, 1000)) ? body.pdf : "";
+    if (!text.trim() && !pdf) return send(res, 400, { error: "Nessun contenuto da leggere." });
+    const today = /^\d{4}-\d{2}-\d{2}$/.test(str(body.today, 10)) ? body.today : new Date().toISOString().slice(0, 10);
+    const id = startJob("import-rows", (p) =>
+      MOCK
+        ? mockRun(p, {
+            found: true, notes: ["Lettura dimostrativa: con l'AI vera il documento viene letto dal modello."],
+            rows: [IMPORT_HEADERS[kind], ...{
+              esami: [["Analisi matematica 1", "14/01/2027", "09:00", "Aula 3", "Scritto", "9", "1"]],
+              insegnamenti: [["Analisi matematica 1", "1", "9", "Obbligatorio", "", "Scritto"]],
+              orari: [["Analisi matematica 1", "Lunedì", "09:00", "11:00", "Aula 3"], ["Fisica generale", "Mercoledì", "09:00", "12:00", "Lab 2"]],
+            }[kind]],
+          })
+        : importRows({ kind, text, pdf, today }, p),
     );
     return send(res, 202, { jobId: id });
   }
@@ -255,7 +278,18 @@ async function api(req, res, url) {
   return send(res, 404, { error: "Endpoint inesistente." });
 }
 
+// pdf.js (lettura dei PDF nel browser): solo i due file necessari, serviti da node_modules.
+const VENDOR = { "/vendor/pdfjs/pdf.min.mjs": "pdf.min.mjs", "/vendor/pdfjs/pdf.worker.min.mjs": "pdf.worker.min.mjs" };
+const VENDOR_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "node_modules", "pdfjs-dist", "legacy", "build");
+
 async function serveStatic(req, res, url) {
+  if (VENDOR[url.pathname]) {
+    try {
+      return send(res, 200, await readFile(join(VENDOR_DIR, VENDOR[url.pathname])), { "Content-Type": MIME[".js"], "Cache-Control": "public, max-age=86400" });
+    } catch {
+      return send(res, 404, "pdf.js non installato (npm install)");
+    }
+  }
   let rel = decodeURIComponent(url.pathname);
   if (rel.endsWith("/")) rel += "index.html";
   const file = normalize(join(ROOT, rel));

@@ -115,3 +115,16 @@ export function normalizeDegrees(raw, seenUrls = new Set()) {
   }
   return { found: !!raw.found, academicYear: str(raw.academicYear), degrees: items, caveats: (raw.caveats ?? []).map(str).filter(Boolean) };
 }
+
+/**
+ * Righe lette dall'AI → tabella con l'intestazione canonica (le righe sono portate alla stessa larghezza).
+ * @returns {{found: boolean, rows: string[][], notes: string[]}} rows[0] = intestazione
+ */
+export function normalizeImportRows(raw, headers) {
+  const w = headers.length;
+  const rows = (Array.isArray(raw?.rows) ? raw.rows : [])
+    .filter(Array.isArray)
+    .map((r) => Array.from({ length: w }, (_, i) => (r[i] == null ? "" : String(r[i]).trim())))
+    .filter((r) => r.filter(Boolean).length >= 2);
+  return { found: !!raw?.found && rows.length > 0, rows: [headers, ...rows], notes: (raw?.notes ?? []).map(str).filter(Boolean).slice(0, 10) };
+}

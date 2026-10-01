@@ -45,7 +45,16 @@ async function addFiles(exam, files) {
   let pdfTotal = exam.materials.filter((m) => m.kind === "pdf").reduce((s, m) => s + m.size, 0);
   for (const file of files) {
     const name = file.name.replace(/\.[^.]+$/, "");
-    if (/\.pdf$/i.test(file.name) || file.type === "application/pdf") {
+    if ((/\.pdf$/i.test(file.name) || file.type === "application/pdf") && core.ai.pdf === false && core.pdfText) {
+      // pagina Claude: il PDF non si può inviare, ma il testo si estrae qui e diventa un appunto
+      try {
+        const text = await core.pdfText(file);
+        if (text.trim().length < 80) toast(`«${file.name}»: PDF senza testo selezionabile (scansione): incolla il testo a mano.`, "error");
+        else exam.materials.push({ id: uid(), kind: "notes", title: `${name} (da PDF)`, text, size: text.length });
+      } catch (e) {
+        toast(`«${file.name}»: ${e.message}`, "error");
+      }
+    } else if (/\.pdf$/i.test(file.name) || file.type === "application/pdf") {
       if (pdfTotal + file.size > MAX_PDF_TOTAL) {
         toast(`«${file.name}»: superato il limite di ${kb(MAX_PDF_TOTAL)} di PDF per esame.`, "error");
         continue;
@@ -123,11 +132,11 @@ export function materialsTab(exam) {
   } }, h("h3", {}, "Incolla appunti"), title, text, h("div", {}, h("button", { class: "btn", type: "submit" }, "Aggiungi")));
 
   /* --- carica file --- */
-  const input = h("input", { type: "file", multiple: true, accept: core.ai.pdf === false ? ".txt,.md,.markdown,text/plain" : ".txt,.md,.markdown,.pdf,application/pdf,text/plain", hidden: true });
+  const input = h("input", { type: "file", multiple: true, accept: core.ai.pdf === false && !core.pdfText ? ".txt,.md,.markdown,text/plain" : ".txt,.md,.markdown,.pdf,application/pdf,text/plain", hidden: true });
   input.addEventListener("change", () => addFiles(exam, [...input.files]));
   const drop = h("div", { class: "file-drop", tabindex: 0, role: "button", onclick: () => input.click(), onkeydown: (e) => (e.key === "Enter" || e.key === " ") && input.click(),
     ondragover: (e) => e.preventDefault(), ondrop: (e) => { e.preventDefault(); addFiles(exam, [...e.dataTransfer.files]); } },
-    h("b", {}, "Carica file"), h("div", { class: "small" }, core.ai.pdf === false ? ".txt o .md (i PDF non sono supportati qui: copia il testo e incollalo)" : ".txt, .md o .pdf (anche dispense scansionate non testuali: il PDF viene letto dall'AI)"), input);
+    h("b", {}, "Carica file"), h("div", { class: "small" }, core.ai.pdf === false ? (core.pdfText ? ".txt, .md o .pdf (di un PDF si legge il testo; le scansioni no)" : ".txt o .md (i PDF non sono supportati qui: copia il testo e incollalo)") : ".txt, .md o .pdf (anche dispense scansionate non testuali: il PDF viene letto dall'AI)"), input);
 
   /* --- ricerca online (o, senza web, traccia dal programma) --- */
   const webOk = core.ai.web !== false;

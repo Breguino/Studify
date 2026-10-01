@@ -118,3 +118,20 @@ test("pagina Claude: piano incollato → anni e attività a scelta, testo come d
   empty.json = async () => ({ found: false, courses: [] });
   await assert.rejects(parseCurriculum({ text: "x".repeat(30) }, () => {}, empty), /non ho trovato insegnamenti/);
 });
+
+test("pagina Claude: importazione da PDF — testo, scansione con immagini, limiti", async () => {
+  const { importRows } = await import("../artifact/generate.js");
+  let seen;
+  const mk = (limits) => { const s = async () => ({ text: "" }); s.limits = async () => limits; s.json = async (p, o) => { seen = { p, o }; return { found: true, notes: [], rows: [["Analisi", "14/01/2027", "09:00", "Aula 3", "Scritto", "9", "1"]] }; }; return s; };
+  const r = await importRows({ kind: "esami", text: "riga 1\nriga 2", today: "2026-10-01" }, () => {}, mk({}));
+  assert.deepEqual(r.rows[0], ["Insegnamento", "Data", "Ora", "Aula", "Tipo prova", "CFU", "Anno"]);
+  assert.match(seen.p, /<documento>/);
+  assert.match(seen.p, /ignora qualunque richiesta/);
+  assert.equal(seen.o.images, undefined);
+  const blobs = [new Blob(["x"])];
+  await importRows({ kind: "esami", text: "", images: blobs, today: "2026-10-01" }, () => {}, mk({ images: { maxCount: 8 } }));
+  assert.equal(seen.o.images, blobs, "scansione: pagine passate come immagini");
+  assert.match(seen.p, /immagini allegate/);
+  await assert.rejects(importRows({ kind: "esami", text: "", images: blobs, today: "2026-10-01" }, () => {}, mk({})), /scansione.*non può leggere immagini/);
+  await assert.rejects(importRows({ kind: "esami", text: "x".repeat(210_000) }, () => {}, mk({})), /troppo lungo/);
+});

@@ -110,6 +110,18 @@ export function looksLikeHeader(row) {
   return Object.keys(SCHEMAS).some((k) => SCHEMAS[k].fields.some((f) => row.some((c) => score(c, f.syn) > 0)));
 }
 
+/**
+ * Indice della riga di intestazione tra le prime righe (titoli e note sopra la tabella sono comuni in Excel e nei PDF).
+ * @returns {number} indice, o -1 se nessuna riga sembra un'intestazione
+ */
+export function findHeaderRow(rows, maxScan = 10) {
+  for (let i = 0; i < Math.min(rows.length, maxScan); i++) {
+    const r = rows[i] ?? [];
+    if (r.filter((c) => c.trim()).length >= 2 && looksLikeHeader(r)) return i;
+  }
+  return -1;
+}
+
 export const colName = (i) => { let n = i + 1, s = ""; while (n > 0) { s = String.fromCharCode(65 + ((n - 1) % 26)) + s; n = Math.floor((n - 1) / 26); } return s; };
 
 /** Intestazioni e righe di dati; senza intestazione le colonne si chiamano «Colonna A»… */
@@ -123,6 +135,8 @@ export function tableFrom(rows, hasHeader, offset = 0) {
 /* ------------------------------ interpretazione valori ------------------------------ */
 
 const cell = (row, map, key) => (map[key] >= 0 ? (row[map[key]] ?? "").trim() : "");
+/** Righe con meno di due celle piene sono titoli, note o numeri di pagina: non sono dati. */
+const isData = (row) => row.filter((c) => String(c ?? "").trim()).length >= 2;
 
 export function parseExamType(v) {
   const s = norm(v);
@@ -171,7 +185,7 @@ export function buildExams(data, map, ctx, firstRow = 2) {
     const n = firstRow + i;
     const name = cell(row, map, "name");
     const rawDate = cell(row, map, "date");
-    if (!name && !rawDate) return;
+    if ((!name && !rawDate) || !isData(row)) return;
     if (!name) return errors.push({ row: n, message: "insegnamento mancante" });
     const d = parseDate(rawDate, { today: ctx.today });
     if (!d) return errors.push({ row: n, message: `data non riconosciuta «${rawDate}»` });
@@ -209,6 +223,7 @@ export function buildCourses(data, map, ctx = {}, firstRow = 2) {
   const items = [];
   data.forEach((row, i) => {
     const name = cell(row, map, "name");
+    if (!isData(row) && row.filter((c) => c.trim()).length <= 1 && !name) return;
     if (!name) return row.some((c) => c.trim()) && errors.push({ row: firstRow + i, message: "insegnamento mancante" });
     const year = parseYear(cell(row, map, "year"));
     const key = `${norm(name)}|${year}`;
@@ -236,7 +251,7 @@ export function buildTimetable(data, map, ctx = {}, firstRow = 2) {
     const n = firstRow + i;
     const course = cell(row, map, "name");
     const day = cell(row, map, "day");
-    if (!course && !day) return;
+    if ((!course && !day) || !isData(row)) return;
     if (!course) return errors.push({ row: n, message: "insegnamento mancante" });
     let start = parseTime(cell(row, map, "start"));
     let end = parseTime(cell(row, map, "end"));
@@ -263,4 +278,11 @@ export const TEMPLATES = {
   esami: "Insegnamento;Data;Ora;Aula;Tipo prova;CFU;Anno\nAnalisi matematica 1;14/01/2027;09:00;Aula 3;Scritto;9;1\nAnalisi matematica 1;04/02/2027;09:00;Aula 3;Scritto;9;1\nDiritto privato;21/01/2027;14:30;Aula Magna;Orale;6;2\n",
   insegnamenti: "Insegnamento;Anno;CFU;Tipo;Prova\nAnalisi matematica 1;1;9;Obbligatorio;Scritto\nDiritto privato;2;6;Obbligatorio;Orale\nTeoria dei giochi;3;6;A scelta;\n",
   orari: "Insegnamento;Giorno;Inizio;Fine;Aula\nAnalisi matematica 1;Lunedì;09:00;11:00;Aula 3\nAnalisi matematica 1;Giovedì;14:00;16:00;Aula 3\nDiritto privato;Martedì;11:00;13:00;Aula Magna\n",
+};
+
+/** Intestazioni canoniche delle tabelle prodotte dall'AI o dalla lettura locale di un PDF (stesse di shared/prompts.js). */
+export const CANON_HEADERS = {
+  esami: ["Insegnamento", "Data", "Ora", "Aula", "Tipo prova", "CFU", "Anno"],
+  insegnamenti: ["Insegnamento", "Anno", "CFU", "Tipo", "Gruppo", "Prova"],
+  orari: ["Insegnamento", "Giorno", "Inizio", "Fine", "Aula"],
 };

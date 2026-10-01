@@ -1,8 +1,8 @@
 // Generazione con Claude dentro la pagina pubblicata (capability `sample`): nessuna chiave API,
 // usa l'account Claude di chi apre la pagina. Limiti: nessuna navigazione web, nessun PDF,
 // prompt ≤ 256 KiB e risposte brevi → il modulo si costruisce a passi (schema → carte/domande per argomento).
-import { CURRICULUM_RULES, EXAM_TYPE_LABEL, GRADE_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext } from "../shared/prompts.js";
-import { normalizeCurriculum, normalizeModule } from "../shared/normalize.js";
+import { CURRICULUM_RULES, EXAM_TYPE_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext } from "../shared/prompts.js";
+import { normalizeCurriculum, normalizeImportRows, normalizeModule } from "../shared/normalize.js";
 
 const MAX_MATERIAL_CHARS = 200_000;
 const CONCURRENCY = 2; // `sample` ne esegue un paio alla volta, le altre aspettano: oltre si rischia rate_limited
@@ -204,4 +204,36 @@ ${text}
   const cur = normalizeCurriculum(raw ?? {}, new Set());
   if (!cur.found || !cur.courses.length) throw new Error("Nel testo non ho trovato insegnamenti: incolla l'elenco con gli anni e i CFU.");
   return { ...cur, sources: [] };
+}
+
+/**
+ * Documento (testo estratto dal PDF con layout a colonne, oppure pagine scansionate come immagini) → righe di tabella
+ * con le colonne canoniche del tipo richiesto. Poi passano dagli stessi importatori dei CSV.
+ */
+export async function importRows({ kind, text, images, today }, onProgress = () => {}, sampleFn) {
+  const sample = sampleFn ?? (await getSample());
+  if (!sample) throw new Error("Claude non è disponibile in questa pagina.");
+  if (!IMPORT_HEADERS[kind]) throw new Error("Tipo di importazione non valido.");
+  if (text && text.length > MAX_MATERIAL_CHARS) throw new Error("Il documento è troppo lungo per questa versione: importa poche pagine alla volta o usa un CSV.");
+  const withImages = !text?.trim() && images?.length;
+  if (withImages) {
+    const limits = await sample.limits?.().catch(() => null);
+    if (!limits?.images) throw new Error("Questo PDF è una scansione e qui Claude non può leggere immagini: usa un PDF con testo selezionabile o un CSV.");
+  }
+  onProgress(0, withImages ? "Claude legge le pagine scansionate…" : "Claude legge il documento…");
+  const prompt = `Sei un assistente che legge documenti universitari e li trasforma in tabelle.
+${IMPORT_RULES(kind, today)}
+Rispondi SOLO con un oggetto JSON: {"found": boolean, "rows": [[${IMPORT_HEADERS[kind].map((h) => `"${h}"`).join(", ")}]], "notes": [string]}
+Le righe contengono SOLO i valori (senza intestazione), ogni riga con ${IMPORT_HEADERS[kind].length} stringhe.
+
+${withImages ? "Il documento è nelle immagini allegate (pagine in ordine)." : `<documento>\n${text}\n</documento>`}`;
+  let raw;
+  try {
+    raw = await sample.json(prompt, { modelTier: "default", ...(withImages ? { images } : {}) });
+  } catch (e) {
+    throw explain(e);
+  }
+  const out = normalizeImportRows(raw, IMPORT_HEADERS[kind]);
+  if (!out.found) throw new Error("Nel documento non ho trovato dati di questo tipo: controlla di aver scelto il tipo giusto.");
+  return out;
 }
