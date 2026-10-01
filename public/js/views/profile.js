@@ -94,7 +94,7 @@ export function profileView() {
     const sel = (opts, cur, onChange, label) => h("select", { "aria-label": label, onchange: (e) => { onChange(e.target.value); store.save(); core.rerender(); } },
       Object.entries(opts).map(([k, t]) => h("option", { value: k, selected: String(k) === String(cur) }, t)));
     return h("tr", {},
-      h("td", {}, c.name, c.manual ? [" ", badge("manuale")] : null),
+      h("td", {}, c.name, c.imported ? [" ", badge("importato", "brand")] : c.manual ? [" ", badge("manuale")] : null),
       h("td", {}, c.cfu || "—"),
       h("td", {}, sel(KIND_SHORT, c.kind, (v) => (c.kind = v), `Tipo di ${c.name}`)),
       h("td", {}, sel(FORMAT_SHORT, c.format, (v) => { c.format = v; if (v !== "sconosciuto" && !c.formatEvidence) c.formatEvidence = "indicato da te"; if (v === "sconosciuto") { c.formatEvidence = ""; c.url = ""; } }, `Prova d'esame di ${c.name}`),

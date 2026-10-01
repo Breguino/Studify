@@ -1,6 +1,6 @@
 import * as api from "../api.js";
 import { core } from "../core.js";
-import { findCourse, parseCurriculumText } from "../curriculum.js";
+import { findCourse, parseCurriculumTable, parseCurriculumText } from "../curriculum.js";
 import { addDays, fmtDate, today } from "../dates.js";
 import { BUILDERS, CANON_HEADERS, SCHEMAS, TEMPLATES, autoMap, colName, detectKind, findHeaderRow, looksLikeHeader, tableFrom } from "../importers.js";
 import { go } from "../nav.js";
@@ -19,7 +19,7 @@ const norm = (s) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-
 
 function load(sheets, fileName, extra = {}) {
   const sheetIdx = Math.max(0, sheets.findIndex((s) => s.rows.length > 1));
-  st = { fileName, sheets, sheetIdx, hasHeader: true, kind: null, kindAuto: null, map: {}, until: "", include: null, pdf: null, notes: [], fromAI: false, ...extra };
+  st = { fileName, sheets, sheetIdx, hasHeader: true, kind: null, kindAuto: null, map: {}, until: "", include: null, pdf: null, notes: [], fromAI: false, meta: null, ...extra };
   setSheet(sheetIdx);
   if (extra.forceKind) { setKind(extra.forceKind); st.kindAuto = extra.forceKind; }
 }
@@ -82,12 +82,14 @@ function applyExams(items) {
   return `${created} esami creati, ${updated} aggiornati.`;
 }
 
-function applyCourses(items) {
+function applyCourses(items, meta) {
   const p = store.profile();
+  if (meta?.academicYear) p.academicYear = meta.academicYear;
+  if (meta?.degreeName && !p.degree) p.degree = meta.degreeName;
   let created = 0;
   let updated = 0;
   for (const it of items) {
-    const { status, ...c } = it;
+    const { status, ...c } = it; // `imported` resta: distingue le voci da file da quelle scritte a mano
     const ex = p.courses.find((x) => norm(x.name) === norm(c.name) && (x.year || 0) === (c.year || 0));
     if (ex) {
       if (c.cfu) ex.cfu = c.cfu;
@@ -129,7 +131,22 @@ async function loadPdf(file) {
     return;
   }
   const { text, chars } = layoutText(pages);
-  load([{ name: `PDF (${numPages} pag.)`, rows: pagesToRows(pages), offset: 0 }], file.name, { pdf: { file, numPages, textless: false, text, chars, lines: plainLines(pages) } });
+  const pdf = { file, numPages, textless: false, text, chars, lines: plainLines(pages), rowsBlank: pagesToRows(pages, { blanks: true }) };
+  // Un piano di studi (sezioni «INSEGNAMENTI 2° ANNO», righe con CFU) si riconosce da solo, senza AI.
+  const cur = parseCurriculumTable(pdf.rowsBlank);
+  if (cur.courses.length >= 4 && cur.years.some((y) => y > 0)) {
+    loadCurriculum(cur, pdf, file.name);
+    return;
+  }
+  load([{ name: `PDF (${numPages} pag.)`, rows: pagesToRows(pages), offset: 0 }], file.name, { pdf });
+}
+
+const curriculumRows = (courses) => [CANON_HEADERS.insegnamenti, ...courses.map((c) => [c.name, String(c.year || ""), String(c.cfu || ""), c.kind === "a_scelta" ? "A scelta" : "Obbligatorio", c.group, ""])];
+
+function loadCurriculum(cur, pdf, fileName) {
+  const m = cur.meta;
+  const notes = [`Riconosciuto un piano di studi${m.degreeName ? ` («${m.degreeName}»)` : ""}${m.academicYear ? `, a.a. ${m.academicYear}` : ""}: ${cur.courses.length} voci in ${cur.years.filter(Boolean).length} anni.`];
+  load([{ name: "Piano dal PDF", rows: curriculumRows(cur.courses), offset: 0 }], fileName, { pdf, forceKind: "insegnamenti", notes, meta: m });
 }
 
 /** Il PDF (o il suo testo con le colonne allineate) → righe canoniche, lette dall'AI. */
@@ -153,12 +170,13 @@ async function aiRead(kind, redraw) {
   }
 }
 
-/** Piano di studi dal testo del PDF, senza AI: righe canoniche ricavate con la lettura rapida. */
+/** Piano di studi dal PDF, senza AI: prima come tabella (SSD | insegnamento | CFU), poi come righe di testo («Analisi – 9 CFU»). */
 function localCurriculum() {
+  const cur = parseCurriculumTable(st.pdf.rowsBlank ?? []);
+  if (cur.courses.length >= 3) return loadCurriculum(cur, st.pdf, st.pdf.file.name);
   const { courses } = parseCurriculumText(st.pdf.lines.join("\n"));
   if (!courses.length) throw new Error("Nel testo non ho riconosciuto insegnamenti con i CFU. Prova con l'AI.");
-  const rows = [CANON_HEADERS.insegnamenti, ...courses.map((c) => [c.name, String(c.year || ""), String(c.cfu || ""), c.kind === "a_scelta" ? "A scelta" : "Obbligatorio", c.group, ""])];
-  load([{ name: "Elenco dal PDF", rows, offset: 0 }], st.pdf.file.name, { pdf: st.pdf, forceKind: "insegnamenti", notes: ["Lettura rapida senza AI: controlla anni, tipo e CFU."] });
+  load([{ name: "Elenco dal PDF", rows: curriculumRows(courses), offset: 0 }], st.pdf.file.name, { pdf: st.pdf, forceKind: "insegnamenti", notes: ["Lettura rapida senza AI: controlla anni, tipo e CFU."] });
 }
 
 /* ---------------------------------- vista ---------------------------------- */
@@ -267,7 +285,10 @@ export function importView() {
       preview = h("div", { style: { overflowX: "auto" } }, h("table", {},
         h("thead", {}, h("tr", {}, ["Insegnamento", "Anno", "CFU", "Tipo", "Prova", ""].map((x) => h("th", {}, x)))),
         h("tbody", {}, res.items.map((c) => h("tr", {}, h("td", {}, c.name), h("td", {}, c.year || "—"), h("td", {}, c.cfu || "—"), h("td", {}, c.kind === "a_scelta" ? badge("a scelta", "warn") : c.kind), h("td", {}, c.format), h("td", {}, badge(c.status, c.status === "nuovo" ? "good" : "brand")))))));
-      action = h("button", { class: "btn primary", disabled: !res.items.length, onclick: () => done(applyCourses(res.items), "#/profile") }, `Importa ${res.items.length} ${res.items.length === 1 ? "insegnamento" : "insegnamenti"}`);
+      const sum = res.items.reduce((n, c) => n + c.cfu, 0);
+      const declared = st.meta?.declaredTotal;
+      if (declared) preview = h("div", { class: "stack" }, preview, h("div", { class: `callout ${sum === declared ? "good" : "warn"}` }, sum === declared ? `CFU letti: ${sum} su ${declared} dichiarati dal documento ✓` : `Attenzione: la somma dei CFU letti (${sum}) non coincide con il totale dichiarato dal documento (${declared}). Controlla le righe.`));
+      action = h("button", { class: "btn primary", disabled: !res.items.length, onclick: () => done(applyCourses(res.items, st.meta), "#/profile") }, `Importa ${res.items.length} ${res.items.length === 1 ? "insegnamento" : "insegnamenti"}`);
     } else {
       st.include ??= new Set(res.courses.map((c) => c.name));
       const until = h("input", { type: "date", id: "import-until", value: st.until, min: today(), onchange: (e) => (st.until = e.target.value) });

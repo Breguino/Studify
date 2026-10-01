@@ -137,3 +137,96 @@ export function groupByYear(courses) {
 
 /** Insegnamenti proponibili per un anno: quelli dell'anno (obbligatori e a scelta) più quelli senza anno. year 0 = tutti. */
 export const coursesForYear = (courses, year) => (year ? courses.filter((c) => c.year === year || !c.year) : courses);
+
+/* ------------------------ piani di studio in tabella (da PDF) ------------------------ */
+
+// Codici SSD: nuovi (STAT-04/A, ECON-06/A) e vecchi (MAT/05, SECS-P/01, ING-INF/05, L-LIN/12)
+const SSD_CODE = /^(?:[A-Z]{2,5}-\d{2}\/[A-Z]|(?:[A-Z]{1,4}-)?[A-Z]{2,4}(?:-[A-Z]{1,3})?\/\d{2}[A-Z]?)$/;
+const SEMESTER = /^(?:[1-4]\s*°?\s*(?:q|sem)\w*|q[1-4]|i{1,3}\s*sem\w*)\*?$/i;
+const YEAR_ANYWHERE = /(\d)\s*[°º]\s*anno|\banno\s*(\d)\b|\b(primo|secondo|terzo|quarto|quinto|sesto)\s+anno/i;
+const ELECTIVE_NAME = /scelta libera|libera scelta|a scelta|opzional|affin/i;
+const sentence = (s) => { const t = s.toLowerCase(); return t.charAt(0).toUpperCase() + t.slice(1); };
+
+/**
+ * Piano di studi come tabella di celle (righe di un PDF o di un foglio): una riga per insegnamento con il CFU in una cella
+ * numerica; l'anno compare nelle intestazioni di sezione («INSEGNAMENTI 2° ANNO»); le attività a scelta stanno in un blocco
+ * «Altre attività…». Una riga vuota ([]) chiude un gruppo. Verifica la somma dei CFU con il «Totale» dichiarato.
+ * @param {string[][]} rows
+ */
+export function parseCurriculumTable(rows) {
+  const courses = [];
+  const seen = new Set();
+  const meta = { degreeName: "", academicYear: "", declaredTotal: 0, sum: 0 };
+  let year = 0;
+  let group = "";
+  const push = (name, cfu, kind, g) => {
+    const n = name
+      .replace(/^[\s\-–•·*]+/, "")
+      .replace(/^(?:e|ed|oppure)\s+/i, "") // congiunzione iniziale («… e Tirocinio»)
+      .replace(/\s+(?:e|ed|oppure)\s*$/i, "") // e finale («… (12 CFU) e»)
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/[:;,]$/, "");
+    if (n.replace(/[^A-Za-zÀ-ÿ]/g, "").length < 3 || n.length > 120) return;
+    const key = `${year}|${n.toLowerCase()}`;
+    if (seen.has(key)) return; // alternative («12 CFU … oppure 15 CFU»): vale la prima
+    seen.add(key);
+    courses.push({ name: n, year, cfu, format: "sconosciuto", formatEvidence: "", kind, group: g, url: "" });
+  };
+
+  for (let i = 0; i < rows.length; i++) {
+    const cells = rows[i];
+    if (!cells.length) { group = ""; continue; }
+    const line = cells.join(" ").replace(/\s+/g, " ").trim();
+    if (!line) continue;
+
+    const mDeg = line.match(/^corso di laurea(?:\s+magistrale(?:\s+a\s+ciclo\s+unico)?)?(?:\s+in)?\s*(.*)$/i);
+    if (mDeg && !meta.degreeName) { meta.degreeName = sentence((mDeg[1] || (rows[i + 1] ?? []).join(" ")).trim()); continue; }
+    const mAa = line.match(/\ba\.?\s?a\.?\s*(\d{4}\s*[-/]\s*\d{2,4})/i);
+    if (mAa && !meta.academicYear && !YEAR_ANYWHERE.test(line)) meta.academicYear = mAa[1].replace(/\s+/g, "");
+
+    if (/^totale\b/i.test(line)) {
+      const n = line.match(/^totale\s*(?:cfu)?\s*(\d{2,3})$/i);
+      if (n) meta.declaredTotal = +n[1];
+      continue;
+    }
+    if (/^\*|^note\b|^legenda\b/i.test(line)) continue;
+
+    const hasCfuCell = cells.some((c, k) => k > 0 && /^\d{1,2}$/.test(c) && +c > 0 && +c <= 30);
+    const ym = line.match(YEAR_ANYWHERE);
+    if (ym && !hasCfuCell) {
+      year = ym[1] ? +ym[1] : ym[2] ? +ym[2] : ORD[ym[3].toLowerCase()];
+      group = "";
+      continue;
+    }
+    if (/^altre attivit/i.test(line)) { group = "Altre attività"; continue; }
+
+    // più voci su una riga: «Scelta libera dello studente (12 CFU) e Tirocinio (3 CFU) oppure»
+    const multi = [...line.matchAll(/([^()]*?)\s*\((\d{1,2})\s*CFU\)/gi)];
+    if (multi.length) {
+      for (const m of multi) push(m[1], +m[2], group || ELECTIVE_NAME.test(m[1]) ? "a_scelta" : "obbligatorio", group || (ELECTIVE_NAME.test(m[1]) ? "A scelta dello studente" : ""));
+      continue;
+    }
+
+    // riga di tabella: [SSD] nome … CFU [quadrimestre]
+    const idx = cells.findIndex((c, k) => k > 0 && /^\d{1,2}$/.test(c) && +c > 0 && +c <= 30);
+    if (idx > 0) {
+      const name = cells.slice(0, idx).filter((c) => !SSD_CODE.test(c) && !SEMESTER.test(c) && /[A-Za-zÀ-ÿ]{3}/.test(c)).join(" ");
+      if (!name) continue;
+      const final = /prova finale|tesi|elaborato finale/i.test(name);
+      if (final) group = "";
+      const kind = !final && (group || ELECTIVE_NAME.test(name)) ? "a_scelta" : "obbligatorio";
+      push(name, +cells[idx], kind, kind === "a_scelta" ? group || "A scelta dello studente" : "");
+      continue;
+    }
+    // riga con «N CFU» nel testo (formato non tabellare)
+    const m = line.match(CFU_RE);
+    if (m) {
+      const words = line.replace(CFU_RE, "").replace(/[()]/g, " ").trim().split(/\s+/);
+      if (SSD_CODE.test(words[0])) words.shift(); // codice SSD in testa alla riga
+      push(words.join(" "), Math.round(parseFloat(m[1].replace(",", "."))), group ? "a_scelta" : "obbligatorio", group);
+    }
+  }
+  meta.sum = courses.reduce((n, c) => n + c.cfu, 0);
+  return { courses, years: [...new Set(courses.map((c) => c.year))].sort((a, b) => a - b), meta };
+}
