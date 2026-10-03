@@ -178,4 +178,10 @@ mark.uncertain { background: #fde68a; color: #1b1f2a; border-radius: 3px; paddin
 /* Schede dei materiali: su schermi stretti il contenuto va a capo invece di allargare la pagina */
 .card.flat > .row.between > div:first-child { min-width: 0; flex: 1 1 auto; }
 .page-pick { flex-wrap: wrap; }
-.card.flat .row { flex-wrap: wrap; }
+.card.flat > .row.between > div:first-child .row { flex-wrap: wrap; }
+.card.flat > .row.between { flex-wrap: nowrap; align-items: flex-start; }
+.callout.hints { border-left: 4px solid var(--bad, #c0392b); }
+.callout.hints ul { margin: 6px 0; padding-left: 18px; }
+.callout.hints li { margin-bottom: 6px; }
+.callout.hints q { font-style: italic; }
+.lesson-names { max-width: 100%; overflow-wrap: anywhere; }

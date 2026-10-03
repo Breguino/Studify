@@ -4,7 +4,7 @@ import { readFile, stat } from "node:fs/promises";
 import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MODEL, aiConfigured, buildModule, curriculum, degrees, examFormat, examFormatFromText, extendModule, transcribe, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
-import { localDelta } from "../public/js/local-builder.js";
+import { findExamHints, localDelta } from "../public/js/local-builder.js";
 import { formatFromSyllabus } from "../public/js/exam-type.js";
 import { IMPORT_HEADERS } from "../shared/prompts.js";
 import { normalizeModule } from "./schema.js";
@@ -294,7 +294,9 @@ async function api(req, res, url) {
   if (url.pathname === "/api/module" || url.pathname === "/api/module-extend") {
     const materials = (Array.isArray(body.materials) ? body.materials : []).slice(0, 40).map((m) => ({
       kind: ["pdf", "notes", "web"].includes(m.kind) ? m.kind : "notes",
-      role: ["appunti", "libro", "dispense", "esercizi", "altro"].includes(m.role) ? m.role : "appunti",
+      role: ["appunti", "libro", "dispense", "esercizi", "sbobine", "altro"].includes(m.role) ? m.role : "appunti",
+      unit: m.unit === "lezioni" ? "lezioni" : "pagine",
+      year: str(m.year, 20),
       pages: /^\d{1,4}-\d{1,4}$/.test(m.pages ?? "") ? m.pages : "",
       handwritten: !!m.handwritten,
       title: str(m.title, 200) || "Appunti",
@@ -318,7 +320,7 @@ async function api(req, res, url) {
     input.existing = parseExisting(body.existing);
     if (!input.existing.topics.length) return send(res, 400, { error: "Il modulo da aggiornare è vuoto: generalo prima." });
     const notes = materials.map((m) => m.text).filter(Boolean).join("\n\n");
-    const id = startJob("module", (p) => (MOCK ? mockRun(p, { delta: localDelta(notes, "Appunti nuovi"), sources: [], mode: "local" }) : extendModule(input, p)));
+    const id = startJob("module", (p) => (MOCK ? mockRun(p, { delta: { ...localDelta(notes, "Appunti nuovi"), examHints: [...findExamHints(notes, "sbobine"), { quote: "Questa frase non è nei materiali: il docente non l'ha mai detta.", source: "inventata", note: "", topicId: "" }] }, sources: [], mode: "local" }) : extendModule(input, p)));
     return send(res, 202, { jobId: id });
   }
 

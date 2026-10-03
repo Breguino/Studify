@@ -106,6 +106,18 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
      pagine che sembrano avere formule rovinate). Le **equazioni di Word e PowerPoint** (OMML) sono convertite in LaTeX: frazioni,
      apici/pedici, radici, sommatorie e integrali, parentesi, funzioni e limiti, accenti, matrici, sistemi. L'«Anteprima del testo»
      di ogni materiale mostra le formule disegnate, per controllarle prima di generare il modulo.
+   - **Sbobine** (trascrizioni delle lezioni fatte da studenti): tipo riconosciuto dal nome del file («sbobin…», «trascrizione…»).
+     Un documento senza pagine (Word, testo, testo incollato) con almeno due intestazioni di lezione («Lezione 5», «LEZ. 3»,
+     «Lezione del 12/10», una data su una riga a sé) viene **diviso per lezioni**, che si scelgono come le pagine di un libro;
+     allargando l'intervallo si mandano solo le lezioni nuove. Si può indicare l'anno accademico della sbobina. Nel prompt le sbobine
+     servono per importanza e mustKnow, con l'avvertenza che possono contenere errori di trascrizione (vale il libro) e venire da
+     un anno precedente.
+   - **Indicazioni del docente sull'esame** (`examHints`): le frasi come «questo all'esame lo chiedo sempre», «il boxplot non lo
+     chiedo», con fonte e argomento, nel riquadro «Cosa ha detto il docente sull'esame» del modulo e nella pagina dell'argomento.
+     Devono essere **copiate** dai materiali: l'app controlla che compaiano nel testo mandato all'AI e scarta quelle inventate o
+     parafrasate (da un PDF non si può verificare: restano, segnate come non verificate). In modalità base si trovano con le regole.
+   - **Registrazioni audio**: Claude non legge l'audio. L'app lo dice e suggerisce di trascriverle con un servizio apposito e
+     caricare il testo come sbobina.
    - **Appunti scritti a mano.** «Fotografa gli appunti» (fotocamera del telefono) o «Carica foto o scansioni»: una foto per
      pagina, in ordine di nome. Le foto vengono raddrizzate, ridotte a 2576 px sul lato lungo (il massimo che i modelli usano) e
      convertite in JPEG nel browser; Claude le trascrive (3 per richiesta) con le formule in LaTeX, segnando «[?]» le parole lette

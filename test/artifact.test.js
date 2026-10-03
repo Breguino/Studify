@@ -236,3 +236,14 @@ test("pagina Claude: appunti a mano con le regole per la scrittura", async () =>
   none.limits = async () => ({});
   await assert.rejects(transcribePages({ images: [new Blob(["x"])], firstPage: 1, handwritten: true }, () => {}, none), /appunti a mano non si possono trascrivere/);
 });
+
+test("pagina Claude: indicazioni sull'esame dalle sbobine, collegate all'argomento, inventate scartate", async () => {
+  const sample = async () => ({ text: "" });
+  sample.json = async (prompt) => {
+    if (prompt.includes("<argomento>")) return { flashcards: [{ front: "f", back: "b", type: "definizione" }], questions: [] };
+    return { title: "T", overview: "O", gaps: [], topics: [{ id: "x1", title: "Media", summary: "s" }, { id: "x2", title: "Varianza", summary: "s" }],
+      examHints: [{ quote: "la varianza all'esame la chiedo sempre", source: "Lez. 2", note: "", topicId: "x2" }, { quote: "Non chiedo mai il boxplot, l'ho detto chiaramente.", source: "?", note: "", topicId: "x1" }] };
+  };
+  const mod = await generateModule({ exam, materials: [{ kind: "notes", role: "sbobine", unit: "lezioni", title: "Sbobine", text: "Lezione 2. Ragazzi, la varianza all'esame la chiedo sempre." }], research: null }, () => {}, sample);
+  assert.deepEqual(mod.examHints.map((x) => [x.topicId, x.verified]), [["t2", true]]);
+});

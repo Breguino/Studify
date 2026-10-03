@@ -106,3 +106,24 @@ export function localDelta(notes, title = "Appunti") {
   const id = (t) => t.replace(/^t/, "n");
   return { topics: m.topics.map((t) => ({ ...t, id: id(t.id) })), flashcards: m.flashcards.map((c) => ({ ...c, topicId: id(c.topicId) })), questions: [] };
 }
+
+// Frasi del docente sull'esame (soprattutto nelle sbobine): «questo lo chiedo», «all'esame», «non lo chiedo»…
+const EXAM_CUE = /all['’]?\s*esame|agli esami|all['’]?\s*orale|allo scritto|(?:lo|la|li|le|ve lo|ve la)\s+chied|chieder[òo]|domand[ae] d['’]esame|esercizi[oi]? d['’]esame|tema d['’]esame|(?:esce|cade|chiedo) sempre|sempre chiest|non (?:lo|la|li|le) chied|non (?:è|e) (?:nel programma|da sapere)|importante per l['’]esame|da sapere bene/i;
+
+/**
+ * Indicazioni sull'esame trovate con le regole (modalità base, senza AI): sono frasi copiate dal testo, quindi verificate.
+ * @returns {{quote: string, source: string, note: string, topicId: string}[]}
+ */
+export function findExamHints(text, source = "") {
+  const out = [];
+  const seen = new Set();
+  for (const raw of String(text ?? "").replace(/\r/g, "").split(/\n+|(?<=[.!?])\s+/)) {
+    const sent = raw.replace(/^[\s\-–—•*>]+/, "").trim();
+    if (sent.length < 12 || !EXAM_CUE.test(sent)) continue;
+    const quote = sent.length > 300 ? `${sent.slice(0, 297)}…` : sent;
+    if (seen.has(quote.toLowerCase())) continue;
+    seen.add(quote.toLowerCase());
+    out.push({ quote, source, note: "", topicId: "" });
+  }
+  return out.slice(0, 40);
+}

@@ -16,7 +16,7 @@ const rawModule = {
   title: "T", overview: "O",
   topics: [{ id: "a", title: "Argomento", importance: 3, difficulty: 2, summary: "s", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "online", sourceIds: ["S1"] }],
   flashcards: [{ id: "f", topicId: "a", front: "d", back: "r", type: "definizione" }],
-  questions: [], gaps: ["manca X"],
+  questions: [], gaps: ["manca X"], examHints: [],
 };
 
 test("buildModule: PDF prima del testo, schema strutturato, nessun prefill, risultato normalizzato", async () => {
@@ -300,4 +300,24 @@ test("transcribe: foto degli appunti a Claude come immagini, 3 per richiesta, re
   assert.equal(r.pages[4], "appunti 5 con $x_5$ e lusso[?]");
   setClient(fake([{ stop_reason: "refusal", content: [] }], []));
   await assert.rejects(transcribe({ images: images.slice(0, 1), handwritten: true }), /rifiutato/);
+});
+
+test("buildModule: regole per le sbobine e le indicazioni sull'esame; citazioni verificate sul testo", async () => {
+  const calls = [];
+  const out = { ...rawModule, examHints: [
+    { quote: "questo all'esame lo chiedo sempre", source: "Lezione 3", note: "Saperlo bene.", topicId: "a" },
+    { quote: "Frase che nessuno ha mai detto.", source: "?", note: "", topicId: "" },
+  ] };
+  setClient(fake([{ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(out) }] }], calls));
+  const mod = await buildModule({
+    exam: { name: "Statistica", type: "problemi", level: 2, daysLeft: 30, language: "italiano" },
+    materials: [{ kind: "notes", role: "sbobine", unit: "lezioni", pages: "3-3", year: "2024-25", title: "Sbobine", text: "Lezione 3\nAllora, la varianza: questo all'esame lo chiedo sempre." }],
+    research: null,
+  });
+  const text = calls[0].messages[0].content.at(-1).text;
+  assert.match(text, /<sbobina titolo="Sbobine" lezioni="3-3" anno="2024-25">/);
+  assert.match(calls[0].system, /sbobine \(trascrizioni delle lezioni[\s\S]*errori di trascrizione/);
+  assert.match(calls[0].system, /INDICAZIONI SULL'ESAME \(examHints\)[\s\S]*COPIATA alla lettera/);
+  assert.equal(calls[0].output_config.format.schema.properties.examHints.type, "array", "campo nello schema strutturato");
+  assert.deepEqual(mod.examHints.map((x) => [x.quote, x.topicId, x.verified]), [["questo all'esame lo chiedo sempre", "t1", true]], "la frase inventata è scartata");
 });

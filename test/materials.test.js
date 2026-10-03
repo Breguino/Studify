@@ -51,7 +51,8 @@ test("intervalli di pagine: parse, testo per pagine, solo le pagine nuove dopo u
   libro.pages = "20-60";
   assert.equal(unsentPages(libro), undefined, "restringere non manda nulla");
   libro.pages = null;
-  assert.equal(unsentPages(libro), null, "tutte le pagine: si manda tutto");
+  assert.equal(unsentPages(libro), null, "tutte le pagine (numero sconosciuto): si manda tutto");
+  assert.equal(unsentPages({ ...libro, numPages: 120 }), "81-120", "tutte, fino all'ultima: solo le pagine nuove");
   markSent(libro);
   assert.equal(libro.sentPages, "all");
   const exam = { module: { materialIds: ["b", "n"] }, materials: [libro, { id: "n" }, { id: "x" }] };

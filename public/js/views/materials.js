@@ -3,7 +3,8 @@ import { core } from "../core.js";
 import { daysLeft } from "../domain.js";
 import { findExamFormat } from "../exam-type.js";
 import { EXAM_TYPES } from "../methods.js";
-import { buildLocalModule, localDelta } from "../local-builder.js";
+import { buildLocalModule, findExamHints, localDelta } from "../local-builder.js";
+import { splitLessons } from "../lessons.js";
 import { uncertainCount } from "../../../shared/prompts.js";
 import { addRange, applyUpdate, compactModule, markSent, mathyPages, parseRange, pendingMaterials, rangesCover, replacePages, sliceText, unsentPages, updateSummary } from "../module-update.js";
 import { officeText } from "../office-text.js";
@@ -59,6 +60,11 @@ async function run(exam, kind, fn, meta = {}) {
 
 async function addFiles(exam, files) {
   let pdfTotal = exam.materials.filter((m) => m.kind === "pdf").reduce((s, m) => s + m.size, 0);
+  const audio = files.filter((f) => /^audio\/|^video\//.test(f.type) || /\.(mp3|m4a|wav|aac|ogg|opus|flac|mp4|mov|webm)$/i.test(f.name));
+  if (audio.length) {
+    toast(`«${audio[0].name}»${audio.length > 1 ? ` e altri ${audio.length - 1}` : ""}: le registrazioni audio non si possono usare direttamente (Claude legge testo, PDF e immagini, non audio). Trascrivi la registrazione con un servizio di trascrizione e carica qui il testo come «Sbobine».`, "error");
+    files = files.filter((f) => !audio.includes(f));
+  }
   const photos = files.filter(isImage);
   if (photos.length) await addHandwritten(exam, photos);
   for (const file of files.filter((f) => !isImage(f))) {
@@ -99,7 +105,7 @@ async function addFiles(exam, files) {
       try {
         const { text, pages } = await officeText(await file.arrayBuffer(), file.name);
         if (text.replace(/\f/g, "").trim().length < 20) toast(`«${file.name}»: nessun testo trovato (solo immagini?).`, "error");
-        else exam.materials.push({ id: uid(), kind: "notes", role: guessRole(file.name, /\.pptx$/i.test(file.name)), title: name, text, size: text.length, numPages: pages || undefined, addedAt: now() });
+        else exam.materials.push(withLessons({ id: uid(), kind: "notes", role: guessRole(file.name, /\.pptx$/i.test(file.name)), title: name, text, size: text.length, numPages: pages || undefined, addedAt: now() }));
       } catch (e) {
         toast(`«${file.name}»: ${e.message}`, "error");
       }
@@ -107,7 +113,7 @@ async function addFiles(exam, files) {
       toast(`«${file.name}»: il vecchio formato Office non è supportato. Salvalo come .docx/.pptx o PDF.`, "error");
     } else if (/\.(txt|md|markdown)$/i.test(file.name) || file.type.startsWith("text/")) {
       const text = await readFileAs(file, "text");
-      exam.materials.push({ id: uid(), kind: "notes", role: guessRole(file.name), title: name, text, size: text.length, addedAt: now() });
+      exam.materials.push(withLessons({ id: uid(), kind: "notes", role: guessRole(file.name), title: name, text, size: text.length, addedAt: now() }));
     } else toast(`«${file.name}»: formato non supportato (usa .pdf, .docx, .pptx, .txt o .md).`, "error");
   }
   store.save();
@@ -121,6 +127,26 @@ async function removeMaterial(exam, m) {
   exam.materials = exam.materials.filter((x) => x.id !== m.id);
   store.save();
   core.rerender();
+}
+
+/** Documento senza pagine con almeno 2 intestazioni di lezione → diviso per lezioni (si scelgono come le pagine). */
+function withLessons(m) {
+  if (m.numPages || m.handwritten) return m;
+  const r = splitLessons(m.text);
+  if (r) Object.assign(m, { text: r.text, numPages: r.sections.length, sections: r.sections, unit: "lezioni" });
+  return m;
+}
+
+/** Testo mandato all'AI, per verificare che le citazioni del docente ci siano davvero. */
+const sentInfo = ({ materials, research }) => ({ sentText: [...materials.map((m) => m.text ?? ""), research?.notes ?? ""].join("\n"), hasPdf: materials.some((m) => m.kind === "pdf") });
+
+/** Modalità base: le frasi del docente sull'esame, copiate dai materiali (con la lezione da cui vengono). */
+function localHints(list, rangeOf) {
+  return list.filter((m) => m.kind === "notes").flatMap((m) => {
+    const range = parseRange(rangeOf(m), m.numPages) ?? { from: 1, to: m.numPages || 1 };
+    const pages = String(m.text).split("\f");
+    return pages.slice(range.from - 1, range.to).flatMap((p, k) => findExamHints(p, [m.title.replace(/ \(da PDF\)$/, ""), m.sections?.[range.from - 1 + k]].filter(Boolean).join(" · ")));
+  });
 }
 
 const hasProgress = (exam) => exam.module && (Object.keys(exam.srs).length || Object.keys(exam.qstats).length || Object.keys(exam.learned).length);
@@ -145,7 +171,7 @@ async function payload(list, { onlyNew = false } = {}) {
       pages += r ? r.to - r.from + 1 : m.numPages ?? 0;
       bytes += data.length;
       materials.push({ kind: "pdf", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", data });
-    } else materials.push({ kind: "notes", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", handwritten: !!m.handwritten, text: sliceText(m.text, range) });
+    } else materials.push({ kind: "notes", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", unit: m.unit ?? "pagine", year: m.year ?? "", handwritten: !!m.handwritten, text: sliceText(m.text, range) });
   }
   if (pages > MAX_SEND_PAGES || bytes > MAX_SEND_BYTES)
     throw new Error(`Troppo materiale PDF per una volta (${pages} pagine, ${kb(bytes * 0.75)}): il limite è ${MAX_SEND_PAGES} pagine e ~${kb(MAX_SEND_BYTES * 0.75)}. Nel materiale scegli le pagine (es. i capitoli del programma) e aggiungi il resto dopo con «Aggiungi al modulo».`);
@@ -172,8 +198,9 @@ async function update(exam) {
   const pending = pendingMaterials(exam);
   if (!pending.length) return;
   await run(exam, "update", async (onProgress) => {
-    const res = await api.runJob("/api/module-extend", { exam: examInfo(exam), ...(await payload(pending, { onlyNew: true })), existing: compactModule(exam.module) }, onProgress);
-    toast(updateSummary(applyUpdate(exam, res, pending.map((m) => m.id))), "ok");
+    const sent = await payload(pending, { onlyNew: true });
+    const res = await api.runJob("/api/module-extend", { exam: examInfo(exam), ...sent, existing: compactModule(exam.module) }, onProgress);
+    toast(updateSummary(applyUpdate(exam, res, pending.map((m) => m.id), undefined, sentInfo(sent))), "ok");
     pending.forEach(markSent);
   });
 }
@@ -182,7 +209,8 @@ function updateLocal(exam) {
   const pending = pendingMaterials(exam);
   const text = pending.filter((m) => m.kind === "notes" && roleOf(m) !== "esercizi").map((m) => sliceText(m.text, unsentPages(m))).join("\n\n");
   if (!text.trim()) return toast("La modalità base usa solo appunti testuali (non PDF).", "error");
-  toast(updateSummary(applyUpdate(exam, { delta: localDelta(text, "Appunti nuovi"), mode: "local" }, pending.map((m) => m.id))), "ok");
+  const delta = { ...localDelta(text, "Appunti nuovi"), examHints: localHints(pending, unsentPages) };
+  toast(updateSummary(applyUpdate(exam, { delta, mode: "local" }, pending.map((m) => m.id), undefined, { sentText: pending.map((m) => m.text).join("\n") })), "ok");
   pending.forEach(markSent);
   store.save();
   core.rerender();
@@ -193,6 +221,7 @@ function generateLocal(exam) {
   if (!text.trim()) return toast("La modalità base funziona solo con appunti testuali (non PDF).", "error");
   const mod = buildLocalModule(text, exam.name);
   if (!mod.topics.length) return toast("Non ho trovato argomenti: aggiungi titoli (#, 1., MAIUSCOLO) agli appunti.", "error");
+  mod.examHints = localHints(exam.materials, (m) => m.pages).map((x) => ({ ...x, verified: true }));
   resetProgress(exam, mod);
   exam.materials.forEach(markSent);
   store.save();
@@ -413,7 +442,7 @@ async function transcribe(exam, m, r, data) {
 /** «Pagine 45–120 di 380»: per libri e slide si sceglie la parte da usare (vuoto = tutte). */
 function pagePicker(m) {
   const r = parseRange(m.pages, m.numPages);
-  const unit = m.imageIds ? "foto" : m.fileId || m.fromPdf || m.title.endsWith("(da PDF)") ? "pagine" : "slide";
+  const unit = m.unit === "lezioni" ? "lezioni" : m.imageIds ? "foto" : m.fileId || m.fromPdf || m.title.endsWith("(da PDF)") ? "pagine" : "slide";
   const num = (v, label) => h("input", { type: "number", min: 1, max: m.numPages, value: v ?? "", placeholder: label, "aria-label": `${label} (${m.title})`, style: { width: "78px", padding: "4px 8px" },
     onchange: (e) => {
       const box = e.target.parentElement.querySelectorAll("input");
@@ -425,8 +454,9 @@ function pagePicker(m) {
     } });
   const count = r ? r.to - r.from + 1 : m.numPages;
   return h("label", { class: "small muted page-pick", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } },
-    { pagine: "Pagine", slide: "Slide", foto: "Foto" }[unit], num(r?.from, "da"), "–", num(r?.to, "a"), `di ${m.numPages}`,
+    { pagine: "Pagine", slide: "Slide", foto: "Foto", lezioni: "Lezioni" }[unit], num(r?.from, "da"), "–", num(r?.to, "a"), `di ${m.numPages}`,
     h("span", {}, r ? ` · ne uso ${count}` : " · tutte"),
+    m.sections ? h("span", { class: "lesson-names" }, ` (${r ? (r.from === r.to ? m.sections[r.from - 1] : `${m.sections[r.from - 1]} → ${m.sections[r.to - 1]}`) : `${m.sections[0]} → ${m.sections.at(-1)}`})`) : null,
     m.kind === "notes" ? h("span", {}, ` (${chars(sliceText(m.text, m.pages).length)})`) : null);
 }
 
@@ -442,7 +472,7 @@ export function materialsTab(exam) {
   const paste = h("form", { class: "stack", onsubmit: (e) => {
     e.preventDefault();
     if (!text.value.trim()) return toast("Incolla del testo.", "error");
-    exam.materials.push({ id: uid(), kind: "notes", role: pasteRole.value, title: title.value.trim() || `${ROLES[pasteRole.value]} ${exam.materials.length + 1}`, text: text.value, size: text.value.length, addedAt: now() });
+    exam.materials.push(withLessons({ id: uid(), kind: "notes", role: pasteRole.value, title: title.value.trim() || `${ROLES[pasteRole.value].replace(/ \(.*\)$/, "")} ${exam.materials.length + 1}`, text: text.value, size: text.value.length, addedAt: now() }));
     store.save();
     core.rerender();
   } }, h("h3", {}, "Incolla appunti, esercizi o parti di libro"), h("div", { class: "row", style: { gap: "8px", flexWrap: "nowrap" } }, title, pasteRole), text, h("div", {}, h("button", { class: "btn", type: "submit" }, "Aggiungi")));
@@ -508,9 +538,12 @@ export function materialsTab(exam) {
         h("div", { class: "card flat" },
           h("div", { class: "row between" }, h("div", {}, h("b", {}, m.title), " ", badge(KIND[m.kind], m.kind === "web" ? "brand" : ""), " ", isPending.has(m.id) ? badge("non ancora nel modulo", "warn") : null, " ", h("span", { class: "muted small" }, kb(m.size)),
               m.kind !== "web" ? h("div", { class: "row", style: { gap: "6px", marginTop: "4px" } }, h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Tipo",
-                h("select", { class: "role-select", "aria-label": `Tipo di ${m.title}`, onchange: (e) => { m.role = e.target.value; store.save(); rerenderSoon(); } },
+                h("select", { class: "role-select", "aria-label": `Tipo di ${m.title}`, onchange: (e) => { m.role = e.target.value; if (m.role === "sbobine") withLessons(m); store.save(); rerenderSoon(); } },
                   Object.entries(ROLES).map(([k, t]) => h("option", { value: k, selected: roleOf(m) === k }, t)))),
+                roleOf(m) === "sbobine" ? h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Anno accademico",
+                  h("input", { class: "sbobina-year", value: m.year ?? "", placeholder: "es. 2025-26", "aria-label": `Anno accademico di ${m.title}`, style: { width: "100px", padding: "4px 8px" }, onchange: (e) => { m.year = e.target.value.trim(); store.save(); } })) : null,
                 m.numPages > 1 ? pagePicker(m) : null) : null,
+              roleOf(m) === "sbobine" ? h("div", { class: "small muted" }, "Sbobine: le frasi del docente sull'esame finiscono nel modulo (verificate sul testo). Possono contenere errori di trascrizione su termini e formule, e se sono di un altro anno docente e programma potrebbero essere cambiati.") : null,
               m.kind === "notes" ? (m.handwritten ? handwrittenRow(exam, m) : formulaRow(exam, m)) : null),
             h("button", { class: "btn small danger", onclick: () => removeMaterial(exam, m), "aria-label": `Rimuovi ${m.title}` }, "Rimuovi")),
           m.kind === "web" ? h("details", {}, h("summary", { class: "small" }, m.generated ? "Anteprima (bozza dalla conoscenza di Claude, senza fonti)" : `Anteprima e ${m.sources.length} fonti`),

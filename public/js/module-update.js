@@ -1,6 +1,6 @@
 // Aggiornare un modulo con gli appunti delle lezioni successive, senza rigenerarlo e senza perdere i progressi.
 // (Il percorso «../../shared» funziona sia su disco sia nel browser, dove il server serve /shared/normalize.js.)
-import { mergeModule } from "../../shared/normalize.js";
+import { mergeModule, quoteChecker } from "../../shared/normalize.js";
 
 /**
  * Materiali aggiunti dopo l'ultima generazione/aggiornamento. Con i moduli creati prima di questa funzione
@@ -27,8 +27,10 @@ export const compactModule = (mod) => ({
  * non cambiano), i materiali usati risultano inclusi, il piano si ricalcola.
  * @returns {{topics: number, updated: number, flashcards: number, questions: number}}
  */
-export function applyUpdate(exam, { delta, sources = [], mode }, usedIds, now = new Date().toISOString()) {
-  const { module, added } = mergeModule(exam.module, delta, sources, { now, summary: mode === "local" ? "append" : "replace", replaceGaps: mode !== "local" });
+export function applyUpdate(exam, { delta, sources = [], mode }, usedIds, now = new Date().toISOString(), { sentText = null, hasPdf = false } = {}) {
+  // le citazioni del docente devono essere nei materiali appena mandati (sentText); senza testo non si possono verificare
+  const checkQuote = sentText != null ? quoteChecker(sentText, { hasPdf }) : null;
+  const { module, added } = mergeModule(exam.module, delta, sources, { now, summary: mode === "local" ? "append" : "replace", replaceGaps: mode !== "local", checkQuote });
   module.materialIds = [...new Set([...(exam.module.materialIds ?? exam.materials.filter((m) => !usedIds.includes(m.id)).map((m) => m.id)), ...usedIds])];
   exam.module = module;
   exam.moduleUpdatedAt = now;
@@ -38,12 +40,13 @@ export function applyUpdate(exam, { delta, sources = [], mode }, usedIds, now = 
 
 /** Frase di riepilogo per l'utente. */
 export function updateSummary(a) {
-  if (!a.topics && !a.updated && !a.flashcards && !a.questions) return "Gli appunti nuovi non aggiungono contenuti che il modulo non abbia già.";
+  if (!a.topics && !a.updated && !a.flashcards && !a.questions && !a.hints) return "Gli appunti nuovi non aggiungono contenuti che il modulo non abbia già.";
   const parts = [];
   if (a.topics) parts.push(`${a.topics} ${a.topics === 1 ? "argomento nuovo" : "argomenti nuovi"}`);
   if (a.updated) parts.push(`${a.updated} ${a.updated === 1 ? "argomento approfondito" : "argomenti approfonditi"}`);
   if (a.flashcards) parts.push(`${a.flashcards} flashcard`);
   if (a.questions) parts.push(`${a.questions} ${a.questions === 1 ? "domanda" : "domande"}`);
+  if (a.hints) parts.push(`${a.hints} ${a.hints === 1 ? "indicazione" : "indicazioni"} del docente sull'esame`);
   return `Aggiunti: ${parts.join(", ")}. I tuoi progressi restano.`;
 }
 
@@ -66,11 +69,13 @@ const fmt = (r) => `${r.from}-${r.to}`;
  * @returns {string|null|undefined} intervallo da mandare, null = tutte le pagine, undefined = niente di nuovo
  */
 export function unsentPages(m) {
-  const cur = parseRange(m.pages);
-  if (m.sentPages === undefined) return cur ? fmt(cur) : null; // mai mandato
+  const chosen = parseRange(m.pages);
+  if (m.sentPages === undefined) return chosen ? fmt(chosen) : null; // mai mandato
   if (m.sentPages === "all") return undefined;
   const sent = parseRange(m.sentPages);
-  if (!cur) return null; // ora tutte le pagine: si rimanda tutto (meglio un doppione che un buco)
+  // «tutte» = da 1 all'ultima: allargando fino alla fine si mandano solo le pagine nuove
+  const cur = chosen ?? (m.numPages ? { from: 1, to: m.numPages } : null);
+  if (!cur) return null; // tutte, ma non si sa quante: si rimanda tutto (meglio un doppione che un buco)
   if (cur.from >= sent.from && cur.to <= sent.to) return undefined;
   if (cur.from >= sent.from && cur.from <= sent.to + 1) return fmt({ from: sent.to + 1, to: cur.to });
   if (cur.to <= sent.to && cur.to >= sent.from - 1) return fmt({ from: cur.from, to: sent.from - 1 });

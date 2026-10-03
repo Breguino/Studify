@@ -81,11 +81,45 @@ function normQuestion(q, id, topicId) {
   };
 }
 
+const flatQ = (s) => String(s ?? "").toLowerCase().normalize("NFC").replace(/[’‘`´]/g, "'").replace(/[“”«»"]/g, "").replace(/\s+/g, " ").replace(/^[\s'.…,;:]+|[\s'.…,;:]+$/g, "").trim();
+
+/**
+ * Controllo delle citazioni del docente: `text` è il testo dei materiali mandati al modello. Una citazione che non compare
+ * (nemmeno nei suoi primi 60 caratteri) è inventata o parafrasata: si scarta. Se alcuni materiali erano PDF (che qui non si
+ * possono leggere) la citazione non trovata resta, ma segnata come non verificata.
+ * @returns {(quote: string) => boolean|null} true = trovata, false = da scartare, null = non verificabile
+ */
+export function quoteChecker(text, { hasPdf = false } = {}) {
+  const hay = flatQ(text);
+  return (quote) => {
+    const q = flatQ(quote);
+    if (q.length < 8) return false;
+    if (hay.includes(q) || (q.length > 60 && hay.includes(q.slice(0, 60)))) return true;
+    return hasPdf ? null : false;
+  };
+}
+
+function normHints(list, idMap, check) {
+  const out = [];
+  const seen = new Set();
+  for (const x of Array.isArray(list) ? list : []) {
+    const quote = tex(x?.quote).slice(0, 400);
+    const key = flatQ(quote);
+    if (!quote || seen.has(key)) continue;
+    const ok = check ? check(quote) : null;
+    if (ok === false) continue;
+    seen.add(key);
+    out.push({ quote, source: str(x?.source).slice(0, 160), note: tex(x?.note).slice(0, 300), topicId: idMap.get(x?.topicId) ?? "", verified: ok === true });
+  }
+  return out;
+}
+
 /**
  * Rende il modulo coerente: id stabili e univoci, riferimenti validi, valori nei range.
  * `sources` è la lista [{id,title,url}] fornita al modello: gli id sconosciuti vengono scartati.
+ * `checkQuote` (vedi quoteChecker) verifica le citazioni del docente in examHints.
  */
-export function normalizeModule(raw, sources = []) {
+export function normalizeModule(raw, sources = [], { checkQuote = null } = {}) {
   const validSource = new Set(sources.map((s) => s.id));
   const idMap = new Map();
   const topics = [];
@@ -112,6 +146,7 @@ export function normalizeModule(raw, sources = []) {
     flashcards,
     questions,
     gaps: (raw.gaps ?? []).map(tex).filter(Boolean),
+    examHints: normHints(raw.examHints, idMap, checkQuote),
     sources,
   };
 }
@@ -128,7 +163,7 @@ const nextNum = (items, prefix) => items.reduce((n, x) => Math.max(n, Number(Str
  * attuali e restituisce l'elenco aggiornato) se `replaceGaps`, altrimenti si aggiungono.
  * @returns {{module: object, added: {topics: number, updated: number, flashcards: number, questions: number}}}
  */
-export function mergeModule(base, raw, sources = [], { now = new Date().toISOString(), replaceGaps = true, summary = "replace" } = {}) {
+export function mergeModule(base, raw, sources = [], { now = new Date().toISOString(), replaceGaps = true, summary = "replace", checkQuote = null } = {}) {
   const mod = structuredClone(base);
   mod.sources ??= [];
   // fonti nuove: id rinumerati se si sovrappongono a quelli già presenti
@@ -208,10 +243,15 @@ export function mergeModule(base, raw, sources = [], { now = new Date().toISOStr
   for (const id of fresh) updated.delete(id);
   for (const id of updated) byId.get(id).updatedAt = now;
 
+  const hints = normHints(raw.examHints, idMap, checkQuote).map((x) => ({ ...x, addedAt: now }));
+  const haveHints = new Set((mod.examHints ?? []).map((x) => flatQ(x.quote)));
+  const newHints = hints.filter((x) => !haveHints.has(flatQ(x.quote)));
+  mod.examHints = [...(mod.examHints ?? []), ...newHints];
+
   const gaps = (raw.gaps ?? []).map(tex).filter(Boolean);
   if (replaceGaps && Array.isArray(raw.gaps)) mod.gaps = gaps;
   else mod.gaps = [...new Set([...(mod.gaps ?? []), ...gaps])];
-  return { module: mod, added: { topics: addedTopics, updated: updated.size, flashcards: addedCards, questions: addedQuestions } };
+  return { module: mod, added: { topics: addedTopics, updated: updated.size, flashcards: addedCards, questions: addedQuestions, hints: newHints.length } };
 }
 
 /** Piano di studi: nomi unici, valori nei range, URL accettati solo se visti davvero nella ricerca. */

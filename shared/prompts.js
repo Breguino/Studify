@@ -36,6 +36,12 @@ const FORMULA_RULE = String.raw`8. FORMULE. Ogni formula, variabile con pedice o
    \begin{pmatrix}...\end{pmatrix}, \begin{cases}...\end{cases}); niente pacchetti né macro personalizzate. Decimali all'italiana tra
    graffe: $0{,}67$. La valuta si scrive «€» o «euro», mai con «$». Trascrivi le formule dei materiali esattamente, con la notazione del docente.`;
 
+const HINTS_RULE = `9. INDICAZIONI SULL'ESAME (examHints). Ogni frase del docente riportata nei materiali (soprattutto nelle sbobine) su cosa chiede
+   o come si svolge l'esame («questo lo chiedo sempre», «all'esame ci sarà un esercizio così», «questo non lo chiedo», «portate la
+   calcolatrice»): quote = la frase COPIATA alla lettera dal materiale (max 300 caratteri, niente parafrasi), source = titolo del materiale
+   e lezione, note = cosa implica per lo studio (una frase), topicId = id dell'argomento a cui si riferisce ("" se nessuno).
+   Gli argomenti che il docente dice di chiedere hanno importance 3. Se non ci sono frasi così, examHints = [].`;
+
 export const MODULE_PRINCIPLES = `Principi inderogabili:
 1. FEDELTÀ. Gli appunti dello studente sono la fonte primaria. Non inserire fatti che non sono nei materiali forniti
    (appunti, PDF, ricerca online) salvo che siano conoscenza consolidata e tu sia certo: in tal caso origin="model".
@@ -60,9 +66,14 @@ export const MODULE_PRINCIPLES = `Principi inderogabili:
      l'importanza degli argomenti su cui vertono) e sono il modello delle domande kind="problem": stesso tipo di esercizio, con
      svolgimento passo-passo in modelAnswer. Se la soluzione è nei materiali, seguila; se non c'è, risolvilo tu e scrivi in
      explanation "Svolgimento non presente nei materiali: verificalo".
+   - sbobine (trascrizioni delle lezioni fatte da studenti, parlato): dicono come il docente spiega e su cosa insiste → importanza
+     e mustKnow. Ignora battute, ripetizioni, avvisi organizzativi. Possono avere errori di trascrizione (termini tecnici, formule,
+     numeri capiti male): se contrastano con libro o dispense vale il libro, e segnalalo in "gaps". Se l'attributo anno indica un anno
+     accademico precedente, docente e programma potrebbero essere cambiati: tienilo presente.
    - appunti scritti a mano (trascritti da foto): «[?]» segna una parola letta con incertezza, «[illeggibile]» una parte non letta.
      Non basare carte o domande su una lettura incerta che gli altri materiali non confermano; se è importante, segnalala in "gaps".
-${FORMULA_RULE}`;
+${FORMULA_RULE}
+${HINTS_RULE}`;
 
 export const GRADE_RULES = (language) => `Sei un esaminatore universitario giusto ma esigente. Valuti la risposta dello studente confrontandola con
 la risposta di riferimento e i punti della rubrica. Non premiare la lunghezza né il lessico: conta la correttezza concettuale.
@@ -161,6 +172,7 @@ uno storico di ripasso. Dai MATERIALI NUOVI ricava SOLO ciò che manca, senza ri
 - flashcard e domande SOLO sui contenuti nuovi, con topicId = id dell'argomento (esistente o nuovo); non ripetere carte o domande
   già presenti, nemmeno con parole diverse;
 - gaps = l'elenco AGGIORNATO delle lacune dell'intero modulo: togli quelle che i materiali nuovi colmano, aggiungi le nuove;
+- examHints = SOLO le indicazioni sull'esame che si trovano nei materiali nuovi;
 - title e overview: ripeti quelli del modulo (non vengono cambiati);
 - se i materiali nuovi non aggiungono nulla, restituisci topics, flashcards e questions vuoti.`;
 
@@ -172,15 +184,16 @@ evidence = la frase sulla modalità d'esame COPIATA alla lettera dal testo (max 
 details = in breve durata, parti, prove intermedie, orale facoltativo. caveats: differenze tra docenti/canali, anno accademico vecchio, dubbi.`;
 
 /** Tag con cui ogni tipo di materiale testuale entra nel prompt. */
-export const MATERIAL_TAG = { appunti: "appunti_studente", libro: "libro", dispense: "dispense", esercizi: "esercizi", altro: "materiale" };
-export const MATERIAL_LABEL = { appunti: "Appunti", libro: "Libro", dispense: "Dispense", esercizi: "Esercizi", altro: "Materiale" };
+export const MATERIAL_TAG = { appunti: "appunti_studente", libro: "libro", dispense: "dispense", esercizi: "esercizi", sbobine: "sbobina", altro: "materiale" };
+export const MATERIAL_LABEL = { appunti: "Appunti", libro: "Libro", dispense: "Dispense", esercizi: "Esercizi", sbobine: "Sbobine", altro: "Materiale" };
 
 /** Blocco di testo di un materiale per il prompt (pagine indicate se è un estratto). */
 export function materialText(m) {
   const tag = MATERIAL_TAG[m.role] ?? MATERIAL_TAG.appunti;
-  const pages = m.pages ? ` pagine="${m.pages}"` : "";
+  const pages = m.pages ? ` ${m.unit === "lezioni" ? "lezioni" : "pagine"}="${m.pages}"` : "";
   const hand = m.handwritten ? ` scritti_a_mano="sì"` : "";
-  return `<${tag} titolo="${String(m.title ?? "").replace(/"/g, "'")}"${pages}${hand}>\n${m.text}\n</${tag}>`;
+  const year = m.year ? ` anno="${String(m.year).replace(/"/g, "")}"` : "";
+  return `<${tag} titolo="${String(m.title ?? "").replace(/"/g, "'")}"${pages}${year}${hand}>\n${m.text}\n</${tag}>`;
 }
 
 /** Istruzione aggiuntiva quando tra i materiali ci sono esercizi. */

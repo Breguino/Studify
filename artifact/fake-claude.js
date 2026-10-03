@@ -16,6 +16,16 @@ const IMPORT_ROWS = {
   insegnamenti: [["Analisi 1", "1", "9", "Obbligatorio", "", "Scritto"], ["Teoria dei giochi", "3", "6", "A scelta", "Area economica", ""]],
   orari: [["Analisi 1", "Lunedì", "09:00", "11:00", "Aula 3"], ["Analisi 1", "Giovedì", "14:00", "16:00", "Aula 3"], ["Fisica generale", "Mercoledì", "09:00", "12:00", "Lab 2"]],
 };
+// Indicazioni sull'esame: una frase vera presa dalle sbobine del prompt e una inventata (che l'app deve scartare).
+function hintsFrom(prompt) {
+  const block = prompt.match(/<sbobina[^>]*>([\s\S]*?)<\/sbobina>/)?.[1] ?? "";
+  const real = block.split(/\n|(?<=[.!?])\s+/).find((x) => /chied/i.test(x));
+  return [
+    ...(real ? [{ quote: real.trim(), source: "Sbobine", note: "Argomento che il docente dice di chiedere.", topicId: "t1" }] : []),
+    { quote: "Il docente ha detto che all'esame non chiede mai le formule.", source: "Sbobine", note: "", topicId: "" },
+  ];
+}
+
 const answer = (prompt) => {
   if (prompt.includes("Trasforma il documento in righe di tabella")) {
     const kind = prompt.includes("Giorno | Inizio") ? "orari" : prompt.includes("Data | Ora") ? "esami" : "insegnamenti";
@@ -31,7 +41,7 @@ const answer = (prompt) => {
     const sentence = text.replace(/\s+/g, " ").split(/(?<=[.;])\s+/).find((x) => /scritt|oral/i.test(x)) ?? "";
     return { found: !!sentence, format: /eserciz/i.test(sentence) ? "problemi" : "scritto", evidence: sentence.trim(), details: /facoltativ/i.test(text) ? "Orale facoltativo (finto)." : "", url: "", academicYear: "2026-27", teacher: "", caveats: [] };
   }
-  if (prompt.includes("<modulo_esistente>")) return { gaps: ["Lacuna aggiornata dopo gli appunti nuovi (finta)."], topics: [
+  if (prompt.includes("<modulo_esistente>")) return { examHints: hintsFrom(prompt), gaps: ["Lacuna aggiornata dopo gli appunti nuovi (finta)."], topics: [
     { id: "t1", title: demo.topics[0].title, importance: 3, difficulty: 2, summary: "Riassunto aggiornato con gli appunti nuovi (finto).", keyConcepts: [{ term: "Prezzo massimo", definition: "tetto imposto dallo Stato" }], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "estratto" },
     { id: "n1", title: "Esternalità", importance: 3, difficulty: 2, summary: "Costi o benefici che ricadono su terzi.", keyConcepts: [{ term: "Esternalità", definition: "effetto su terzi" }], mustKnow: ["Definire un'esternalità"], commonMistakes: [], origin: "notes", excerpt: "estratto" } ] };
   if (prompt.includes("<argomento>")) {
@@ -46,7 +56,7 @@ const answer = (prompt) => {
       questions: demo.questions.filter((q) => q.topicId === topic.id).map(({ topicId, id, ...q }) => q),
     };
   }
-  return { title: demo.title, overview: demo.overview, gaps: demo.gaps, topics: demo.topics.map((t) => ({ ...t, excerpt: "estratto dagli appunti" })) };
+  return { title: demo.title, overview: demo.overview, gaps: demo.gaps, examHints: hintsFrom(prompt), topics: demo.topics.map((t) => ({ ...t, excerpt: "estratto dagli appunti" })) };
 };
 
 // Trascrizione delle pagine (immagini): risponde con i marcatori e una formula in LaTeX per pagina.

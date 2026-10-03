@@ -2,7 +2,7 @@
 // usa l'account Claude di chi apre la pagina. Limiti: nessuna navigazione web, nessun PDF,
 // prompt ≤ 256 KiB e risposte brevi → il modulo si costruisce a passi (schema → carte/domande per argomento).
 import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXERCISES_TASK, EXTEND_RULES, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, JSON_LATEX_RULE, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt } from "../shared/prompts.js";
-import { normalizeCurriculum, normalizeExamFormat, normalizeImportRows, normalizeModule, repairLatex } from "../shared/normalize.js";
+import { normalizeCurriculum, normalizeExamFormat, normalizeImportRows, normalizeModule, quoteChecker, repairLatex } from "../shared/normalize.js";
 
 const MAX_MATERIAL_CHARS = 200_000;
 const CONCURRENCY = 2; // `sample` ne esegue un paio alla volta, le altre aspettano: oltre si rischia rate_limited
@@ -64,7 +64,8 @@ const OUTLINE_SHAPE = `Rispondi SOLO con un oggetto JSON (nessun testo prima o d
    "mustKnow": [string] (3-5), "commonMistakes": [string] (1-3),
    "origin": "notes"|"model",
    "excerpt": string (passaggio COPIATO alla lettera dai materiali su cui si basa l'argomento, max 1000 caratteri; "" se origin è "model"),
-   "exercises": string (1-3 esercizi COPIATI dai materiali di tipo esercizi che riguardano l'argomento, con la soluzione se c'è, max 2000 caratteri; "" se non ce ne sono)}]}
+   "exercises": string (1-3 esercizi COPIATI dai materiali di tipo esercizi che riguardano l'argomento, con la soluzione se c'è, max 2000 caratteri; "" se non ce ne sono)}],
+ "examHints": [{"quote": string, "source": string, "note": string, "topicId": string (id dell'argomento, es. "t3", o "")}] (vedi il punto 9; [] se non ce ne sono)}
 Regole di forma: da 5 a 12 argomenti, in ordine logico. origin="notes" se il contenuto viene dai materiali dello studente;
 "model" solo per ciò che non è nei materiali (conoscenza generale, di cui sei certo). Il contenuto della <traccia_ai_non_verificata>
 è una bozza senza fonti: ciò che proviene solo da lì ha origin="model".`;
@@ -107,7 +108,9 @@ export async function generateModule({ exam, materials, research }, onProgress =
   }
   const topics = (Array.isArray(outline?.topics) ? outline.topics : []).filter((t) => t && typeof t.title === "string" && t.title.trim()).slice(0, 12);
   if (!topics.length) throw new Error("Claude non ha individuato argomenti: i materiali sono sufficienti?");
+  const origIds = topics.map((t) => t.id);
   topics.forEach((t, i) => (t.id = `t${i + 1}`));
+  const hintTopic = (id) => (origIds.indexOf(id) >= 0 ? `t${origIds.indexOf(id) + 1}` : "");
 
   // Passo 2: flashcard e domande per argomento
   let done = 0;
@@ -133,10 +136,11 @@ export async function generateModule({ exam, materials, research }, onProgress =
     overview: outline.overview,
     gaps: [...(Array.isArray(outline.gaps) ? outline.gaps : []), ...failed.map((f) => `Per «${f}» non sono riuscito a generare carte e domande: rigenera il modulo.`)],
     topics: topics.map((t) => ({ ...t, sourceIds: [] })),
+    examHints: (Array.isArray(outline.examHints) ? outline.examHints : []).map((x) => ({ ...x, topicId: hintTopic(x?.topicId) })),
     flashcards: perTopic.flatMap((r, i) => r.flashcards.map((c) => ({ ...c, topicId: topics[i].id }))),
     questions: perTopic.flatMap((r, i) => r.questions.map((q) => ({ ...q, topicId: topics[i].id }))),
   };
-  const mod = normalizeModule(raw, []);
+  const mod = normalizeModule(raw, [], { checkQuote: quoteChecker(body) });
   if (!mod.topics.length || (mod.flashcards.length === 0 && mod.questions.length === 0)) throw new Error("Non sono riuscito a generare carte e domande. Riprova con meno materiale.");
   return mod;
 }
@@ -147,7 +151,8 @@ const EXTEND_OUTLINE_SHAPE = `Rispondi SOLO con un oggetto JSON (nessun testo pr
    "importance": 1|2|3, "difficulty": 1|2|3, "summary": string, "keyConcepts": [{"term": string, "definition": string}] (solo voci nuove),
    "mustKnow": [string] (solo voci nuove), "commonMistakes": [string] (solo voci nuove), "origin": "notes"|"model",
    "excerpt": string (passaggio COPIATO alla lettera dai MATERIALI NUOVI su cui si basa, max 1000 caratteri),
-   "exercises": string (1-3 esercizi COPIATI dai materiali nuovi di tipo esercizi sull'argomento, con soluzione se c'è, max 2000 caratteri; "" se non ce ne sono)}]}
+   "exercises": string (1-3 esercizi COPIATI dai materiali nuovi di tipo esercizi sull'argomento, con soluzione se c'è, max 2000 caratteri; "" se non ce ne sono)}],
+ "examHints": [{"quote": string, "source": string, "note": string, "topicId": string (id dell'argomento: esistente o nuovo, o "")}] (solo dai materiali nuovi; [] se non ce ne sono)}
 Al massimo 8 argomenti in tutto (nuovi + approfonditi). Carte e domande verranno chieste dopo, argomento per argomento.`;
 
 /**
@@ -180,9 +185,10 @@ export async function extendModule({ exam, materials, research, existing }, onPr
     .filter((t) => t && (known.has(t.id) || (typeof t.title === "string" && t.title.trim())))
     .slice(0, 8);
   let n = 0;
+  const renamed = new Map();
   for (const t of topics) {
     if (known.has(t.id)) t.title = known.get(t.id).title;
-    else t.id = `n${++n}`;
+    else { const old = t.id; t.id = `n${++n}`; if (old != null) renamed.set(old, t.id); }
   }
 
   let done = 0;
@@ -209,6 +215,7 @@ export async function extendModule({ exam, materials, research, existing }, onPr
     delta: {
       gaps: [...gaps, ...failed.map((f) => `Per «${f}» non sono riuscito a generare carte e domande: ripeti l'aggiornamento.`)],
       topics: topics.map(({ excerpt, exercises, ...t }) => ({ ...t, sourceIds: [] })),
+      examHints: (Array.isArray(outline?.examHints) ? outline.examHints : []).map((x) => ({ ...x, topicId: known.has(x?.topicId) ? x.topicId : renamed.get(x?.topicId) ?? "" })),
       flashcards: perTopic.flatMap((r, i) => r.flashcards.map((c) => ({ ...c, topicId: topics[i].id }))),
       questions: perTopic.flatMap((r, i) => r.questions.map((q) => ({ ...q, topicId: topics[i].id }))),
     },
