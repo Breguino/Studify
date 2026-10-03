@@ -60,6 +60,8 @@ export const MODULE_PRINCIPLES = `Principi inderogabili:
      l'importanza degli argomenti su cui vertono) e sono il modello delle domande kind="problem": stesso tipo di esercizio, con
      svolgimento passo-passo in modelAnswer. Se la soluzione è nei materiali, seguila; se non c'è, risolvilo tu e scrivi in
      explanation "Svolgimento non presente nei materiali: verificalo".
+   - appunti scritti a mano (trascritti da foto): «[?]» segna una parola letta con incertezza, «[illeggibile]» una parte non letta.
+     Non basare carte o domande su una lettura incerta che gli altri materiali non confermano; se è importante, segnalala in "gaps".
 ${FORMULA_RULE}`;
 
 export const GRADE_RULES = (language) => `Sei un esaminatore universitario giusto ma esigente. Valuti la risposta dello studente confrontandola con
@@ -177,7 +179,8 @@ export const MATERIAL_LABEL = { appunti: "Appunti", libro: "Libro", dispense: "D
 export function materialText(m) {
   const tag = MATERIAL_TAG[m.role] ?? MATERIAL_TAG.appunti;
   const pages = m.pages ? ` pagine="${m.pages}"` : "";
-  return `<${tag} titolo="${String(m.title ?? "").replace(/"/g, "'")}"${pages}>\n${m.text}\n</${tag}>`;
+  const hand = m.handwritten ? ` scritti_a_mano="sì"` : "";
+  return `<${tag} titolo="${String(m.title ?? "").replace(/"/g, "'")}"${pages}${hand}>\n${m.text}\n</${tag}>`;
 }
 
 /** Istruzione aggiuntiva quando tra i materiali ci sono esercizi. */
@@ -186,3 +189,44 @@ export const EXERCISES_TASK = `- Ci sono materiali di tipo esercizi: almeno met�
 
 /** Per le risposte JSON scritte come testo (pagina Claude): i backslash del LaTeX vanno raddoppiati, altrimenti \frac diventa un carattere di controllo. */
 export const JSON_LATEX_RULE = String.raw`Nel JSON ogni backslash del LaTeX va scritto doppio: "$\\frac{a}{b}$", "$\\beta_1$" (un solo backslash, come in "\frac", nel JSON diventa un carattere di controllo).`;
+
+/* ------------------------- trascrizione di pagine (immagini) ------------------------- */
+
+/**
+ * Prompt per trascrivere pagine fotografate o scansionate (PDF senza testo utile, appunti scritti a mano).
+ * String.raw: i backslash del LaTeX («\begin{cases}») arrivano al modello come sono scritti.
+ */
+export function transcribePrompt({ from, count, title = "", handwritten = false }) {
+  const to = from + count - 1;
+  const which = count === 1 ? `la pagina ${from}` : `le pagine da ${from} a ${to}`;
+  const hand = handwritten
+    ? String.raw`
+Sono appunti SCRITTI A MANO da uno studente durante le lezioni.
+- Trascrivi quello che c'è scritto, anche abbreviazioni e frasi incomplete: non riscrivere in bella, non completare, non correggere i contenuti.
+- Parola incerta: scrivi la lettura più probabile seguita da «[?]» (es. «elasticità[?]»). Parti che non riesci a leggere: «[illeggibile]».
+- Parti cancellate o barrate: non trascriverle. Note a margine o aggiunte con freccia: «(nota: …)» vicino a ciò a cui si riferiscono.
+- Frecce tra concetti: «→». Parole sottolineate o cerchiate: «**parola**». Riquadri: una riga «> …».
+- Schemi e mappe concettuali: elenco con «-» che ne segue la struttura. Disegni e grafici: «[Figura: …]» con assi, curve, etichette.`
+    : "";
+  return String.raw`Trascrivi fedelmente ${which} di «${title}» (le immagini sono in ordine, una per pagina).
+${SAFETY_RULES}${hand}
+- Testo: parola per parola, senza riassumere né aggiungere. Titoli con «#», elenchi con «-».
+- Formule: tutte in LaTeX compatibile con KaTeX, $...$ nel testo e $$...$$ se sono su una riga a sé; stessi simboli e notazione della pagina
+  (pedici, apici, barre, cappelli, frazioni, sommatorie, matrici, sistemi con \begin{cases}). Mai formule in testo semplice.
+- Tabelle: una riga per riga della tabella, celle separate da « | ».
+- Figure e grafici: una riga «[Figura: …]» che dice cosa mostrano (assi, curve, valori leggibili).
+- Ignora intestazioni e piè di pagina ripetuti e i numeri di pagina.
+Prima di ogni pagina scrivi una riga «=== PAGINA n ===» con il suo numero (${from}${to > from ? `…${to}` : ""}). Nient'altro prima o dopo.`;
+}
+
+/** Risposta della trascrizione → testo di ciascuna pagina (null se manca). */
+export function parseTranscription(text, from, count) {
+  const pages = {};
+  const chunks = String(text ?? "").split(/^=== PAGINA (\d+) ===\s*$/m); // ["prima", n, testo, n, testo…]
+  for (let k = 1; k < chunks.length; k += 2) pages[Number(chunks[k])] = chunks[k + 1].trim();
+  if (!Object.keys(pages).length && count === 1 && String(text ?? "").trim()) pages[from] = String(text).trim();
+  return Array.from({ length: count }, (_, k) => pages[from + k] || null);
+}
+
+/** Parole incerte o illeggibili segnate dalla trascrizione degli appunti a mano. */
+export const uncertainCount = (text) => (String(text ?? "").match(/\[\?\]|\[illeggibile\]/g) ?? []).length;

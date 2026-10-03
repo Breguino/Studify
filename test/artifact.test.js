@@ -214,6 +214,7 @@ test("pagina Claude: trascrizione delle pagine a gruppi di 3, con immagini e mar
   const progress = [];
   const out = await transcribePages({ images, firstPage: 5, title: "Libro" }, (c, l) => progress.push(l), sample);
   assert.deepEqual(calls.map((c) => c.n), [3, 3, 1]);
+  assert.ok(!calls[0].prompt.includes("SCRITTI A MANO"), "PDF stampato: niente regole per la scrittura a mano");
   assert.match(calls[0].prompt, /le pagine da 5 a 7 di «Libro»/);
   assert.match(calls[0].prompt, /LaTeX compatibile con KaTeX/);
   assert.match(calls[2].prompt, /la pagina 11/);
@@ -222,4 +223,16 @@ test("pagina Claude: trascrizione delle pagine a gruppi di 3, con immagini e mar
   const noImages = async () => ({ text: "" });
   noImages.limits = async () => ({});
   await assert.rejects(transcribePages({ images, firstPage: 1 }, () => {}, noImages), /non può leggere le immagini/);
+});
+
+test("pagina Claude: appunti a mano con le regole per la scrittura", async () => {
+  const prompts = [];
+  const sample = async (prompt, opts) => { prompts.push(prompt); return { text: `=== PAGINA 1 ===\nlusso[?] $x$` }; };
+  sample.limits = async () => ({ images: { maxCount: 8 } });
+  const out = await transcribePages({ images: [new Blob(["x"])], firstPage: 1, title: "Quaderno", handwritten: true }, () => {}, sample);
+  assert.match(prompts[0], /SCRITTI A MANO/);
+  assert.deepEqual(out, ["lusso[?] $x$"]);
+  const none = async () => ({ text: "" });
+  none.limits = async () => ({});
+  await assert.rejects(transcribePages({ images: [new Blob(["x"])], firstPage: 1, handwritten: true }, () => {}, none), /appunti a mano non si possono trascrivere/);
 });

@@ -165,3 +165,17 @@ details.card > summary { cursor: pointer; }
 .option .math { pointer-events: none; }
 .material-preview { max-height: 320px; overflow: auto; font-size: 0.92rem; padding: 6px 10px; margin-top: 6px; background: var(--surface-2); border-radius: 8px; }
 .material-preview p { margin: 0 0 0.5em; white-space: pre-wrap; }
+
+/* Appunti a mano: foto accanto alla trascrizione */
+.page-row { display: grid; grid-template-columns: minmax(120px, 38%) 1fr; gap: 12px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.page-row:last-child { border-bottom: 0; }
+.page-photo img { width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--line); display: block; }
+.page-text p { margin: 0 0 0.45em; }
+.page-edit { width: 100%; min-height: 220px; font: inherit; font-size: 0.9rem; }
+mark.uncertain { background: #fde68a; color: #1b1f2a; border-radius: 3px; padding: 0 2px; }
+@media (max-width: 560px) { .page-row { grid-template-columns: 1fr; } }
+.material-preview:has(.page-row) { max-height: 75vh; }
+/* Schede dei materiali: su schermi stretti il contenuto va a capo invece di allargare la pagina */
+.card.flat > .row.between > div:first-child { min-width: 0; flex: 1 1 auto; }
+.page-pick { flex-wrap: wrap; }
+.card.flat .row { flex-wrap: wrap; }

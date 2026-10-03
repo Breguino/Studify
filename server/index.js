@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODEL, aiConfigured, buildModule, curriculum, degrees, examFormat, examFormatFromText, extendModule, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
+import { MODEL, aiConfigured, buildModule, curriculum, degrees, examFormat, examFormatFromText, extendModule, transcribe, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
 import { localDelta } from "../public/js/local-builder.js";
 import { formatFromSyllabus } from "../public/js/exam-type.js";
 import { IMPORT_HEADERS } from "../shared/prompts.js";
@@ -56,6 +56,18 @@ async function mockRun(onProgress, result) {
     onProgress(900);
   }
   return result;
+}
+
+/** Demo: una trascrizione finta per pagina (con una parola incerta negli appunti a mano). */
+function mockTranscription({ images, firstPage, handwritten }) {
+  return {
+    pages: images.map((_, k) => {
+      const n = firstPage + k;
+      return handwritten
+        ? `# Lezione ${n} — Elasticità\nL'elasticità della domanda al prezzo misura quanto varia $Q$ quando varia $P$ (in %).\n\n$$\\varepsilon_P=\\left|\\frac{\\Delta\\%Q}{\\Delta\\%P}\\right|$$\n\n- se $\\varepsilon_P>1$ → domanda **elastica**\n- beni di lusso[?] più elastici\n(nota: chiesto all'esame l'anno scorso)`
+        : `# Pagina ${n}\nTesto della pagina ${n} (trascrizione simulata).`;
+    }),
+  };
 }
 
 async function demoModule() {
@@ -263,6 +275,15 @@ async function api(req, res, url) {
     return send(res, 202, { jobId: id });
   }
 
+  if (url.pathname === "/api/transcribe") {
+    const images = (Array.isArray(body.images) ? body.images : []).filter((i) => typeof i?.data === "string" && /^image\/(jpeg|png|webp|gif)$/.test(i.mediaType));
+    if (!images.length || images.length > 12 || images.length !== body.images.length) return send(res, 400, { error: "Da 1 a 12 immagini JPEG/PNG per volta." });
+    if (images.some((i) => i.data.length > 8 * 1024 * 1024)) return send(res, 400, { error: "Immagine troppo grande (max ~6 MB)." });
+    const input = { images, firstPage: Math.max(1, Math.round(Number(body.firstPage)) || 1), title: str(body.title, 200), handwritten: !!body.handwritten };
+    const id = startJob("transcribe", (p) => (MOCK ? mockRun(p, mockTranscription(input)) : transcribe(input, p)));
+    return send(res, 202, { jobId: id });
+  }
+
   if (url.pathname === "/api/exam-format-text") {
     const text = str(body.text, 40_000);
     if (text.trim().length < 20) return send(res, 400, { error: "Incolla il testo della scheda dell'insegnamento." });
@@ -275,6 +296,7 @@ async function api(req, res, url) {
       kind: ["pdf", "notes", "web"].includes(m.kind) ? m.kind : "notes",
       role: ["appunti", "libro", "dispense", "esercizi", "altro"].includes(m.role) ? m.role : "appunti",
       pages: /^\d{1,4}-\d{1,4}$/.test(m.pages ?? "") ? m.pages : "",
+      handwritten: !!m.handwritten,
       title: str(m.title, 200) || "Appunti",
       text: str(m.text, 2_000_000),
       data: m.kind === "pdf" && typeof m.data === "string" ? m.data : "",
@@ -335,7 +357,7 @@ const VENDOR = {
 };
 
 // Codice condiviso server/browser (fuori da public/): solo i file elencati.
-const SHARED = { "/shared/normalize.js": "normalize.js" };
+const SHARED = { "/shared/normalize.js": "normalize.js", "/shared/prompts.js": "prompts.js" };
 const SHARED_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "shared");
 
 // KaTeX (formule): modulo, CSS e font da node_modules/katex/dist.

@@ -13,7 +13,7 @@ export async function runJob(path, body, onProgress = () => {}) {
   if (path === "/api/module") return generateModule(body, onProgress);
   if (path === "/api/module-extend") return extendModule(body, onProgress);
   if (path === "/api/exam-format-text") return examFormatFromText(body, onProgress);
-  if (path === "/api/transcribe") return transcribePages(body, onProgress);
+  if (path === "/api/transcribe") return { pages: await transcribePages(body, onProgress) }; // stessa forma del server
   if (path === "/api/research") return generateNotes(body, onProgress);
   if (path === "/api/parse-curriculum") return parseCurriculum(body, onProgress);
   if (path === "/api/import-rows") return importRows(body, onProgress);

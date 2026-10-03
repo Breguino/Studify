@@ -4,6 +4,7 @@ import { daysLeft } from "../domain.js";
 import { findExamFormat } from "../exam-type.js";
 import { EXAM_TYPES } from "../methods.js";
 import { buildLocalModule, localDelta } from "../local-builder.js";
+import { uncertainCount } from "../../../shared/prompts.js";
 import { addRange, applyUpdate, compactModule, markSent, mathyPages, parseRange, pendingMaterials, rangesCover, replacePages, sliceText, unsentPages, updateSummary } from "../module-update.js";
 import { officeText } from "../office-text.js";
 import { extractPdfPages } from "../pdf-pages.js";
@@ -12,6 +13,7 @@ import { guessRole, roleOf, ROLES } from "../material-roles.js";
 import * as store from "../store.js";
 import { fmtDate, today } from "../dates.js";
 import { richParas } from "../math.js";
+import { blobToBase64, byName, isImage, prepareImage } from "../images.js";
 import { badge, confirmDialog, h, readFileAs, toast, uid } from "../ui.js";
 
 const MAX_PDF_TOTAL = 300 * 1024 * 1024; // archiviati nel browser: anche libri interi, poi se ne scelgono le pagine
@@ -57,7 +59,9 @@ async function run(exam, kind, fn, meta = {}) {
 
 async function addFiles(exam, files) {
   let pdfTotal = exam.materials.filter((m) => m.kind === "pdf").reduce((s, m) => s + m.size, 0);
-  for (const file of files) {
+  const photos = files.filter(isImage);
+  if (photos.length) await addHandwritten(exam, photos);
+  for (const file of files.filter((f) => !isImage(f))) {
     const name = file.name.replace(/\.[^.]+$/, "");
     if ((/\.pdf$/i.test(file.name) || file.type === "application/pdf") && core.ai.pdf === false && core.pdfText) {
       // pagina Claude: il PDF non si può inviare, ma il testo si estrae qui e diventa un appunto
@@ -113,6 +117,7 @@ async function addFiles(exam, files) {
 async function removeMaterial(exam, m) {
   if (m.fileId) await store.delFile(m.fileId);
   if (m.pdfFileId) await store.delFile(m.pdfFileId);
+  for (const id of m.imageIds ?? []) await store.delFile(id);
   exam.materials = exam.materials.filter((x) => x.id !== m.id);
   store.save();
   core.rerender();
@@ -140,7 +145,7 @@ async function payload(list, { onlyNew = false } = {}) {
       pages += r ? r.to - r.from + 1 : m.numPages ?? 0;
       bytes += data.length;
       materials.push({ kind: "pdf", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", data });
-    } else materials.push({ kind: "notes", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", text: sliceText(m.text, range) });
+    } else materials.push({ kind: "notes", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", handwritten: !!m.handwritten, text: sliceText(m.text, range) });
   }
   if (pages > MAX_SEND_PAGES || bytes > MAX_SEND_BYTES)
     throw new Error(`Troppo materiale PDF per una volta (${pages} pagine, ${kb(bytes * 0.75)}): il limite è ${MAX_SEND_PAGES} pagine e ~${kb(MAX_SEND_BYTES * 0.75)}. Nel materiale scegli le pagine (es. i capitoli del programma) e aggiungi il resto dopo con «Aggiungi al modulo».`);
@@ -195,15 +200,163 @@ function generateLocal(exam) {
   core.rerender();
 }
 
-/** Anteprima del testo usato (pagine scelte), con le formule disegnate: per controllare che siano giuste. */
-function preview(m) {
+/* ------------------------------ appunti scritti a mano ------------------------------ */
+
+const MAX_PHOTOS = 40;
+const SERVER_BATCH = 12; // immagini per richiesta al server (che le manda a Claude 3 alla volta)
+
+/** Le immagini nel formato dell'API: Blob nella pagina Claude, base64 per il server. */
+const imagesForApi = async (blobs) => (core.ai.artifact ? blobs : Promise.all(blobs.map(async (b) => ({ data: await blobToBase64(b), mediaType: b.type || "image/jpeg" }))));
+
+/** Foto salvate di un materiale (nella pagina Claude solo per la sessione) → Blob, null se non ci sono più. */
+async function photoBlobs(m, from, to) {
+  const out = [];
+  for (let p = from; p <= to; p++) {
+    const v = m.imageIds?.[p - 1] ? await store.getFile(m.imageIds[p - 1]) : null;
+    if (!v) return null;
+    out.push(v instanceof Blob ? v : new Blob([Uint8Array.from(atob(v), (c) => c.charCodeAt(0))], { type: "image/jpeg" }));
+  }
+  return out;
+}
+
+/** Foto degli appunti → un materiale «Appunti a mano» (una foto = una pagina), trascritto subito da Claude. */
+async function addHandwritten(exam, files) {
+  if (!core.ai.ai) return toast("Per leggere gli appunti scritti a mano serve Claude (qui l'AI non è attiva).", "error");
+  if (files.length > MAX_PHOTOS) return toast(`Al massimo ${MAX_PHOTOS} foto per volta: dividile in più gruppi (es. una lezione per volta).`, "error");
+  files = [...files].sort(byName);
+  const imageIds = [];
+  toast(`Preparo ${files.length === 1 ? "la foto" : `${files.length} foto`}…`);
+  for (const f of files) {
+    try {
+      const { blob } = await prepareImage(f);
+      const id = uid();
+      await store.putFile(id, core.ai.artifact ? blob : await blobToBase64(blob)); // pagina Claude: in memoria; server: nel browser
+      imageIds.push(id);
+    } catch (e) {
+      toast(e.message, "error");
+    }
+  }
+  if (!imageIds.length) return;
+  const n = imageIds.length;
+  const m = { id: uid(), kind: "notes", role: "appunti", handwritten: true, title: `Appunti a mano — ${fmtDate(today())}`, text: Array(n).fill("").join("\f"), size: 0, numPages: n, imageIds, addedAt: now() };
+  exam.materials.push(m);
+  store.save();
+  core.rerender();
+  await readPhotos(exam, m, { from: 1, to: n });
+}
+
+async function readPhotos(exam, m, r) {
+  await run(exam, "transcribe", async (onProgress) => {
+    const blobs = await photoBlobs(m, r.from, r.to);
+    if (!blobs) throw new Error("Le foto non sono più disponibili (dopo una ricarica la pagina Claude non le conserva): caricale di nuovo.");
+    const pages = [];
+    const step = core.ai.artifact ? blobs.length : SERVER_BATCH;
+    for (let k = 0; k < blobs.length; k += step) {
+      const res = await api.runJob("/api/transcribe", { images: await imagesForApi(blobs.slice(k, k + step)), firstPage: r.from + k, title: m.title, handwritten: true },
+        (c, label) => onProgress(c, label ?? `Leggo gli appunti con Claude… ${Math.min(k + step, blobs.length)}/${blobs.length} foto`));
+      pages.push(...res.pages);
+    }
+    m.text = replacePages(m.text, r.from, pages, m.numPages);
+    m.size = m.text.replace(/\f/g, "").length;
+    pages.forEach((p, k) => { if (p != null) m.mathPages = addRange(m.mathPages, r.from + k, r.from + k); });
+    const missing = pages.filter((p) => p == null).length;
+    const unsure = uncertainCount(sliceText(m.text, `${r.from}-${r.to}`));
+    toast(missing ? `${missing} foto non trascritte: riprova da «Rileggi».` : unsure ? `Appunti trascritti. ${unsure} ${unsure === 1 ? "parola incerta" : "parole incerte"}: controllale nell'anteprima, accanto alle foto.` : "Appunti trascritti: dai un'occhiata all'anteprima accanto alle foto.", missing ? "error" : "ok");
+  }, { mid: m.id });
+}
+
+/** Stato degli appunti a mano: pagine lette, parole incerte, rilettura. */
+function handwrittenRow(exam, m) {
+  if (!m.handwritten) return null;
+  const job = jobs.get(exam.id);
+  if (job?.kind === "transcribe" && job.mid === m.id) return jobLine(exam, "transcribe", "Leggo gli appunti con Claude");
+  const read = m.mathPages ? m.mathPages.split(",").reduce((n, x) => { const r = parseRange(x); return n + (r ? r.to - r.from + 1 : 0); }, 0) : 0;
+  const unsure = uncertainCount(m.text);
+  const missing = m.numPages - read;
+  return h("div", { class: "row small", style: { gap: "8px", alignItems: "center" } },
+    badge(`a mano · ${m.numPages} ${m.numPages === 1 ? "foto" : "foto"}`, "brand"),
+    missing ? badge(`${missing} da leggere`, "warn") : null,
+    unsure ? h("span", { class: "muted" }, `${unsure} ${unsure === 1 ? "parola incerta" : "parole incerte"} (in giallo nell'anteprima)`) : null,
+    h("button", { class: "btn small ghost", disabled: jobs.has(exam.id), onclick: () => {
+      const r = missing ? firstMissing(m) : { from: 1, to: m.numPages };
+      readPhotos(exam, m, r);
+    } }, missing ? "Leggi le foto mancanti" : "Rileggi con Claude"));
+}
+
+function firstMissing(m) {
+  let from = 0;
+  let to = 0;
+  for (let p = 1; p <= m.numPages; p++) {
+    if (rangesCover(m.mathPages, p, p)) { if (from) break; continue; }
+    if (!from) from = p;
+    to = p;
+  }
+  return { from: from || 1, to: to || m.numPages };
+}
+
+/** Nel testo già disegnato: «**parola**» in grassetto (sottolineature degli appunti), «[?]» e «[illeggibile]» evidenziati. */
+function markUncertain(nodes) {
+  for (const root of nodes) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const hits = [];
+    while (walker.nextNode()) if (/\*\*[^*\n]+\*\*/.test(walker.currentNode.nodeValue) && !walker.currentNode.parentElement.closest(".katex")) hits.push(walker.currentNode);
+    for (const t of hits) t.replaceWith(...t.nodeValue.split(/(\*\*[^*\n]+\*\*)/).filter(Boolean).map((x) => (/^\*\*[^*]+\*\*$/.test(x) ? h("strong", {}, x.slice(2, -2)) : document.createTextNode(x))));
+  }
+  for (const root of nodes) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const hits = [];
+    while (walker.nextNode()) if (/\[\?\]|\[illeggibile\]/.test(walker.currentNode.nodeValue) && !walker.currentNode.parentElement.closest(".katex")) hits.push(walker.currentNode);
+    for (const t of hits) {
+      const parts = t.nodeValue.split(/(\S*\[\?\]|\[illeggibile\])/);
+      t.replaceWith(...parts.filter(Boolean).map((x) => (/\[\?\]$|^\[illeggibile\]$/.test(x) ? h("mark", { class: "uncertain", title: "lettura incerta: controlla sulla foto" }, x) : document.createTextNode(x))));
+    }
+  }
+  return nodes;
+}
+
+const pageNodes = (text) => markUncertain(richParas(String(text ?? "").replace(/^#{1,4}\s+/gm, ""))); // titoli Markdown della trascrizione
+
+/**
+ * Anteprima del testo usato (pagine scelte), con le formule disegnate: per controllare che sia giusto.
+ * Con le foto (appunti a mano) ogni pagina è affiancata alla sua foto e si può correggere.
+ */
+function preview(exam, m) {
   const box = h("div", { class: "material-preview" });
-  return h("details", { ontoggle: (e) => {
-    if (!e.target.open || box.childNodes.length) return;
-    const pages = sliceText(m.text, m.pages);
-    const text = pages.length > 6000 ? `${pages.slice(0, 6000).replace(/\$[^$]*$/, "")}\n\n…` : pages;
-    box.replaceChildren(...richParas(text.replace(/\f/g, "\n\n").replace(/^#{1,4}\s+/gm, ""))); // titoli Markdown della trascrizione
-  } }, h("summary", { class: "small" }, "Anteprima del testo"), box);
+  const fill = async () => {
+    const r = parseRange(m.pages, m.numPages) ?? { from: 1, to: m.numPages || 1 };
+    if (!m.imageIds) {
+      const pages = sliceText(m.text, m.pages);
+      const text = pages.length > 6000 ? `${pages.slice(0, 6000).replace(/\$[^$]*$/, "")}\n\n…` : pages;
+      return box.replaceChildren(...pageNodes(text.replace(/\f/g, "\n\n")));
+    }
+    const all = m.text.split("\f");
+    const rows = [];
+    for (let p = r.from; p <= Math.min(r.to, r.from + 19); p++) {
+      const photo = m.imageIds[p - 1] ? await store.getFile(m.imageIds[p - 1]) : null;
+      const src = photo instanceof Blob ? URL.createObjectURL(photo) : photo ? `data:image/jpeg;base64,${photo}` : null;
+      const textBox = h("div", { class: "page-text" }, ...(all[p - 1]?.trim() ? pageNodes(all[p - 1]) : [h("p", { class: "muted" }, "(non ancora trascritta)")]));
+      const edit = h("button", { class: "btn small ghost", onclick: () => {
+        const ta = h("textarea", { class: "page-edit", "aria-label": `Testo della pagina ${p}` });
+        ta.value = all[p - 1] ?? "";
+        textBox.replaceChildren(ta, h("div", { class: "row", style: { gap: "6px" } },
+          h("button", { class: "btn small primary", onclick: () => {
+            m.text = replacePages(m.text, p, [ta.value.trim()], m.numPages);
+            m.size = m.text.replace(/\f/g, "").length;
+            store.save();
+            rerenderSoon();
+          } }, "Salva"),
+          h("button", { class: "btn small ghost", onclick: () => fill() }, "Annulla")));
+        ta.focus();
+      } }, "Correggi");
+      rows.push(h("div", { class: "page-row" },
+        src ? h("a", { href: src, target: "_blank", rel: "noopener", class: "page-photo" }, h("img", { src, alt: `Foto della pagina ${p}`, loading: "lazy" })) : h("div", { class: "page-photo muted small" }, "foto non più in memoria"),
+        h("div", {}, h("div", { class: "row between small muted" }, `Pagina ${p}`, edit), textBox)));
+    }
+    if (r.to - r.from > 19) rows.push(h("p", { class: "muted small" }, `Mostrate le prime 20 pagine su ${r.to - r.from + 1}: scegli le pagine per vedere le altre.`));
+    box.replaceChildren(...rows);
+  };
+  return h("details", { open: !!m.handwritten && !!m.mathPages && uncertainCount(m.text) > 0 && !m.reviewed, ontoggle: (e) => { if (e.target.open && !box.childNodes.length) fill(); } },
+    h("summary", { class: "small" }, m.imageIds ? "Anteprima: foto e trascrizione (puoi correggerla)" : "Anteprima del testo"), box);
 }
 
 const MAX_TRANSCRIBE = 30; // pagine per volta da far leggere a Claude come immagini
@@ -247,7 +400,7 @@ async function transcribe(exam, m, r, data) {
   await run(exam, "transcribe", async (onProgress) => {
     onProgress(0, "Preparo le immagini delle pagine…");
     const { images } = await core.pdfPageImages(data, r.from, r.to);
-    const pages = await api.runJob("/api/transcribe", { images, firstPage: r.from, title: m.title.replace(/ \(da PDF\)$/, "") }, onProgress);
+    const { pages } = await api.runJob("/api/transcribe", { images: await imagesForApi(images), firstPage: r.from, title: m.title.replace(/ \(da PDF\)$/, "") }, onProgress);
     m.text = replacePages(m.text, r.from, pages, m.numPages);
     m.size = m.text.length;
     pages.forEach((p, k) => { if (p != null) m.mathPages = addRange(m.mathPages, r.from + k, r.from + k); });
@@ -260,7 +413,7 @@ async function transcribe(exam, m, r, data) {
 /** «Pagine 45–120 di 380»: per libri e slide si sceglie la parte da usare (vuoto = tutte). */
 function pagePicker(m) {
   const r = parseRange(m.pages, m.numPages);
-  const unit = m.fileId || m.title.endsWith("(da PDF)") ? "pagine" : "slide";
+  const unit = m.imageIds ? "foto" : m.fileId || m.fromPdf || m.title.endsWith("(da PDF)") ? "pagine" : "slide";
   const num = (v, label) => h("input", { type: "number", min: 1, max: m.numPages, value: v ?? "", placeholder: label, "aria-label": `${label} (${m.title})`, style: { width: "78px", padding: "4px 8px" },
     onchange: (e) => {
       const box = e.target.parentElement.querySelectorAll("input");
@@ -272,7 +425,7 @@ function pagePicker(m) {
     } });
   const count = r ? r.to - r.from + 1 : m.numPages;
   return h("label", { class: "small muted page-pick", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } },
-    unit === "pagine" ? "Pagine" : "Slide", num(r?.from, "da"), "–", num(r?.to, "a"), `di ${m.numPages}`,
+    { pagine: "Pagine", slide: "Slide", foto: "Foto" }[unit], num(r?.from, "da"), "–", num(r?.to, "a"), `di ${m.numPages}`,
     h("span", {}, r ? ` · ne uso ${count}` : " · tutte"),
     m.kind === "notes" ? h("span", {}, ` (${chars(sliceText(m.text, m.pages).length)})`) : null);
 }
@@ -295,13 +448,26 @@ export function materialsTab(exam) {
   } }, h("h3", {}, "Incolla appunti, esercizi o parti di libro"), h("div", { class: "row", style: { gap: "8px", flexWrap: "nowrap" } }, title, pasteRole), text, h("div", {}, h("button", { class: "btn", type: "submit" }, "Aggiungi")));
 
   /* --- carica file --- */
-  const input = h("input", { type: "file", multiple: true, accept: `${core.ai.pdf === false && !core.pdfText ? "" : ".pdf,application/pdf,"}.docx,.pptx,.txt,.md,.markdown,text/plain`, hidden: true });
+  const input = h("input", { type: "file", multiple: true, accept: `${core.ai.pdf === false && !core.pdfText ? "" : ".pdf,application/pdf,"}.docx,.pptx,.txt,.md,.markdown,text/plain,image/*,.heic`, hidden: true });
+  const camera = h("input", { type: "file", accept: "image/*", capture: "environment", multiple: true, hidden: true, id: "camera-input" });
+  camera.addEventListener("change", () => addFiles(exam, [...camera.files]));
+  const handBox = h("div", { class: "card stack" },
+    h("h3", {}, "Appunti scritti a mano"),
+    h("p", { class: "muted small", style: { margin: 0 } }, ai
+      ? "Fotografa le pagine del quaderno (una foto per pagina, in ordine) o caricane le foto: Claude le trascrive, formule comprese. Le parti incerte vengono segnate: controllale accanto alle foto prima di generare il modulo."
+      : "Per leggere la scrittura a mano serve Claude: qui l'AI non è attiva."),
+    h("div", { class: "row" },
+      h("button", { class: "btn", disabled: !ai, onclick: () => camera.click() }, "Fotografa gli appunti"),
+      h("button", { class: "btn ghost", disabled: !ai, onclick: () => input.click() }, "Carica foto o scansioni"), camera),
+    h("details", { class: "small muted" }, h("summary", {}, "Come fare foto che si leggono bene"),
+      h("ul", {}, h("li", {}, "Luce uniforme, senza ombre del telefono; foglio piatto e inquadrato tutto."), h("li", {}, "Una pagina per foto, dritta; penna scura."),
+        h("li", {}, "Per le tavolette (GoodNotes, Notability): esporta in PDF e caricalo come documento."), h("li", {}, "La calligrafia molto corsiva e le formule scritte piccole sono i punti dove Claude sbaglia di più: controllali."))));
   input.addEventListener("change", () => addFiles(exam, [...input.files]));
   const drop = h("div", { class: "file-drop", tabindex: 0, role: "button", onclick: () => input.click(), onkeydown: (e) => (e.key === "Enter" || e.key === " ") && input.click(),
     ondragover: (e) => e.preventDefault(), ondrop: (e) => { e.preventDefault(); addFiles(exam, [...e.dataTransfer.files]); } },
     h("b", {}, "Carica libro, dispense, slide, esercizi"), h("div", { class: "small" }, core.ai.pdf === false
       ? (core.pdfText ? ".pdf, .docx, .pptx, .txt, .md: di un PDF si legge il testo (le scansioni no; le formule possono uscire male)" : ".docx, .pptx, .txt o .md (i PDF non sono supportati qui: copia il testo e incollalo)")
-      : ".pdf (anche scansioni e formule: il PDF viene letto dall'AI), .docx, .pptx, .txt, .md"),
+      : ".pdf (anche scansioni e formule: il PDF viene letto dall'AI), .docx, .pptx, .txt, .md, foto"),
       h("div", { class: "small muted" }, "Di un libro scegli poi le pagine dei capitoli del programma."), input);
 
   /* --- ricerca online (o, senza web, traccia dal programma) --- */
@@ -345,12 +511,12 @@ export function materialsTab(exam) {
                 h("select", { class: "role-select", "aria-label": `Tipo di ${m.title}`, onchange: (e) => { m.role = e.target.value; store.save(); rerenderSoon(); } },
                   Object.entries(ROLES).map(([k, t]) => h("option", { value: k, selected: roleOf(m) === k }, t)))),
                 m.numPages > 1 ? pagePicker(m) : null) : null,
-              m.kind === "notes" ? formulaRow(exam, m) : null),
+              m.kind === "notes" ? (m.handwritten ? handwrittenRow(exam, m) : formulaRow(exam, m)) : null),
             h("button", { class: "btn small danger", onclick: () => removeMaterial(exam, m), "aria-label": `Rimuovi ${m.title}` }, "Rimuovi")),
           m.kind === "web" ? h("details", {}, h("summary", { class: "small" }, m.generated ? "Anteprima (bozza dalla conoscenza di Claude, senza fonti)" : `Anteprima e ${m.sources.length} fonti`),
             h("pre", { style: { whiteSpace: "pre-wrap", maxHeight: "260px", overflow: "auto", font: "inherit", fontSize: ".9rem" } }, m.text),
             h("ul", { class: "source-list" }, m.sources.map((s) => h("li", {}, h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer" }, s.title || s.url))))) : null,
-          m.kind === "notes" ? preview(m) : null)))
+          m.kind === "notes" ? preview(exam, m) : null)))
     : h("p", { class: "muted" }, "Nessun materiale ancora. Aggiungi appunti, file o fai partire una ricerca online.");
 
   /* --- generazione / aggiornamento --- */
@@ -390,6 +556,6 @@ export function materialsTab(exam) {
   }
 
   return h("div", { class: "stack" },
-    h("div", { class: "grid" }, h("div", { class: "card stack" }, paste, drop), researchBox),
+    h("div", { class: "grid" }, h("div", { class: "card stack" }, paste, drop), handBox, researchBox),
     formatBox, h("h2", { style: { margin: "6px 0 0" } }, `Materiali (${exam.materials.length})`), list, gen);
 }

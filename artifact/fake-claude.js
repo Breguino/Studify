@@ -55,6 +55,11 @@ function transcription(prompt) {
   const from = Number(m[1]);
   const to = Number(m[2] ?? m[1]);
   const out = [];
+  if (prompt.includes("SCRITTI A MANO")) {
+    for (let p = from; p <= to; p++)
+      out.push(`=== PAGINA ${p} ===\n# Lezione ${p} — Elasticità\nL'elasticità della domanda misura quanto varia $Q$ quando varia $P$.\n\n$$\\varepsilon_P=\\left|\\frac{\\Delta\\%Q}{\\Delta\\%P}\\right|$$\n\n- se $\\varepsilon_P>1$ → domanda **elastica**\n- beni di lusso[?] più elastici\n(nota: chiesto all'esame)`);
+    return out.join("\n\n");
+  }
   for (let p = from; p <= to; p++)
     out.push(`=== PAGINA ${p} ===\n# Capitolo ${Math.ceil(p / 4)}, pagina ${p}\nLa varianza campionaria è\n\n$$s^2=\\frac{1}{n-1}\\sum_{i=1}^{n}\\left(x_i-\\bar{x}\\right)^2$$\n\ne la media $\\bar{x}=\\frac{1}{n}\\sum_i x_i$ (pagina ${p}).`);
   return out.join("\n\n");

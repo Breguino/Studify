@@ -106,6 +106,14 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
      pagine che sembrano avere formule rovinate). Le **equazioni di Word e PowerPoint** (OMML) sono convertite in LaTeX: frazioni,
      apici/pedici, radici, sommatorie e integrali, parentesi, funzioni e limiti, accenti, matrici, sistemi. L'«Anteprima del testo»
      di ogni materiale mostra le formule disegnate, per controllarle prima di generare il modulo.
+   - **Appunti scritti a mano.** «Fotografa gli appunti» (fotocamera del telefono) o «Carica foto o scansioni»: una foto per
+     pagina, in ordine di nome. Le foto vengono raddrizzate, ridotte a 2576 px sul lato lungo (il massimo che i modelli usano) e
+     convertite in JPEG nel browser; Claude le trascrive (3 per richiesta) con le formule in LaTeX, segnando «[?]» le parole lette
+     con incertezza e «[illeggibile]» le parti non lette, senza riscrivere in bella. L'anteprima mette ogni foto accanto alla
+     sua trascrizione, con le parti incerte in giallo e «Correggi» pagina per pagina; nel prompt del modulo gli appunti sono
+     segnati come scritti a mano e le letture incerte non devono diventare carte. Le foto HEIC dell'iPhone non si aprono in Chrome:
+     l'app spiega come averle in JPEG. Con il server le foto restano nel browser e si possono rileggere; nella pagina Claude solo
+     per la sessione. Per le tavolette (GoodNotes, Notability) si esporta in PDF.
 3. **Genera il modulo**: l'AI produce argomenti (con importanza/difficoltà), flashcard atomiche, domande
    (scelta multipla, aperte, esercizi con rubrica) e un elenco di **lacune** nei materiali.
    **Durante il semestre non serve aspettare di avere tutto:** dopo ogni lezione aggiungi gli appunti e premi «Aggiungi al

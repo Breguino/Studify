@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { buildModule, curriculum, examFormat, examFormatFromText, extendModule, degrees, gradeAnswer, importRows, parseCurriculum, research, setClient } from "../server/ai.js";
+import { buildModule, curriculum, examFormat, examFormatFromText, extendModule, transcribe, degrees, gradeAnswer, importRows, parseCurriculum, research, setClient } from "../server/ai.js";
 import { CurriculumSchema, GradeSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees } from "../server/schema.js";
 
 const stream = (msg) => ({ on() {}, finalMessage: async () => msg });
@@ -279,4 +279,25 @@ test("buildModule: tipi di materiale, pagine dei PDF e regola sugli esercizi nel
   assert.match(text, /<appunti_studente titolo="Lezione 3">/);
   assert.match(text, /almeno metà delle domande siano kind="problem"/);
   assert.match(calls[0].system, /esercizi \(eserciziari, temi d'esame, esercitazioni\): NON trasformarli in flashcard/);
+});
+
+test("transcribe: foto degli appunti a Claude come immagini, 3 per richiesta, regole per la scrittura a mano", async () => {
+  const calls = [];
+  const reply = (from, n) => ({ stop_reason: "end_turn", content: [{ type: "text", text: Array.from({ length: n }, (_, k) => `=== PAGINA ${from + k} ===\nappunti ${from + k} con $x_${from + k}$ e lusso[?]`).join("\n") }] });
+  setClient(fake([reply(1, 3), reply(4, 2)], calls));
+  const images = Array.from({ length: 5 }, (_, k) => ({ data: `QUJD${k}`, mediaType: "image/jpeg" }));
+  const r = await transcribe({ images, firstPage: 1, title: "Quaderno", handwritten: true });
+  assert.equal(calls.length, 2);
+  const c0 = calls[0].messages[0].content;
+  assert.deepEqual(c0.map((b) => b.type), ["image", "image", "image", "text"], "immagini prima del testo");
+  assert.deepEqual(c0[0].source, { type: "base64", media_type: "image/jpeg", data: "QUJD0" });
+  assert.match(c0.at(-1).text, /le pagine da 1 a 3 di «Quaderno»/);
+  assert.match(c0.at(-1).text, /SCRITTI A MANO[\s\S]*«\[\?\]»[\s\S]*«\[illeggibile\]»/);
+  assert.match(c0.at(-1).text, /\\begin\{cases\}/, "LaTeX nel prompt intatto");
+  assert.ok(!/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(c0.at(-1).text), "nessun carattere di controllo nel prompt");
+  assert.match(calls[1].messages[0].content.at(-1).text, /le pagine da 4 a 5/);
+  assert.equal(r.pages.length, 5);
+  assert.equal(r.pages[4], "appunti 5 con $x_5$ e lusso[?]");
+  setClient(fake([{ stop_reason: "refusal", content: [] }], []));
+  await assert.rejects(transcribe({ images: images.slice(0, 1), handwritten: true }), /rifiutato/);
 });

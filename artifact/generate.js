@@ -1,7 +1,7 @@
 // Generazione con Claude dentro la pagina pubblicata (capability `sample`): nessuna chiave API,
 // usa l'account Claude di chi apre la pagina. Limiti: nessuna navigazione web, nessun PDF,
 // prompt ≤ 256 KiB e risposte brevi → il modulo si costruisce a passi (schema → carte/domande per argomento).
-import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXERCISES_TASK, EXTEND_RULES, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, JSON_LATEX_RULE, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest } from "../shared/prompts.js";
+import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXERCISES_TASK, EXTEND_RULES, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, JSON_LATEX_RULE, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt } from "../shared/prompts.js";
 import { normalizeCurriculum, normalizeExamFormat, normalizeImportRows, normalizeModule, repairLatex } from "../shared/normalize.js";
 
 const MAX_MATERIAL_CHARS = 200_000;
@@ -217,41 +217,26 @@ export async function extendModule({ exam, materials, research, existing }, onPr
 }
 
 const PAGES_PER_CALL = 3; // poche pagine per richiesta: la trascrizione di una pagina fitta è lunga
-const MARK = /^=== PAGINA (\d+) ===\s*$/m;
 
 /**
  * Trascrive pagine di PDF (immagini) in testo con formule LaTeX: è il modo per avere formule esatte nella pagina Claude,
  * dove il testo estratto dal PDF le rovina. `images[k]` è la pagina `firstPage + k`.
  * @returns {Promise<string[]>} testo di ciascuna pagina, nello stesso ordine
  */
-export async function transcribePages({ images, firstPage, title = "" }, onProgress = () => {}, sampleFn) {
+export async function transcribePages({ images, firstPage, title = "", handwritten = false }, onProgress = () => {}, sampleFn) {
   const sample = sampleFn ?? (await getSample());
   if (!sample) throw new Error("Claude non è disponibile in questa pagina.");
   const limits = await sample.limits?.().catch(() => null);
-  if (!limits?.images) throw new Error("Qui Claude non può leggere le immagini delle pagine: le formule restano quelle del testo del PDF.");
+  if (!limits?.images) throw new Error(handwritten ? "Qui Claude non può leggere immagini: gli appunti a mano non si possono trascrivere." : "Qui Claude non può leggere le immagini delle pagine: le formule restano quelle del testo del PDF.");
   const per = Math.max(1, Math.min(PAGES_PER_CALL, limits.images.maxCount ?? PAGES_PER_CALL));
   const groups = [];
   for (let k = 0; k < images.length; k += per) groups.push({ start: k, imgs: images.slice(k, k + per) });
   let done = 0;
   const parts = await pool(groups, CONCURRENCY, async ({ start, imgs }) => {
     const from = firstPage + start;
-    const to = from + imgs.length - 1;
-    const prompt = `Trascrivi fedelmente ${imgs.length === 1 ? `la pagina ${from}` : `le pagine da ${from} a ${to}`} di «${title}» (le immagini sono in ordine).
-${SAFETY_RULES}
-- Testo: parola per parola, senza riassumere, correggere o aggiungere. Titoli con «#», elenchi con «-».
-- Formule: tutte in LaTeX compatibile con KaTeX, $...$ nel testo e $$...$$ se sono su una riga a sé; stessi simboli e notazione della pagina
-  (pedici, apici, barre, cappelli, frazioni, sommatorie, matrici, sistemi con \begin{cases}). Mai formule in testo semplice.
-- Tabelle: una riga per riga della tabella, celle separate da « | ».
-- Figure e grafici: una riga «[Figura: …]» che dice cosa mostrano (assi, curve, valori leggibili).
-- Ignora intestazioni e piè di pagina ripetuti e i numeri di pagina.
-Prima di ogni pagina scrivi una riga «=== PAGINA n ===» con il suo numero (${from}${to > from ? `…${to}` : ""}). Nient'altro prima o dopo.`;
     try {
-      const { text } = await sample(prompt, { images: imgs, modelTier: "default" });
-      const pages = {};
-      const chunks = String(text ?? "").split(MARK); // ["prima", n, testo, n, testo…]
-      for (let k = 1; k < chunks.length; k += 2) pages[Number(chunks[k])] = chunks[k + 1].trim();
-      if (!Object.keys(pages).length && imgs.length === 1 && String(text ?? "").trim()) pages[from] = String(text).trim();
-      return Array.from({ length: imgs.length }, (_, k) => pages[from + k] ?? null);
+      const { text } = await sample(transcribePrompt({ from, count: imgs.length, title, handwritten }), { images: imgs, modelTier: "default" });
+      return parseTranscription(text, from, imgs.length);
     } catch (e) {
       throw explain(e);
     } finally {

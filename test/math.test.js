@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import katex from "katex";
 import { clipRich, hasMath, splitMath } from "../public/js/math.js";
 import { mergeModule, normalizeModule, repairLatex } from "../shared/normalize.js";
+import { materialText, parseTranscription, transcribePrompt, uncertainCount } from "../shared/prompts.js";
 import { addRange, mathyPages, rangesCover, replacePages } from "../public/js/module-update.js";
 
 const types = (s) => splitMath(s).map((p) => (p.type === "math" ? `${p.display ? "D" : "M"}:${p.value}` : `T:${p.value}`));
@@ -58,4 +59,20 @@ test("pagine trascritte: sostituzione, intervalli, pagine con probabili formule"
   const fromPdf = "Capitolo 2\n\nLa varianza campionaria e:\nn\n2  1  2\ns  =  ∑  ( xi - x )\nn - 1\ni = 1\n\ndove n e il numero di osservazioni.";
   assert.equal(mathyPages(fromPdf), 1, "formula spezzata dal testo di un PDF (meno come trattino)");
   assert.equal(mathyPages("Il mercato è in equilibrio quando la domanda e l'offerta coincidono.\nSe il prezzo sale, la quantità domandata scende e a volte cresce l'offerta.\nÈ il caso più comune."), 0, "prosa con parole di una lettera: no");
+});
+
+test("trascrizione: marcatori di pagina, pagine mancanti, parole incerte, prompt per pagine stampate o a mano", () => {
+  assert.deepEqual(parseTranscription("=== PAGINA 3 ===\nuno\n\n=== PAGINA 5 ===\ntre", 3, 3), ["uno", null, "tre"]);
+  assert.deepEqual(parseTranscription("senza marcatori", 7, 1), ["senza marcatori"], "una pagina sola: va bene anche senza marcatore");
+  assert.deepEqual(parseTranscription("", 1, 2), [null, null]);
+  assert.equal(uncertainCount("lusso[?] e [illeggibile], poi testo[?]"), 3);
+  const printed = transcribePrompt({ from: 1, count: 1, title: "Libro" });
+  const hand = transcribePrompt({ from: 2, count: 3, title: "Quaderno", handwritten: true });
+  assert.ok(!printed.includes("SCRITTI A MANO") && hand.includes("SCRITTI A MANO"));
+  assert.match(printed, /la pagina 1 di «Libro»/);
+  for (const p of [printed, hand]) {
+    assert.ok(p.includes(String.raw`\begin{cases}`));
+    assert.ok(!/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(p), "nessun carattere di controllo");
+  }
+  assert.match(materialText({ title: "Quaderno", handwritten: true, text: "x" }), /scritti_a_mano="sì"/);
 });

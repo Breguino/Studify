@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXERCISES_TASK, EXTEND_RULES, MATERIAL_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, where } from "../shared/prompts.js";
+import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXERCISES_TASK, EXTEND_RULES, MATERIAL_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, where } from "../shared/prompts.js";
 import { CurriculumSchema, DegreesSchema, ExamFormatSchema, GradeSchema, ImportRowsSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeImportRows, normalizeModule, repairLatex } from "./schema.js";
 
 export const MODEL = process.env.STUDIFY_MODEL || "claude-opus-5-5";
@@ -393,6 +393,43 @@ export async function extendModule(input, onProgress = () => {}) {
   } catch {
     throw new Error("L'AI ha restituito un aggiornamento in formato non valido. Riprova.");
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Trascrizione di pagine fotografate (appunti a mano, scansioni)             */
+/* -------------------------------------------------------------------------- */
+
+const TRANSCRIBE_PER_CALL = 3; // una pagina fitta trascritta è lunga: poche immagini per richiesta
+
+/**
+ * Immagini di pagine → testo di ciascuna pagina (formule in LaTeX). `images` = [{data: base64, mediaType}].
+ * @returns {Promise<{pages: (string|null)[]}>}
+ */
+export async function transcribe({ images, firstPage = 1, title = "", handwritten = false }, onProgress = () => {}) {
+  const pages = [];
+  for (let k = 0; k < images.length; k += TRANSCRIBE_PER_CALL) {
+    const group = images.slice(k, k + TRANSCRIBE_PER_CALL);
+    const from = firstPage + k;
+    const stream = client().messages.stream({
+      model: MODEL,
+      max_tokens: 32000,
+      thinking: { type: "adaptive" },
+      output_config: { effort: "medium" },
+      messages: [{
+        role: "user",
+        content: [
+          ...group.map((img) => ({ type: "image", source: { type: "base64", media_type: img.mediaType, data: img.data } })),
+          { type: "text", text: transcribePrompt({ from, count: group.length, title, handwritten }) },
+        ],
+      }],
+    });
+    stream.on("text", (d) => onProgress(d.length));
+    const msg = await stream.finalMessage();
+    assertUsable(msg);
+    pages.push(...parseTranscription(textOf(msg.content), from, group.length));
+  }
+  if (pages.every((p) => p == null)) throw new Error("Claude non ha restituito la trascrizione delle pagine. Riprova con meno foto.");
+  return { pages };
 }
 
 /* -------------------------------------------------------------------------- */
