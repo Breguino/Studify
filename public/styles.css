@@ -202,9 +202,31 @@ mark.uncertain { background: #fde68a; color: #1b1f2a; border-radius: 3px; paddin
 .dispensa-doc table { border-collapse: collapse; margin: 0.6em 0; }
 .dispensa-doc th, .dispensa-doc td { border: 1px solid var(--line); padding: 4px 10px; text-align: left; }
 .dispensa-hints q { font-style: italic; }
+/* Esami passati e simulazioni */
+.paper-items { margin: 6px 0 0; padding-left: 22px; }
+.paper-items li { margin-bottom: 6px; }
+.freq-line a { overflow-wrap: anywhere; }
+.sim-line { flex-wrap: nowrap; align-items: flex-start; border-top: 1px solid var(--line); padding-top: 8px; }
+.sim-line > div:first-child { min-width: 0; }
+.sim-head { position: sticky; top: 56px; z-index: 4; background: var(--bg); padding: 8px 0; margin-bottom: 0; }
+.sim-timer { font-variant-numeric: tabular-nums; font-weight: 700; padding: 4px 12px; border-radius: 999px; background: var(--surface-2); white-space: nowrap; }
+.sim-timer.soon { background: var(--warn-soft); color: var(--warn); }
+.sim-timer.late { background: var(--bad); color: #fff; }
+.paper-box { overflow-x: auto; overflow-wrap: anywhere; }
+.paper-box table { border-collapse: collapse; } .paper-box th, .paper-box td { border: 1px solid var(--line); padding: 4px 8px; }
+.paper-pdf { width: 100%; height: 75vh; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.sim-answer { min-height: 260px; font-variant-numeric: tabular-nums; }
+.sim-mode { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 0; }
+.sim-mode legend { padding: 0 4px; color: var(--muted); }
+.sim-points { width: 72px; padding: 4px 8px; }
+.sim-item .row.between > div:first-child { min-width: 0; }
+.sim-item .badge { white-space: nowrap; }
+@media (max-width: 520px) { .sim-item > .row.between { flex-wrap: wrap !important; } }
+.score-big.good-text { color: var(--good); } .score-big.bad-text { color: var(--bad); }
 @media print {
   @page { margin: 18mm 16mm; }
   .no-print, header.app, .topbar, #toasts, .toast, nav.tabs, .skip-link { display: none !important; }
+  .sim-head { position: static; }
   body, main, .app-main { background: #fff !important; color: #111 !important; padding: 0 !important; margin: 0 !important; max-width: none !important; }
   .dispensa-doc { border: 0; padding: 0; background: #fff; color: #111; }
   .dispensa-doc blockquote { background: #f3f2ff; }

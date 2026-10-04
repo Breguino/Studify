@@ -7,6 +7,7 @@ import { buildQueue, dailyNewLimit } from "./srs.js";
 import { busyMinutes, lessonsOn } from "./timetable.js";
 import * as store from "./store.js";
 import { studyStart, windowDays } from "./workload.js";
+import { allPapers, attemptsOf, paperMinutes } from "./past-exams.js";
 import { save } from "./store.js";
 
 export const daysLeft = (exam) => daysBetween(today(), exam.date);
@@ -14,7 +15,8 @@ export const daysLeft = (exam) => daysBetween(today(), exam.date);
 export function ensurePlan(exam, force = false) {
   if (!exam.module) return null;
   const tt = store.state.profile?.timetable ?? null;
-  const stamp = `${exam.moduleBuiltAt}|${exam.moduleUpdatedAt ?? ""}|${tt?.importedAt ?? ""}|${tt?.until ?? ""}|${exam.date}|${exam.studyDays ?? 0}`;
+  const papers = allPapers(exam);
+  const stamp = `${exam.moduleBuiltAt}|${exam.moduleUpdatedAt ?? ""}|${tt?.importedAt ?? ""}|${tt?.until ?? ""}|${exam.date}|${exam.studyDays ?? 0}|${papers.length}|${exam.pastExams?.analyzedAt ?? ""}`;
   if (force || !exam.plan || exam.plan.builtOn !== today() || exam.plan.stamp !== stamp) {
     exam.plan = {
       ...buildPlan({
@@ -31,9 +33,28 @@ export function ensurePlan(exam, force = false) {
       }),
       stamp,
     };
+    useRealPapers(exam.plan, exam, papers);
     save();
   }
   return exam.plan;
+}
+
+/**
+ * Con le prove d'esame passate, le simulazioni del piano si fanno su prove vere (finché ce ne sono di mai fatte):
+ * a tempo, con la durata della prova.
+ */
+function useRealPapers(plan, exam, papers) {
+  let fresh = papers.filter((p) => !attemptsOf(exam, p.key).length).length;
+  for (const d of plan.days)
+    for (const t of d.tasks) {
+      if (t.kind !== "mock" || fresh <= 0) continue;
+      Object.assign(t, { kind: "sim", title: "Simulazione con un tema d'esame vero (a tempo, senza appunti)", minutes: Math.min(240, paperMinutes(exam, "") + 20) });
+      fresh--;
+    }
+  for (const d of plan.days) {
+    d.minutes = d.tasks.reduce((s, t) => s + t.minutes, 0);
+    d.overload = d.minutes > d.usable * 1.15;
+  }
 }
 
 export const isDone = (exam, task) => (task.kind === "learn" ? !!exam.learned[task.topicId] : !!exam.done[task.id]);
@@ -94,6 +115,8 @@ export function taskHref(exam, task) {
       return `${base}/topic/${task.topicId}?${q}`;
     case "explain":
       return `${base}/explain/${task.mode === "oral" ? "oral" : task.topicId}?${q}`;
+    case "sim":
+      return `${base}/sim?${q}`;
     case "quiz":
     case "mock":
       q.set("mode", task.mode ?? "mixed");

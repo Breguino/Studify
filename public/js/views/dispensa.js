@@ -121,7 +121,7 @@ function printDoc() {
 
 const sourceLine = (m) => {
   const r = parseRange(m.pages, m.numPages);
-  const unit = m.unit === "lezioni" ? "lezioni" : m.imageIds ? "foto" : "pagine";
+  const unit = m.unit === "lezioni" || m.unit === "prove" ? m.unit : m.imageIds ? "foto" : "pagine";
   return `${m.title.replace(/ \(da PDF\)$/, "")} (${(ROLES[roleOf(m)] ?? "").replace(/ \(.*\)$/, "").toLowerCase()}${r ? `, ${unit} ${r.from}–${r.to}` : ""}${m.year ? `, a.a. ${m.year}` : ""})`;
 };
 

@@ -12,12 +12,15 @@ import { core } from "../core.js";
 import { materialsTab } from "./materials.js";
 import { methodsTab, progressTab } from "./insights.js";
 import { dispensaTab } from "./dispensa.js";
+import { esamiTab } from "./esami.js";
+import { allPapers, analysisValid, topicFrequency } from "../past-exams.js";
 
 const TABS = [
   ["today", "Oggi"],
   ["materials", "Materiali"],
   ["module", "Modulo"],
   ["dispensa", "Dispensa"],
+  ["esami", "Esami passati"],
   ["methods", "Metodi"],
   ["progress", "Progressi"],
 ];
@@ -27,7 +30,7 @@ export function hubView(exam, tab) {
   const dl = daysLeft(exam);
   const apHere = exam.appelli?.find((a) => a.date === exam.date);
   const others = (exam.appelli ?? []).filter((a) => a.date !== exam.date && a.date >= today());
-  const body = { today: todayTab, materials: materialsTab, module: moduleTab, dispensa: dispensaTab, methods: methodsTab, progress: progressTab }[tab](exam);
+  const body = { today: todayTab, materials: materialsTab, module: moduleTab, dispensa: dispensaTab, esami: esamiTab, methods: methodsTab, progress: progressTab }[tab](exam);
   return h(
     "div",
     { class: "stack", style: { gap: "0" } },
@@ -121,19 +124,32 @@ function hintsBox(hints, mod, title = "Cosa ha detto il docente sull'esame") {
 /** Aggiunto o approfondito con gli appunti nelle ultime due settimane. */
 const recent = (iso) => !!iso && daysBetween(today(new Date(iso)), today()) <= 14;
 
+/** «in 4/5 prove»: quante prove d'esame passate chiedono l'argomento (dopo l'analisi). */
+function examBadge(t, { n, freq }) {
+  if (!n) return null;
+  const k = freq.get(t.id) ?? 0;
+  return k ? badge(`in ${k}/${n} ${n === 1 ? "prova" : "prove"}`, k / n >= 0.5 && n >= 3 ? "bad" : "warn") : null;
+}
+
 function moduleTab(exam) {
   const mod = exam.module;
   if (!mod) return emptyState("Nessun modulo", "Crealo dalla scheda Materiali.", h("a", { class: "btn primary", href: `#/exam/${exam.id}/materials` }, "Vai ai materiali"));
+  const freq = topicFrequency(exam);
+  const papers = allPapers(exam).length;
   return h("div", { class: "stack" },
     h("div", { class: "card" }, h("h2", {}, mod.title || "Modulo di studio"), richParas(mod.overview),
       h("div", { class: "row" }, badge(`${mod.topics.length} argomenti`, "brand"), badge(`${mod.flashcards.length} flashcard`), badge(`${mod.questions.length} domande`), mod.examHints?.length ? badge(`${mod.examHints.length} ${mod.examHints.length === 1 ? "indicazione" : "indicazioni"} sull'esame`, "bad") : null, mod.local ? badge("modalità base", "warn") : null),
       exam.moduleUpdatedAt ? h("p", { class: "muted small", style: { margin: "8px 0 0" } }, `Aggiornato con appunti nuovi il ${fmtDate(today(new Date(exam.moduleUpdatedAt)))}.`) : null),
     hintsBox(mod.examHints, mod),
+    papers ? h("div", { class: "callout row between" }, h("span", {}, freq.n
+      ? `Esami passati: ${freq.n} ${freq.n === 1 ? "prova analizzata" : "prove analizzate"}. Accanto a ogni argomento, in quante prove compare.`
+      : `Hai ${papers} ${papers === 1 ? "prova" : "prove"} d'esame tra i materiali: analizzale per vedere quali argomenti escono di più.`),
+      h("a", { class: "btn small", href: `#/exam/${exam.id}/esami` }, freq.n ? "Esami passati" : "Analizza")) : null,
     mod.gaps?.length ? h("div", { class: "callout warn" }, h("b", {}, "Cose da verificare / lacune individuate"), h("ul", {}, mod.gaps.map((g) => h("li", {}, rich(g))))) : null,
     h("div", { class: "stack", style: { gap: "10px" } }, mod.topics.map((t) =>
       h("a", { class: "topic card flat", href: `#/exam/${exam.id}/topic/${t.id}`, style: { textDecoration: "none", color: "inherit" } },
         h("div", { class: "row between" }, h("h3", { style: { margin: 0 } }, rich(t.title)),
-          h("div", { class: "row" }, (mod.examHints ?? []).some((x) => x.topicId === t.id) ? badge("il docente ne parla per l'esame", "bad") : null, recent(t.addedAt) ? badge("nuovo", "brand") : recent(t.updatedAt) ? badge("approfondito", "brand") : null, badge(["", "marginale", "importante", "centrale"][t.importance], t.importance === 3 ? "bad" : t.importance === 2 ? "warn" : ""), exam.learned[t.id] ? badge("studiato", "good") : null)),
+          h("div", { class: "row" }, examBadge(t, freq), (mod.examHints ?? []).some((x) => x.topicId === t.id) ? badge("il docente ne parla per l'esame", "bad") : null, recent(t.addedAt) ? badge("nuovo", "brand") : recent(t.updatedAt) ? badge("approfondito", "brand") : null, badge(["", "marginale", "importante", "centrale"][t.importance], t.importance === 3 ? "bad" : t.importance === 2 ? "warn" : ""), exam.learned[t.id] ? badge("studiato", "good") : null)),
         h("p", { class: "muted small", style: { margin: "6px 0 0" } }, rich(clipRich(t.summary, 180)))))),
     mod.sources?.length ? h("details", {}, h("summary", {}, `Fonti online (${mod.sources.length})`), h("ul", { class: "source-list" }, mod.sources.map((s) => h("li", {}, h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer" }, s.title || s.url))))) : null,
     h("p", { class: "muted small" }, "Il modulo è una bozza generata da te + AI: confrontalo con il programma e con il docente. Le fonti web e le conoscenze generali vanno verificate."),
@@ -141,6 +157,19 @@ function moduleTab(exam) {
 }
 
 /* ---------------------------------- ARGOMENTO ---------------------------------- */
+
+/** Che cosa hanno chiesto su questo argomento le prove d'esame passate (dall'analisi). */
+function askedBox(exam, t) {
+  if (!analysisValid(exam)) return null;
+  const { n, freq } = topicFrequency(exam);
+  const labels = new Map(allPapers(exam).map((p) => [p.key, p.label]));
+  const asked = Object.entries(exam.pastExams.papers).filter(([k]) => labels.has(k))
+    .flatMap(([k, p]) => p.items.filter((it) => it.topicIds.includes(t.id)).map((it) => ({ ...it, paper: p.label || labels.get(k) })));
+  if (!asked.length) return n >= 3 ? h("p", { class: "muted small" }, `Negli esami passati: non compare in nessuna delle ${n} prove analizzate (non vuol dire che non uscirà).`) : null;
+  return h("div", { class: "callout" }, h("b", {}, `Negli esami passati: in ${freq.get(t.id)} ${n === 1 ? "prova" : `prove su ${n}`}`),
+    h("ul", {}, asked.slice(0, 6).map((it) => h("li", {}, rich(it.summary), h("span", { class: "muted small" }, ` — ${it.paper}, es. ${it.n}`)))),
+    asked.length > 6 ? h("div", { class: "small muted" }, `… e altri ${asked.length - 6}.`) : null);
+}
 
 export function topicView(exam, tid, query) {
   const mod = exam.module;
@@ -165,6 +194,7 @@ export function topicView(exam, tid, query) {
     h("div", { class: "row between" }, h("h1", {}, rich(t.title)), h("div", { class: "row" }, badge(`difficoltà ${t.difficulty}/3`), badge(["", "marginale", "importante", "centrale"][t.importance], t.importance === 3 ? "bad" : "warn"))),
     h("div", { class: "callout" }, h("b", {}, "Prima di leggere: "), "scrivi o pensa a 3 cose che già sai su questo argomento (anche sbagliate). Il tentativo di ricordare rende la lettura successiva più efficace."),
     hintsBox((mod.examHints ?? []).filter((x) => x.topicId === t.id), mod, "Il docente su questo argomento"),
+    askedBox(exam, t),
     h("div", { class: "card" }, h("h3", {}, "In breve"), richParas(t.summary)),
     t.keyConcepts.length ? h("div", { class: "card" }, h("h3", {}, "Concetti chiave"), t.keyConcepts.map((k) => h("div", { class: "concept" }, h("b", {}, rich(k.term)), rich(k.definition)))) : null,
     t.mustKnow.length ? h("div", { class: "card" }, h("h3", {}, "Da saper dire senza appunti"), h("ul", {}, t.mustKnow.map((m) => h("li", {}, rich(m))))) : null,

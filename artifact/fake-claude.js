@@ -1,6 +1,7 @@
 // SOLO PER LE PROVE: simula `window.claude` (sample, db, user, downloads) in un browser normale.
 // Non viene incluso nel file da pubblicare.
 import demo from "../public/demo/module.json";
+import { demoAnalysis, demoGrade } from "../public/js/past-exams.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const calls = (window.__sampleCalls = []);
@@ -26,7 +27,27 @@ function hintsFrom(prompt) {
   ];
 }
 
+// Prove d'esame (analisi) e svolgimento (correzione) letti dal prompt, come li legge Claude.
+const papersIn = (prompt) => [...prompt.matchAll(/<prova id="(P\d+)" titolo="([^"]*)">\n?([\s\S]*?)\n?<\/prova>/g)].map((m) => ({ id: m[1], label: m[2], text: m[3] }));
+const topicsIn = (prompt) => [...(prompt.split(/Argomenti del modulo[^\n]*\n/)[1] ?? "").split("\n\n")[0].matchAll(/^(t\d+): (.+)$/gm)].map((m) => ({ id: m[1], title: m[2] }));
+
 const answer = (prompt) => {
+  if (prompt.includes("PROVE D'ESAME PASSATE")) {
+    const out = demoAnalysis(papersIn(prompt), topicsIn(prompt));
+    const ids = out.papers.map((p) => p.id);
+    out.structure = "Prova di 2 ore con 3 esercizi: due di calcolo e una domanda di teoria (analisi finta).";
+    if (ids.length >= 2) out.recurring = [{ pattern: "Calcolo dell'elasticità da una funzione di domanda", topicId: "t2", paperIds: ids }, { pattern: "Compare in una prova sola", topicId: "", paperIds: [ids[0]] }];
+    out.uncovered = ["Esternalità (chiesta nelle prove, non nel modulo)"];
+    return out;
+  }
+  if (prompt.includes("CORREGGE LA PROVA")) {
+    const paper = prompt.match(/<prova titolo="[^"]*">\n([\s\S]*?)\n<\/prova>/)?.[1] ?? "";
+    const sv = prompt.match(/<svolgimento>\n([\s\S]*?)\n<\/svolgimento>/)?.[1] ?? "";
+    const g = demoGrade(paper, sv);
+    g.items[0].feedback = "Imposti bene $\\varepsilon_P$, ma il segno va tolto: $|-0{,}5|=0{,}5$.";
+    g.items[0].topicId = "t2";
+    return g;
+  }
   if (prompt.includes("Trasforma il documento in righe di tabella")) {
     const kind = prompt.includes("Giorno | Inizio") ? "orari" : prompt.includes("Data | Ora") ? "esami" : "insegnamenti";
     return { found: true, notes: ["Letto dal documento (finto)."], rows: IMPORT_ROWS[kind] };

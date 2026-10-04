@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { buildModule, curriculum, examFormat, examFormatFromText, extendModule, transcribe, writeDispensa, degrees, gradeAnswer, importRows, parseCurriculum, research, setClient } from "../server/ai.js";
+import { analyzePastExams, gradeExam, buildModule, curriculum, examFormat, examFormatFromText, extendModule, transcribe, writeDispensa, degrees, gradeAnswer, importRows, parseCurriculum, research, setClient } from "../server/ai.js";
 import { CurriculumSchema, GradeSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees } from "../server/schema.js";
 
 const stream = (msg) => ({ on() {}, finalMessage: async () => msg });
@@ -278,7 +278,87 @@ test("buildModule: tipi di materiale, pagine dei PDF e regola sugli esercizi nel
   assert.match(text, /<esercizi titolo="Temi d'esame">\nEsercizio 1/);
   assert.match(text, /<appunti_studente titolo="Lezione 3">/);
   assert.match(text, /almeno metà delle domande siano kind="problem"/);
-  assert.match(calls[0].system, /esercizi \(eserciziari, temi d'esame, esercitazioni\): NON trasformarli in flashcard/);
+  assert.match(calls[0].system, /esercizi \(eserciziari, esercitazioni\): NON trasformarli in flashcard/);
+  assert.ok(!/temi d'esame passati: le domande imitino/.test(text), "senza temi d'esame niente regola sui temi");
+});
+
+test("buildModule: i temi d'esame passati arrivano con il loro tag e la regola di non copiarli", async () => {
+  const calls = [];
+  setClient(fake([{ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(rawModule) }] }], calls));
+  await buildModule({
+    exam: { name: "Microeconomia", type: "problemi", level: 2, daysLeft: 20, language: "italiano" },
+    materials: [
+      { kind: "notes", role: "esami", title: "Temi d'esame", unit: "prove", pages: "1-2", text: "Appello del 12/01/2024\n1. Calcola l'elasticità" },
+      { kind: "notes", role: "appunti", title: "Lezione 3", text: "elasticità" },
+    ],
+    research: null,
+  });
+  const text = calls[0].messages[0].content.at(-1).text;
+  assert.match(text, /<temi_esame titolo="Temi d'esame" prove="1-2">\nAppello del 12\/01\/2024/);
+  assert.match(text, /temi d'esame passati: le domande imitino il loro stile[\s\S]*mai copiati/);
+  assert.ok(!/almeno metà delle domande siano kind="problem" modellate su quegli esercizi/.test(text), "niente regola sugli eserciziari");
+  assert.match(calls[0].system, /temi d'esame \(prove degli appelli passati\)[\s\S]*NON copiarli nel quiz/);
+});
+
+test("analyzePastExams: prove di testo e PDF, id validi, frequenze e ricorrenze controllate", async () => {
+  const calls = [];
+  const raw = {
+    papers: [
+      { id: "P1", label: "Appello del 12/01/2024", year: "2024", durationMin: 120, hasSolutions: false, items: [
+        { n: "1", summary: "Calcolo dell'elasticità $\\varepsilon_P$", topicIds: ["t2", "t99"], kind: "esercizio", points: 10 },
+        { n: "2", summary: "Definizione di surplus", topicIds: ["t3"], kind: "teoria", points: 0 }] },
+      { id: "P2", label: "", year: "24", durationMin: -5, hasSolutions: true, items: [{ n: "1", summary: "Elasticità incrociata", topicIds: ["t2"], kind: "test", points: 8 }] },
+      { id: "P7", label: "inventata", year: "", durationMin: 0, hasSolutions: false, items: [] },
+    ],
+    structure: "Due ore, tre esercizi.",
+    recurring: [{ pattern: "Elasticità da una domanda lineare", topicId: "t2", paperIds: ["P1", "P2", "P9"] }, { pattern: "Una volta sola", topicId: "t3", paperIds: ["P1"] }],
+    uncovered: ["Esternalità"],
+    caveats: [],
+  };
+  setClient(fake([{ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(raw) }] }], calls));
+  const r = await analyzePastExams({
+    exam: { name: "Microeconomia", type: "problemi", level: 2, daysLeft: 20, language: "italiano" },
+    topics: [{ id: "t2", title: "Elasticità" }, { id: "t3", title: "Surplus" }],
+    papers: [{ id: "P1", label: "Appello del 12/01/2024", text: "1. Calcola l'elasticità" }, { id: "P2", label: "Appello del 9/02/2024", data: "QUJD" }],
+  });
+  const content = calls[0].messages[0].content;
+  assert.deepEqual(content.map((b) => b.type), ["document", "text"], "il PDF della prova come documento");
+  assert.equal(content[0].title, "P2 — Appello del 9/02/2024");
+  assert.match(content[1].text, /t2: Elasticità\nt3: Surplus/);
+  assert.match(content[1].text, /<prova id="P1" titolo="Appello del 12\/01\/2024">\n1\. Calcola/);
+  assert.match(content[1].text, /<prova id="P2"[^>]*>\(PDF allegato «P2 — Appello del 9\/02\/2024»\)<\/prova>/);
+  assert.match(calls[0].system, /PROVE D'ESAME PASSATE[\s\S]*Non risolvere gli esercizi/);
+  assert.deepEqual(Object.keys(r.papers), ["P1", "P2"], "prova inventata scartata");
+  assert.deepEqual(r.papers.P1.items[0].topicIds, ["t2"], "argomento inesistente scartato");
+  assert.equal(r.papers.P1.items[0].summary, "Calcolo dell'elasticità $\\varepsilon_P$");
+  assert.equal(r.papers.P2.items[0].kind, "test");
+  assert.equal(r.papers.P2.durationMin, 0);
+  assert.equal(r.papers.P2.year, "");
+  assert.deepEqual(r.recurring, [{ pattern: "Elasticità da una domanda lineare", topicId: "t2", paperIds: ["P1", "P2"] }], "ricorrente solo se in almeno 2 prove vere");
+});
+
+test("gradeExam: prova e svolgimento a Claude, punti entro il massimo, LaTeX riparato", async () => {
+  const calls = [];
+  const raw = { items: [
+    { n: "1", task: "Elasticità", maxPoints: 10, points: 14, verdict: "corretto", feedback: "Bene: $\\frac{\\Delta Q}{Q}$.".replace("\\frac", "\f" + "rac"), topicId: "t2" },
+    { n: "2", task: "Surplus", maxPoints: 20, points: 5, verdict: "parziale", feedback: "Manca il grafico.", topicId: "t42" },
+    { n: "3", task: "senza punti", maxPoints: 0, points: 0, verdict: "non svolto", feedback: "", topicId: "" }],
+    overall: "Discreta.", priorities: ["Surplus"], readingIssues: [] };
+  setClient(fake([{ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(raw) }] }], calls));
+  const r = await gradeExam({
+    exam: { name: "Microeconomia", type: "problemi", level: 2, daysLeft: 20, language: "italiano" },
+    topics: [{ id: "t2", title: "Elasticità" }],
+    paper: { label: "Appello del 12/01/2024", text: "1. Calcola l'elasticità (10 punti)", durationMin: 120 },
+    answer: "1. $\\varepsilon=0{,}5$", minutes: 95,
+  });
+  const text = calls[0].messages[0].content.at(-1).text;
+  assert.match(text, /Tempo impiegato dallo studente: 95 minuti \(durata della prova: 120\)/);
+  assert.match(text, /<prova titolo="Appello del 12\/01\/2024">\n1\. Calcola[\s\S]*<svolgimento>\n1\. \$\\varepsilon=0\{,\}5\$\n<\/svolgimento>/);
+  assert.match(calls[0].system, /CORREGGE LA PROVA[\s\S]*distribuisci 30 punti/);
+  assert.equal(r.items.length, 2, "esercizio senza punti scartato");
+  assert.equal(r.items[0].points, 10, "punti entro il massimo");
+  assert.equal(r.items[0].feedback, "Bene: $\\frac{\\Delta Q}{Q}$.", "\\f riparato");
+  assert.equal(r.items[1].topicId, "", "argomento inesistente scartato");
 });
 
 test("transcribe: foto degli appunti a Claude come immagini, 3 per richiesta, regole per la scrittura a mano", async () => {

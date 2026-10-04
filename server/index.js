@@ -3,11 +3,12 @@ import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODEL, aiConfigured, buildModule, curriculum, degrees, examFormat, examFormatFromText, extendModule, transcribe, writeDispensa, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
+import { MODEL, aiConfigured, analyzePastExams, buildModule, curriculum, degrees, examFormat, examFormatFromText, extendModule, gradeExam, transcribe, writeDispensa, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
+import { demoAnalysis, demoGrade } from "../public/js/past-exams.js";
 import { findExamHints, localDelta } from "../public/js/local-builder.js";
 import { formatFromSyllabus } from "../public/js/exam-type.js";
 import { IMPORT_HEADERS } from "../shared/prompts.js";
-import { normalizeModule } from "./schema.js";
+import { normalizeExamGrade, normalizeModule, normalizePastExams } from "./schema.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
 const PORT = Number(process.env.PORT || 3000);
@@ -133,8 +134,8 @@ const str = (v, max = 500) => (typeof v === "string" ? v.slice(0, max) : "");
 function parseMaterials(body) {
   const materials = (Array.isArray(body.materials) ? body.materials : []).slice(0, 40).map((m) => ({
     kind: ["pdf", "notes", "web"].includes(m.kind) ? m.kind : "notes",
-    role: ["appunti", "libro", "dispense", "esercizi", "sbobine", "altro"].includes(m.role) ? m.role : "appunti",
-    unit: m.unit === "lezioni" ? "lezioni" : "pagine",
+    role: ["appunti", "libro", "dispense", "esercizi", "esami", "sbobine", "altro"].includes(m.role) ? m.role : "appunti",
+    unit: ["lezioni", "prove"].includes(m.unit) ? m.unit : "pagine",
     year: str(m.year, 20),
     pages: /^\d{1,4}-\d{1,4}$/.test(m.pages ?? "") ? m.pages : "",
     handwritten: !!m.handwritten,
@@ -166,6 +167,9 @@ function parseExisting(e = {}) {
     gaps: arr(e.gaps, 60).map((g) => str(g, 600)).filter(Boolean),
   };
 }
+
+/** Argomenti del modulo (id e titolo) a cui collegare prove ed esercizi. */
+const parseTopics = (list) => (Array.isArray(list) ? list : []).slice(0, 80).map((t) => ({ id: str(t?.id, 12), title: str(t?.title, 300) })).filter((t) => t.id && t.title);
 
 function parseExam(e = {}) {
   const level = Math.min(5, Math.max(1, Number(e.level) || 2));
@@ -352,8 +356,33 @@ async function api(req, res, url) {
     }
     input.existing = parseExisting(body.existing);
     if (!input.existing.topics.length) return send(res, 400, { error: "Il modulo da aggiornare è vuoto: generalo prima." });
-    const notes = materials.map((m) => m.text).filter(Boolean).join("\n\n");
+    const notes = materials.filter((m) => !["esercizi", "esami"].includes(m.role)).map((m) => m.text).filter(Boolean).join("\n\n"); // come la modalità base: le prove non diventano argomenti
     const id = startJob("module", (p) => (MOCK ? mockRun(p, { delta: { ...localDelta(notes, "Appunti nuovi"), examHints: [...findExamHints(notes, "sbobine"), { quote: "Questa frase non è nei materiali: il docente non l'ha mai detta.", source: "inventata", note: "", topicId: "" }] }, sources: [], mode: "local" }) : extendModule(input, p)));
+    return send(res, 202, { jobId: id });
+  }
+
+  if (url.pathname === "/api/past-exams") {
+    const topics = parseTopics(body.topics);
+    const papers = (Array.isArray(body.papers) ? body.papers : []).slice(0, 40).map((p) => ({
+      id: str(p?.id, 8), label: str(p?.label, 120), text: str(p?.text, 300_000), data: typeof p?.data === "string" ? p.data : "",
+    })).filter((p) => /^P\d{1,2}$/.test(p.id) && (p.text.trim() || p.data));
+    if (!papers.length) return send(res, 400, { error: "Nessuna prova da analizzare." });
+    if (!topics.length) return send(res, 400, { error: "Serve il modulo di studio (gli argomenti a cui collegare le prove)." });
+    const input = { exam: parseExam(body.exam), topics, papers };
+    const id = startJob("past-exams", (p) => (MOCK
+      ? mockRun(p, normalizePastExams(demoAnalysis(papers.map((x) => ({ ...x, text: x.text || "1. Esercizio sul PDF (demo)" })), topics), { paperIds: papers.map((x) => x.id), topicIds: topics.map((t) => t.id) }))
+      : analyzePastExams(input, p)));
+    return send(res, 202, { jobId: id });
+  }
+
+  if (url.pathname === "/api/grade-exam") {
+    const topics = parseTopics(body.topics);
+    const paper = { label: str(body.paper?.label, 120), text: str(body.paper?.text, 300_000), data: typeof body.paper?.data === "string" ? body.paper.data : "", durationMin: Math.max(0, Number(body.paper?.durationMin) || 0) };
+    const answer = str(body.answer, 200_000);
+    if (!paper.text.trim() && !paper.data) return send(res, 400, { error: "Manca il testo della prova." });
+    if (!answer.trim()) return send(res, 400, { error: "Lo svolgimento è vuoto." });
+    const input = { exam: parseExam(body.exam), topics, paper, answer, minutes: Math.max(0, Math.round(Number(body.minutes) || 0)) };
+    const id = startJob("grade-exam", (p) => (MOCK ? mockRun(p, normalizeExamGrade(demoGrade(paper.text, answer), { topicIds: topics.map((t) => t.id) })) : gradeExam(input, p)));
     return send(res, 202, { jobId: id });
   }
 

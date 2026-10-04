@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { examFormatFromText, explain, extendModule, generateModule, transcribePages, writeDispensa, generateNotes, gradeAnswer, parseCurriculum } from "../artifact/generate.js";
+import { analyzePastExams, gradeExam, examFormatFromText, explain, extendModule, generateModule, transcribePages, writeDispensa, generateNotes, gradeAnswer, parseCurriculum } from "../artifact/generate.js";
 import { decodeState, encodeState, split } from "../artifact/backend.js";
 
 const demo = JSON.parse(readFileSync(new URL("../public/demo/module.json", import.meta.url), "utf8"));
@@ -266,4 +266,27 @@ test("pagina Claude: dispensa un capitolo per volta, parziali, capitolo troppo l
   assert.match(r.chapters[1].body, /interrotto perché troppo lungo/);
   assert.ok(labels.some((l) => /capitolo 2\/2: B/.test(l)));
   assert.deepEqual(partials.at(-1), 2);
+});
+
+test("pagina Claude: analisi delle prove passate e correzione di una simulazione", async () => {
+  const prompts = [];
+  const sample = async () => ({ text: "", truncated: false });
+  sample.json = async (prompt) => {
+    prompts.push(prompt);
+    if (prompt.includes("PROVE D'ESAME PASSATE"))
+      return { papers: [{ id: "P1", label: "Appello", year: "2024", durationMin: 90, hasSolutions: false, items: [{ n: "1", summary: "Elasticità", topicIds: ["t1", "t9"], kind: "esercizio", points: 10 }] }, { id: "P3", items: [] }],
+        structure: "S", recurring: [], uncovered: [], caveats: [] };
+    return { items: [{ n: "1", task: "E", maxPoints: 10, points: 6, verdict: "parziale", feedback: "\fcirc", topicId: "t1" }], overall: "", priorities: [], readingIssues: [] };
+  };
+  const topics = [{ id: "t1", title: "Elasticità" }];
+  const a = await analyzePastExams({ exam, topics, papers: [{ id: "P1", label: "Appello", text: "1. Calcola" }] }, () => {}, sample);
+  assert.match(prompts[0], /PROVE D'ESAME PASSATE[\s\S]*Rispondi SOLO con un oggetto JSON[\s\S]*t1: Elasticità[\s\S]*<prova id="P1" titolo="Appello">\n1\. Calcola\n<\/prova>/);
+  assert.match(prompts[0], /ogni backslash del LaTeX va scritto doppio/);
+  assert.deepEqual(Object.keys(a.papers), ["P1"]);
+  assert.deepEqual(a.papers.P1.items[0].topicIds, ["t1"]);
+  const g = await gradeExam({ exam, topics, paper: { label: "Appello", text: "1. Calcola", durationMin: 90 }, answer: "1. ok", minutes: 80 }, () => {}, sample);
+  assert.match(prompts[1], /CORREGGE LA PROVA[\s\S]*<svolgimento>\n1\. ok\n<\/svolgimento>/);
+  assert.equal(g.items[0].points, 6);
+  assert.equal(g.items[0].feedback, "\\fcirc", "\\f riparato");
+  await assert.rejects(analyzePastExams({ exam, topics, papers: [{ id: "P1", label: "x", text: "x".repeat(210_000) }] }, () => {}, sample), /troppo lunghe/);
 });

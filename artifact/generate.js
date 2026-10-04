@@ -1,8 +1,8 @@
 // Generazione con Claude dentro la pagina pubblicata (capability `sample`): nessuna chiave API,
 // usa l'account Claude di chi apre la pagina. Limiti: nessuna navigazione web, nessun PDF,
 // prompt ≤ 256 KiB e risposte brevi → il modulo si costruisce a passi (schema → carte/domande per argomento).
-import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXERCISES_TASK, EXTEND_RULES, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, JSON_LATEX_RULE, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, DISPENSA_SYSTEM, chapterPrompt, splitChapter } from "../shared/prompts.js";
-import { normalizeCurriculum, normalizeExamFormat, normalizeImportRows, normalizeModule, quoteChecker, repairLatex } from "../shared/normalize.js";
+import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_GRADE_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, GRADE_RULES, PAST_EXAMS_RULES, examGradePrompt, pastExamsPrompt, IMPORT_HEADERS, IMPORT_RULES, JSON_LATEX_RULE, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, DISPENSA_SYSTEM, chapterPrompt, splitChapter } from "../shared/prompts.js";
+import { normalizeCurriculum, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex } from "../shared/normalize.js";
 
 const MAX_MATERIAL_CHARS = 200_000;
 const CONCURRENCY = 2; // `sample` ne esegue un paio alla volta, le altre aspettano: oltre si rischia rate_limited
@@ -64,7 +64,7 @@ const OUTLINE_SHAPE = `Rispondi SOLO con un oggetto JSON (nessun testo prima o d
    "mustKnow": [string] (3-5), "commonMistakes": [string] (1-3),
    "origin": "notes"|"model",
    "excerpt": string (passaggio COPIATO alla lettera dai materiali su cui si basa l'argomento, max 1000 caratteri; "" se origin è "model"),
-   "exercises": string (1-3 esercizi COPIATI dai materiali di tipo esercizi che riguardano l'argomento, con la soluzione se c'è, max 2000 caratteri; "" se non ce ne sono)}],
+   "exercises": string (1-3 esercizi COPIATI dai materiali di tipo esercizi o dai temi d'esame che riguardano l'argomento, con la soluzione se c'è, max 2000 caratteri; "" se non ce ne sono)}],
  "examHints": [{"quote": string, "source": string, "note": string, "topicId": string (id dell'argomento, es. "t3", o "")}] (vedi il punto 9; [] se non ce ne sono)}
 Regole di forma: da 5 a 12 argomenti, in ordine logico. origin="notes" se il contenuto viene dai materiali dello studente;
 "model" solo per ciò che non è nei materiali (conoscenza generale, di cui sei certo). Il contenuto della <traccia_ai_non_verificata>
@@ -80,7 +80,7 @@ Mix delle domande per questa prova (${EXAM_TYPE_LABEL[type]}): ${QUESTION_MIX[ty
 /** Esercizi dei materiali su questo argomento: modello per le domande «problem» (il passo 2 non vede i materiali interi). */
 const exerciseBlock = (t) =>
   typeof t.exercises === "string" && t.exercises.trim()
-    ? `<esercizi_dai_materiali>\n${t.exercises.slice(0, 2500)}\n</esercizi_dai_materiali>\nUsa questi esercizi come modello: almeno metà delle domande siano kind="problem" dello stesso tipo, con svolgimento in modelAnswer (se la soluzione non c'è, risolvilo e scrivi in explanation "Svolgimento non presente nei materiali: verificalo"). Non farne flashcard.\n`
+    ? `<esercizi_dai_materiali>\n${t.exercises.slice(0, 2500)}\n</esercizi_dai_materiali>\nUsa questi esercizi come modello: almeno metà delle domande siano kind="problem" dello stesso tipo, con svolgimento in modelAnswer (se la soluzione non c'è, risolvilo e scrivi in explanation "Svolgimento non presente nei materiali: verificalo"). Non farne flashcard. Se vengono da temi d'esame passati, cambia dati e contesto: le prove vere lo studente le tiene per le simulazioni.\n`
     : "";
 
 /**
@@ -151,7 +151,7 @@ const EXTEND_OUTLINE_SHAPE = `Rispondi SOLO con un oggetto JSON (nessun testo pr
    "importance": 1|2|3, "difficulty": 1|2|3, "summary": string, "keyConcepts": [{"term": string, "definition": string}] (solo voci nuove),
    "mustKnow": [string] (solo voci nuove), "commonMistakes": [string] (solo voci nuove), "origin": "notes"|"model",
    "excerpt": string (passaggio COPIATO alla lettera dai MATERIALI NUOVI su cui si basa, max 1000 caratteri),
-   "exercises": string (1-3 esercizi COPIATI dai materiali nuovi di tipo esercizi sull'argomento, con soluzione se c'è, max 2000 caratteri; "" se non ce ne sono)}],
+   "exercises": string (1-3 esercizi COPIATI dai materiali nuovi di tipo esercizi o dai temi d'esame nuovi sull'argomento, con soluzione se c'è, max 2000 caratteri; "" se non ce ne sono)}],
  "examHints": [{"quote": string, "source": string, "note": string, "topicId": string (id dell'argomento: esistente o nuovo, o "")}] (solo dai materiali nuovi; [] se non ce ne sono)}
 Al massimo 8 argomenti in tutto (nuovi + approfonditi). Carte e domande verranno chieste dopo, argomento per argomento.`;
 
@@ -326,6 +326,53 @@ ${String(text).slice(0, 40_000)}
   } catch (e) {
     throw explain(e);
   }
+}
+
+/** Analisi delle prove d'esame passate (testo): esercizi collegati agli argomenti del modulo. */
+export async function analyzePastExams({ exam, topics, papers }, onProgress = () => {}, sampleFn) {
+  const sample = sampleFn ?? (await getSample());
+  if (!sample) throw new Error("Claude non è disponibile in questa pagina.");
+  const body = pastExamsPrompt({ exam, topics, papers });
+  if (body.length > MAX_MATERIAL_CHARS) throw new Error(`Prove troppo lunghe per una volta (${Math.round(body.length / 1000)}k caratteri): nei materiali scegli meno prove e analizza il resto dopo.`);
+  const prompt = `${PAST_EXAMS_RULES}
+${JSON_LATEX_RULE}
+Rispondi SOLO con un oggetto JSON: {"papers": [{"id": string, "label": string, "year": string, "durationMin": number, "hasSolutions": boolean,
+"items": [{"n": string, "summary": string, "topicIds": [string], "kind": "esercizio"|"teoria"|"test"|"altro", "points": number}]}],
+"structure": string, "recurring": [{"pattern": string, "topicId": string, "paperIds": [string]}], "uncovered": [string], "caveats": [string]}
+
+${body}`;
+  let raw;
+  try {
+    raw = await sample.json(prompt, { modelTier: "default", onText: ({ text }) => onProgress(text.length, `Claude legge le prove… ~${Math.round(text.length / 1000)}k caratteri`) });
+  } catch (e) {
+    throw explain(e);
+  }
+  const out = normalizePastExams(raw, { paperIds: papers.map((p) => p.id), topicIds: topics.map((t) => t.id) });
+  if (!Object.keys(out.papers).length) throw new Error("Claude non ha riconosciuto le prove: controlla che i materiali «Esami passati» contengano i testi delle prove.");
+  return out;
+}
+
+/** Correzione di una simulazione d'esame: la prova (testo) e lo svolgimento dello studente. */
+export async function gradeExam({ exam, topics, paper, answer, minutes }, onProgress = () => {}, sampleFn) {
+  const sample = sampleFn ?? (await getSample());
+  if (!sample) throw new Error("Claude non è disponibile in questa pagina.");
+  const body = examGradePrompt({ exam, topics, paper, answer, minutes });
+  if (body.length > MAX_MATERIAL_CHARS) throw new Error("Prova e svolgimento sono troppo lunghi per una correzione sola.");
+  const prompt = `${EXAM_GRADE_RULES}
+${JSON_LATEX_RULE}
+Rispondi SOLO con un oggetto JSON: {"items": [{"n": string, "task": string, "maxPoints": number, "points": number,
+"verdict": "corretto"|"parziale"|"errato"|"non svolto", "feedback": string, "topicId": string}], "overall": string, "priorities": [string], "readingIssues": [string]}
+
+${body}`;
+  let raw;
+  try {
+    raw = await sample.json(prompt, { modelTier: "default", onText: ({ text }) => onProgress(text.length, `Correzione in corso… ~${Math.round(text.length / 1000)}k caratteri`) });
+  } catch (e) {
+    throw explain(e);
+  }
+  const out = normalizeExamGrade(raw, { topicIds: topics.map((t) => t.id) });
+  if (!out.items.length) throw new Error("Claude non è riuscito a correggere la prova. Riprova.");
+  return out;
 }
 
 /** Correzione di una risposta libera. */

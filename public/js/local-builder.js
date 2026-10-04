@@ -19,7 +19,7 @@ const DEF_IS = /^[-*•\s]*(.{3,60}?)\s+(?:è|sono|si definisce|si definiscono|i
 const sentences = (text) => text.replace(/\s+/g, " ").match(/[^.!?]+[.!?]+(\s|$)/g)?.map((s) => s.trim()) ?? [text.trim()];
 
 export function buildLocalModule(notes, title = "Appunti") {
-  const lines = notes.replace(/\r/g, "").split("\n");
+  const lines = notes.replace(/\r/g, "").replace(/\f/g, "\n\n").split("\n"); // «\f» separa pagine e lezioni
   const sections = [];
   let cur = null;
   for (const line of lines) {

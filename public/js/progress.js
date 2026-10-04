@@ -20,6 +20,8 @@ export function topicStats(module, srs, qstats, learned = {}) {
     for (const q of qs) if (qstats[q.id]) results.push(mean(qstats[q.id].recent));
     const ex = qstats[`x:${t.id}`];
     if (ex) results.push(mean(ex.recent));
+    const sim = qstats[`s:${t.id}`]; // esercizi su questo argomento nelle simulazioni d'esame
+    if (sim) results.push(mean(sim.recent));
     const expected = qs.length + 1; // domande + spiegazione
     const quiz = results.length ? mean(results) * Math.min(1, results.length / Math.min(3, expected)) : null;
     const cardScore = cards.length ? mature / cards.length : null;

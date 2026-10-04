@@ -46,7 +46,8 @@ export function repairLatex(text) {
 
 const clamp = (n, lo, hi, dflt) => (Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : dflt);
 const str = (s) => (typeof s === "string" ? s.trim() : "");
-const tex = (s) => repairLatex(str(s)); // testo che può contenere formule
+// testo che può contenere formule: si ripara PRIMA di togliere gli spazi (un «\f» iniziale, cioè \frac rovinato, è uno «spazio»)
+const tex = (s) => (typeof s === "string" ? repairLatex(s).trim() : "");
 
 const normTopic = (t, id, validSource) => ({
   id,
@@ -345,5 +346,74 @@ export function normalizeExamFormat(raw, { seenUrls = new Set(), sourceText = nu
     academicYear: str(raw?.academicYear).slice(0, 20),
     teacher: str(raw?.teacher).slice(0, 120),
     caveats: (raw?.caveats ?? []).map(str).filter(Boolean).slice(0, 5),
+  };
+}
+
+const num = (n, lo, hi) => (Number.isFinite(Number(n)) ? Math.min(hi, Math.max(lo, Number(n))) : lo);
+const KINDS_ITEM = ["esercizio", "teoria", "test", "altro"];
+
+/**
+ * Analisi delle prove passate: solo prove e argomenti che esistono (`paperIds`, `topicIds`), numeri nei range.
+ * Gli esercizi ricorrenti valgono solo se compaiono davvero in almeno 2 prove elencate.
+ * @returns {{papers: Object<string, object>, structure: string, recurring: object[], uncovered: string[], caveats: string[]}} papers per id
+ */
+export function normalizePastExams(raw, { paperIds = [], topicIds = [] } = {}) {
+  const validP = new Set(paperIds);
+  const validT = new Set(topicIds);
+  const papers = {};
+  for (const p of Array.isArray(raw?.papers) ? raw.papers : []) {
+    if (!validP.has(p?.id) || papers[p.id]) continue;
+    const items = (Array.isArray(p.items) ? p.items : []).slice(0, 40).map((it, k) => ({
+      n: str(it?.n).slice(0, 8) || String(k + 1),
+      summary: tex(it?.summary).slice(0, 240),
+      topicIds: [...new Set((Array.isArray(it?.topicIds) ? it.topicIds : []).filter((id) => validT.has(id)))],
+      kind: KINDS_ITEM.includes(it?.kind) ? it.kind : "altro",
+      points: Math.round(num(it?.points, 0, 100) * 10) / 10,
+    })).filter((it) => it.summary);
+    papers[p.id] = {
+      label: str(p.label).slice(0, 120),
+      year: /^(19|20)\d{2}$/.test(str(p.year)) ? str(p.year) : "",
+      durationMin: Math.round(num(p.durationMin, 0, 600)),
+      hasSolutions: !!p.hasSolutions,
+      items,
+    };
+  }
+  const recurring = (Array.isArray(raw?.recurring) ? raw.recurring : []).map((r) => ({
+    pattern: tex(r?.pattern).slice(0, 240),
+    topicId: validT.has(r?.topicId) ? r.topicId : "",
+    paperIds: [...new Set((Array.isArray(r?.paperIds) ? r.paperIds : []).filter((id) => papers[id]))],
+  })).filter((r) => r.pattern && r.paperIds.length >= 2).sort((a, b) => b.paperIds.length - a.paperIds.length).slice(0, 12);
+  return {
+    papers,
+    structure: tex(raw?.structure).slice(0, 1200),
+    recurring,
+    uncovered: (Array.isArray(raw?.uncovered) ? raw.uncovered : []).map(tex).filter(Boolean).slice(0, 12),
+    caveats: (Array.isArray(raw?.caveats) ? raw.caveats : []).map(tex).filter(Boolean).slice(0, 8),
+  };
+}
+
+const VERDICTS = ["corretto", "parziale", "errato", "non svolto"];
+
+/** Correzione di una simulazione: punti tra 0 e il massimo di ogni esercizio, argomenti validi, LaTeX riparato. */
+export function normalizeExamGrade(raw, { topicIds = [] } = {}) {
+  const validT = new Set(topicIds);
+  const items = (Array.isArray(raw?.items) ? raw.items : []).slice(0, 40).map((it, k) => {
+    const maxPoints = Math.round(num(it?.maxPoints, 0, 100) * 10) / 10;
+    const points = Math.round(num(it?.points, 0, maxPoints) * 10) / 10;
+    return {
+      n: str(it?.n).slice(0, 8) || String(k + 1),
+      task: tex(it?.task).slice(0, 240),
+      maxPoints,
+      points,
+      verdict: VERDICTS.includes(it?.verdict) ? it.verdict : points >= maxPoints ? "corretto" : points > 0 ? "parziale" : "errato",
+      feedback: tex(it?.feedback).slice(0, 1500),
+      topicId: validT.has(it?.topicId) ? it.topicId : "",
+    };
+  }).filter((it) => it.maxPoints > 0);
+  return {
+    items,
+    overall: tex(raw?.overall).slice(0, 1500),
+    priorities: (Array.isArray(raw?.priorities) ? raw.priorities : []).map(tex).filter(Boolean).slice(0, 6),
+    readingIssues: (Array.isArray(raw?.readingIssues) ? raw.readingIssues : []).map(tex).filter(Boolean).slice(0, 6),
   };
 }

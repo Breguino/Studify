@@ -63,7 +63,7 @@ test("intervalli di pagine: parse, testo per pagine, solo le pagine nuove dopo u
 
 test("tipo di materiale: dal nome del file e nel prompt", () => {
   assert.equal(guessRole("Eserciziario_cap3.pdf", true), "esercizi");
-  assert.equal(guessRole("Temi d'esame 2024.pdf", true), "esercizi");
+  assert.equal(guessRole("Temi d'esame 2024.pdf", true), "esami");
   assert.equal(guessRole("Slide lezione 4.pptx", true), "dispense");
   assert.equal(guessRole("Mankiw - Capitolo 5.pdf", true), "libro");
   assert.equal(guessRole("appunti_settimana2.md"), "appunti");

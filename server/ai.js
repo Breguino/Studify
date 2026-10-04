@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXERCISES_TASK, EXTEND_RULES, MATERIAL_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, where, DISPENSA_SYSTEM, chapterPrompt, splitChapter } from "../shared/prompts.js";
-import { CurriculumSchema, DegreesSchema, ExamFormatSchema, GradeSchema, ImportRowsSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeImportRows, normalizeModule, quoteChecker, repairLatex } from "./schema.js";
+import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_GRADE_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, PAST_EXAMS_RULES, examGradePrompt, pastExamsPrompt, practiceTasks, MATERIAL_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, where, DISPENSA_SYSTEM, chapterPrompt, splitChapter } from "../shared/prompts.js";
+import { CurriculumSchema, DegreesSchema, ExamFormatSchema, ExamGradeSchema, GradeSchema, ImportRowsSchema, ModuleSchema, PastExamsSchema, normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex } from "./schema.js";
 
 export const MODEL = process.env.STUDIFY_MODEL || "claude-opus-5-5";
 
@@ -339,8 +339,8 @@ function buildUserContent({ exam, materials, research: res, existing }, task = f
     parts.push(`<fonti_online>\n${res.sources.map((s) => `${s.id}: ${s.title} — ${s.url}`).join("\n")}\n</fonti_online>`);
   }
   const type = exam.type in EXAM_TYPE_LABEL ? exam.type : "misto";
-  const exercises = materials.some((m) => m.role === "esercizi");
-  parts.push(`${examContext(exam)}\n\n${task(exam, type)}${exercises ? `\n${EXERCISES_TASK}` : ""}`);
+  const extra = practiceTasks(materials.map((m) => m.role));
+  parts.push(`${examContext(exam)}\n\n${task(exam, type)}${extra ? `\n${extra}` : ""}`);
   content.push({ type: "text", text: parts.join("\n\n") });
   return content;
 }
@@ -483,6 +483,67 @@ export async function writeDispensa({ exam, materials, research, outline, topics
   }
   if (chapters.every((c) => c.error)) throw new Error(chapters[0]?.error || "Non sono riuscito a scrivere la dispensa.");
   return { chapters };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Esami degli anni passati: analisi e correzione delle simulazioni           */
+/* -------------------------------------------------------------------------- */
+
+const pdfBlock = (title, data) => ({ type: "document", title, source: { type: "base64", media_type: "application/pdf", data } });
+
+/**
+ * Le prove passate collegate agli argomenti del modulo. `papers` = [{id: "P1", label, text}] o, per i PDF, [{id, label, data}].
+ * @returns {Promise<object>} vedi normalizePastExams (prove per id)
+ */
+export async function analyzePastExams({ exam, topics, papers }, onProgress = () => {}) {
+  const content = papers.filter((p) => p.data).map((p) => pdfBlock(`${p.id} — ${p.label}`, p.data));
+  content.push({ type: "text", text: pastExamsPrompt({ exam, topics, papers: papers.map((p) => ({ ...p, text: p.data ? null : p.text })) }) });
+  const stream = client().messages.stream({
+    model: MODEL,
+    max_tokens: 32000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "medium", format: zodOutputFormat(PastExamsSchema) },
+    system: PAST_EXAMS_RULES,
+    messages: [{ role: "user", content }],
+  });
+  stream.on("text", (d) => onProgress(d.length));
+  const msg = await stream.finalMessage();
+  assertUsable(msg);
+  let raw;
+  try {
+    raw = PastExamsSchema.parse(JSON.parse(textOf(msg.content)));
+  } catch {
+    throw new Error("L'analisi delle prove è arrivata in un formato non valido. Riprova.");
+  }
+  const out = normalizePastExams(raw, { paperIds: papers.map((p) => p.id), topicIds: topics.map((t) => t.id) });
+  if (!Object.keys(out.papers).length) throw new Error("Claude non ha riconosciuto le prove: controlla che i materiali «Esami passati» contengano i testi delle prove.");
+  return out;
+}
+
+/** Correzione di una prova svolta a tempo (testo della prova o PDF, svolgimento come testo). */
+export async function gradeExam({ exam, topics, paper, answer, minutes }, onProgress = () => {}) {
+  const content = paper.data ? [pdfBlock(paper.label, paper.data)] : [];
+  content.push({ type: "text", text: examGradePrompt({ exam, topics, paper: { ...paper, text: paper.data ? null : paper.text }, answer, minutes }) });
+  const stream = client().messages.stream({
+    model: MODEL,
+    max_tokens: 32000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "high", format: zodOutputFormat(ExamGradeSchema) },
+    system: EXAM_GRADE_RULES,
+    messages: [{ role: "user", content }],
+  });
+  stream.on("text", (d) => onProgress(d.length));
+  const msg = await stream.finalMessage();
+  assertUsable(msg);
+  let raw;
+  try {
+    raw = ExamGradeSchema.parse(JSON.parse(textOf(msg.content)));
+  } catch {
+    throw new Error("La correzione è arrivata in un formato non valido. Riprova.");
+  }
+  const out = normalizeExamGrade(raw, { topicIds: topics.map((t) => t.id) });
+  if (!out.items.length) throw new Error("Claude non è riuscito a correggere la prova. Riprova.");
+  return out;
 }
 
 /* -------------------------------------------------------------------------- */

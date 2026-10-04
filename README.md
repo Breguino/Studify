@@ -21,7 +21,7 @@ Lo stesso Studify si può pubblicare come **pagina Claude** (artifact): niente N
 Usa l'account Claude di chi apre la pagina e salva i dati nel suo spazio privato.
 
 ```
-npm run build:artifact     # crea dist/studify.html (un solo file, ~1,9 MB: include pdf.js)
+npm run build:artifact     # crea dist/studify.html (un solo file, ~2,7 MB: include pdf.js e KaTeX)
 ```
 
 Si pubblica con le capacità `sample` (Claude), `db` + `user` (archivio privato per utente) e `downloads` (backup).
@@ -31,6 +31,7 @@ Differenze rispetto alla versione con server:
 |---|---|---|
 | Generazione modulo | una richiesta, PDF compresi (anche scansioni) | a passi (schema → carte e domande per argomento); max ~200k caratteri; di un PDF si usa il testo (le scansioni no) |
 | Ricerca web: corsi dell'ateneo, piano di studi, materiali | sì | **no** (Claude non può navigare): il piano si **incolla** (letto da Claude) o si scrive; al posto dei materiali web una «traccia dal programma» marcata *non verificata* |
+| Esami passati | analisi e correzione anche con le prove in PDF (le pagine della prova vanno a Claude); i PDF con più prove si dividono dal testo | prove come testo (anche da PDF); stessa analisi, simulazione e correzione |
 | Dati | IndexedDB nel browser | `db` privato per utente (non visibile agli altri nemmeno se condividi la pagina) |
 | Costo | la tua chiave API | uso del tuo account Claude |
 
@@ -142,13 +143,31 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
    argomento è cambiato con materiali nuovi risultano «da aggiornare». «Stampa o salva in PDF» (un capitolo per pagina, formule
    intere) oppure «Scarica il file»: un HTML autonomo con formule e font incorporati, da aprire e stampare in PDF.
    Rileggere da solo dà l'illusione di sapere: la dispensa serve a capire la prima volta e a consultare, flashcard e quiz a ricordare.
-5. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
+5. **Esami degli anni passati** (scheda «Esami passati»): carichi i temi d'esame (PDF, Word, testo o foto) con il tipo «Esami passati»
+   (riconosciuto dal nome: «Temi d'esame», «Appello…», «Compito A», «Prove scritte»). Un file con più appelli viene diviso in prove
+   dai titoli («Appello del 12/01/2024», «Esame del 14 giugno 2023», «Compito B», «2° appello»); per un PDF (versione con server) gli
+   inizi si trovano nel testo delle pagine, e si correggono a mano («dove inizia ogni prova: 1, 4, 7»). Le prove vere:
+   - **non diventano flashcard né domande del quiz**: il modulo ne imita lo stile con esercizi nuovi (dati diversi), così restano
+     intatte per le simulazioni; la dispensa non le risolve;
+   - **analisi con Claude**: ogni esercizio di ogni prova è collegato agli argomenti del modulo (id controllati), con durata, punti e
+     tipo (calcolo, teoria, test). Si vedono gli argomenti più chiesti («Elasticità 3/4»), gli esercizi che si ripetono (solo se
+     compaiono davvero in almeno 2 prove), gli argomenti chiesti ma assenti dal modulo. Con almeno 3 prove, un argomento che esce in
+     metà delle prove diventa «centrale» nel piano (e torna come prima se un'analisi successiva non lo conferma). Con meno di 3 prove
+     l'app dice che la frequenza conta poco; gli argomenti mai usciti non vengono abbassati («non è uscito» non vuol dire «non uscirà»).
+     Rigenerando il modulo l'analisi va rifatta (gli argomenti cambiano);
+   - **simulazione a tempo**: scegli la prova (consigliata: la più vecchia non ancora fatta, le più recenti si tengono per gli ultimi
+     giorni), la durata (letta nella prova) e se rispondere su carta o a schermo. Il testo compare solo all'inizio; il timer continua
+     anche uscendo dalla pagina (la prova resta in corso e si riprende). Alla consegna: foto dei fogli trascritte da Claude (parole
+     incerte segnate, da correggere prima), poi **correzione di Claude** (punti per esercizio, giudizio, cosa sbagli e come si fa,
+     voto stimato in trentesimi) oppure **autocorrezione** con i punti dell'analisi. I punti si possono cambiare; il risultato va nei
+     progressi degli argomenti, e nel piano le simulazioni finali usano le prove vere finché ce ne sono di mai fatte.
+6. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
 
 | Sessione | Cosa fa |
 |---|---|
 | Flashcard | Richiamo attivo con ripasso dilazionato (SM-2 semplificato) che **non programma nulla oltre il giorno prima dell'esame**. Le carte nuove sono introdotte solo per argomenti già studiati. |
 | Quiz | Errori recenti per primi, argomenti alternati (interleaving). Risposte aperte: spunti i punti della rubrica o chiedi la correzione all'AI. |
-| Simulazione | Quiz a tempo con correzione **differita**, come all'esame. |
+| Simulazione | Con le prove degli anni passati: una prova vera a tempo, senza appunti, corretta da Claude o da te. Senza: quiz a tempo con correzione **differita**. |
 | Spiega a parole tue | Per scritto aperto/orale: spieghi senza appunti e confronti con i punti chiave. «Simulazione orale» sceglie 3 argomenti pesati per importanza. |
 | Progressi | Stima di preparazione per argomento (flashcard solide + quiz), con i punti dove conviene lavorare. |
 
@@ -174,6 +193,9 @@ una prima lettura guidata e da esempi svolti (expertise reversal); con pochi gio
 - **Ricerca online**: la qualità dipende da ciò che il web offre sul tuo corso; dispense del tuo docente battono qualsiasi ricerca.
 - **Privacy**: i dati restano nel browser (IndexedDB). Il testo dei materiali viene inviato al server locale e da lì all'API di
   Anthropic solo quando generi un modulo, cerchi online o fai correggere una risposta.
+- **Esami passati**: la correzione di Claude è una stima, non il voto del tuo docente (che può pesare diversamente procedimento e
+  risultato); con le foto, una cattiva lettura della calligrafia pesa sulla correzione, per questo la trascrizione si controlla prima.
+  La frequenza degli argomenti su poche prove è rumorosa, e prove di un altro docente o di un programma vecchio possono ingannare.
 - **Modalità base** (senza chiave API): argomenti e flashcard ricavati euristicamente dalle definizioni nei tuoi appunti testuali; niente quiz, PDF, né ricerca.
 - Un solo utente per browser, nessun account né sincronizzazione (usa «Dati → Esporta backup»).
 
@@ -196,7 +218,8 @@ server/           index.js (HTTP, job asincroni, sicurezza) · ai.js (Anthropic 
 shared/           prompts.js, normalize.js: usati sia dal server sia dalla pagina Claude (nessuna dipendenza)
 artifact/         versione pagina Claude: generate.js (sample), backend.js (db), api.js, entry.js, template, fake-claude (prove)
 scripts/          build-artifact.mjs (esbuild)
-public/js/        logica pura (testata): dates, methods, srs, planner, progress, local-builder, tabular (CSV/xlsx), importers, timetable
+public/js/        logica pura (testata): dates, methods, srs, planner, progress, local-builder, tabular (CSV/xlsx), importers, timetable,
+                  lessons (lezioni e prove), past-exams (prove, frequenze, voto)
                   stato/UI: store (IndexedDB), domain, api, ui, views/*
 public/demo/      modulo demo (Microeconomia)
 test/             node --test: logica pura + client AI con SDK simulato

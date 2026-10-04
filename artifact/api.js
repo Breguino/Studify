@@ -1,6 +1,6 @@
 // Sostituisce public/js/api.js nella versione pubblicata come pagina Claude: stessa interfaccia,
 // ma le chiamate vanno a Claude (capability `sample`) invece che al server.
-import { examFormatFromText, extendModule, transcribePages, writeDispensa, generateModule, generateNotes, getSample, gradeAnswer, importRows, parseCurriculum } from "./generate.js";
+import { analyzePastExams, gradeExam, examFormatFromText, extendModule, transcribePages, writeDispensa, generateModule, generateNotes, getSample, gradeAnswer, importRows, parseCurriculum } from "./generate.js";
 
 export async function status() {
   const sample = await getSample();
@@ -15,6 +15,8 @@ export async function runJob(path, body, onProgress = () => {}) {
   if (path === "/api/exam-format-text") return examFormatFromText(body, onProgress);
   if (path === "/api/transcribe") return { pages: await transcribePages(body, onProgress) }; // stessa forma del server
   if (path === "/api/dispensa") return writeDispensa(body, onProgress);
+  if (path === "/api/past-exams") return analyzePastExams(body, onProgress);
+  if (path === "/api/grade-exam") return gradeExam(body, onProgress);
   if (path === "/api/research") return generateNotes(body, onProgress);
   if (path === "/api/parse-curriculum") return parseCurriculum(body, onProgress);
   if (path === "/api/import-rows") return importRows(body, onProgress);

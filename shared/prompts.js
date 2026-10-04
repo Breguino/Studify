@@ -62,10 +62,14 @@ export const MODULE_PRINCIPLES = `Principi inderogabili:
 7. TIPI DI MATERIALE (indicati dal tag o dal titolo del documento):
    - appunti: ciò che il docente ha spiegato e sottolineato a lezione → usali soprattutto per decidere l'importanza degli argomenti;
    - libro e dispense: la fonte per definizioni, dimostrazioni e approfondimenti;
-   - esercizi (eserciziari, temi d'esame, esercitazioni): NON trasformarli in flashcard. Ti dicono che cosa chiede l'esame (alza
+   - esercizi (eserciziari, esercitazioni): NON trasformarli in flashcard. Ti dicono che cosa chiede l'esame (alza
      l'importanza degli argomenti su cui vertono) e sono il modello delle domande kind="problem": stesso tipo di esercizio, con
      svolgimento passo-passo in modelAnswer. Se la soluzione è nei materiali, seguila; se non c'è, risolvilo tu e scrivi in
      explanation "Svolgimento non presente nei materiali: verificalo".
+   - temi d'esame (prove degli appelli passati): sono la prova più diretta di cosa chiede l'esame. Alza l'importanza degli argomenti
+     che ricorrono e modella domande e esercizi sul loro stile (tipo di richiesta, livello, formulazione). NON copiarli nel quiz e
+     non farne flashcard: lo studente li tiene per le simulazioni a tempo. Crea esercizi dello stesso tipo con dati e contesto diversi.
+     Se l'attributo anno indica prove vecchie, docente e programma potrebbero essere cambiati.
    - sbobine (trascrizioni delle lezioni fatte da studenti, parlato): dicono come il docente spiega e su cosa insiste → importanza
      e mustKnow. Ignora battute, ripetizioni, avvisi organizzativi. Possono avere errori di trascrizione (termini tecnici, formule,
      numeri capiti male): se contrastano con libro o dispense vale il libro, e segnalalo in "gaps". Se l'attributo anno indica un anno
@@ -184,13 +188,13 @@ evidence = la frase sulla modalità d'esame COPIATA alla lettera dal testo (max 
 details = in breve durata, parti, prove intermedie, orale facoltativo. caveats: differenze tra docenti/canali, anno accademico vecchio, dubbi.`;
 
 /** Tag con cui ogni tipo di materiale testuale entra nel prompt. */
-export const MATERIAL_TAG = { appunti: "appunti_studente", libro: "libro", dispense: "dispense", esercizi: "esercizi", sbobine: "sbobina", altro: "materiale" };
-export const MATERIAL_LABEL = { appunti: "Appunti", libro: "Libro", dispense: "Dispense", esercizi: "Esercizi", sbobine: "Sbobine", altro: "Materiale" };
+export const MATERIAL_TAG = { appunti: "appunti_studente", libro: "libro", dispense: "dispense", esercizi: "esercizi", esami: "temi_esame", sbobine: "sbobina", altro: "materiale" };
+export const MATERIAL_LABEL = { appunti: "Appunti", libro: "Libro", dispense: "Dispense", esercizi: "Esercizi", esami: "Temi d'esame", sbobine: "Sbobine", altro: "Materiale" };
 
 /** Blocco di testo di un materiale per il prompt (pagine indicate se è un estratto). */
 export function materialText(m) {
   const tag = MATERIAL_TAG[m.role] ?? MATERIAL_TAG.appunti;
-  const pages = m.pages ? ` ${m.unit === "lezioni" ? "lezioni" : "pagine"}="${m.pages}"` : "";
+  const pages = m.pages ? ` ${m.unit === "lezioni" ? "lezioni" : m.unit === "prove" ? "prove" : "pagine"}="${m.pages}"` : "";
   const hand = m.handwritten ? ` scritti_a_mano="sì"` : "";
   const year = m.year ? ` anno="${String(m.year).replace(/"/g, "")}"` : "";
   return `<${tag} titolo="${String(m.title ?? "").replace(/"/g, "'")}"${pages}${year}${hand}>\n${m.text}\n</${tag}>`;
@@ -199,6 +203,13 @@ export function materialText(m) {
 /** Istruzione aggiuntiva quando tra i materiali ci sono esercizi. */
 export const EXERCISES_TASK = `- Ci sono materiali di tipo esercizi: almeno metà delle domande siano kind="problem" modellate su quegli esercizi (stesso tipo, dati diversi
   o gli stessi esercizi se sono tipici d'esame), distribuite sugli argomenti a cui si riferiscono.`;
+
+/** Istruzione aggiuntiva quando tra i materiali ci sono temi d'esame passati. */
+export const EXAMS_TASK = `- Ci sono temi d'esame passati: le domande imitino il loro stile (per gli esercizi kind="problem" con dati diversi, mai copiati), e gli
+  argomenti che vi ricorrono abbiano importance 3. I temi d'esame restano intatti per le simulazioni.`;
+
+/** Il compito aggiuntivo per i tipi di materiale presenti. */
+export const practiceTasks = (roles) => [roles.includes("esercizi") ? EXERCISES_TASK : "", roles.includes("esami") ? EXAMS_TASK : ""].filter(Boolean).join("\n");
 
 /** Per le risposte JSON scritte come testo (pagina Claude): i backslash del LaTeX vanno raddoppiati, altrimenti \frac diventa un carattere di controllo. */
 export const JSON_LATEX_RULE = String.raw`Nel JSON ogni backslash del LaTeX va scritto doppio: "$\\frac{a}{b}$", "$\\beta_1$" (un solo backslash, come in "\frac", nel JSON diventa un carattere di controllo).`;
@@ -254,6 +265,8 @@ Regole:
   materiali manca, aggiungilo in un riquadro «> Integrazione (non è nei tuoi materiali): …». Non inventare dati, esempi d'esame o citazioni.
 - FONTI. Dopo i passaggi importanti indica tra parentesi quadre da dove vengono: [Libro p. 45], [Slide 12], [Sbobine, lez. 3],
   [Appunti]. Se due fonti dicono cose diverse, scrivilo: «> Attenzione: le sbobine dicono…, il libro…».
+- TEMI D'ESAME passati: non risolverli e non copiarli nella dispensa (lo studente li usa per le simulazioni a tempo); puoi dire che tipo
+  di esercizio chiedono sull'argomento («Negli appelli: calcolo dell'elasticità da una funzione di domanda»).
 - SBOBINE: togli il parlato (ripetizioni, battute, avvisi) e tieni la spiegazione; i termini o le formule sospette vanno controllati
   sulle altre fonti. Le parole segnate «[?]» negli appunti a mano sono letture incerte: non basarci la spiegazione.
 - FORMULE in LaTeX compatibile con KaTeX: $...$ nel testo, $$...$$ su una riga a sé (con una riga vuota prima e dopo). Mai formule in testo
@@ -286,4 +299,64 @@ Non scrivere il titolo del capitolo (lo aggiunge l'app) e niente prima della pri
 export function splitChapter(text) {
   const [body, ...rest] = String(text ?? "").split(/^\s*=== SOLUZIONI ===\s*$/m);
   return { body: body.trim(), solutions: rest.join("\n").trim() };
+}
+
+
+/* --------------------------- esami degli anni passati --------------------------- */
+
+/** Analisi delle prove d'esame passate: cosa chiedono, collegato agli argomenti del modulo. */
+export const PAST_EXAMS_RULES = `Analizzi le PROVE D'ESAME PASSATE di un insegnamento (ognuna in <prova id="P1" …>, o come PDF allegato con il titolo «P1 — …»)
+per capire che cosa chiede l'esame. Non risolvere gli esercizi.
+${SAFETY_RULES}
+- papers: una voce per ogni prova, con lo stesso id. label = appello o data se si leggono (es. "Appello del 12/01/2024"), altrimenti "".
+  year = anno a 4 cifre o "". durationMin = durata indicata nella prova, in minuti (0 se non c'è). hasSolutions = true se contiene le soluzioni.
+  items: un elemento per ogni esercizio o domanda, nell'ordine (n = numerazione della prova, es. "1", "2b"; se non numerata "1", "2"…);
+  summary = che cosa chiede, in una frase tua (max 160 caratteri, non copiare il testo); topicIds = id degli argomenti del modulo che
+  servono per svolgerlo (anche più di uno; [] se nessuno); kind = "esercizio" (calcolo o problema), "teoria" (domanda aperta, definizione,
+  dimostrazione), "test" (risposta multipla, vero/falso), "altro"; points = punti indicati nella prova, 0 se non ci sono.
+- structure: com'è fatta di solito la prova (durata, numero e tipo di esercizi, punteggi, teoria sì/no), 2-4 frasi.
+- recurring: i tipi di esercizio che si ripetono in più prove: pattern = descrizione concreta (es. "calcolo dell'elasticità da una funzione
+  di domanda lineare"), topicId = argomento principale ("" se nessuno), paperIds = id delle prove in cui compare (almeno 2).
+- uncovered: argomenti chiesti nelle prove che il modulo non copre (frasi brevi).
+- caveats: avvertenze concrete (prove molto vecchie o di un altro docente, programmi diversi tra le prove, prove incomplete o illeggibili).`;
+
+/** Testo della richiesta di analisi (le prove in PDF sono allegate a parte, qui solo nominate). */
+export function pastExamsPrompt({ exam, topics, papers }) {
+  const list = topics.map((t) => `${t.id}: ${t.title}`).join("\n");
+  const texts = papers.map((p) => (p.text != null
+    ? `<prova id="${p.id}" titolo="${String(p.label).replace(/"/g, "'")}">\n${p.text}\n</prova>`
+    : `<prova id="${p.id}" titolo="${String(p.label).replace(/"/g, "'")}">(PDF allegato «${p.id} — ${p.label}»)</prova>`)).join("\n\n");
+  return `${examContext(exam)}
+
+Argomenti del modulo di studio (id: titolo):
+${list}
+
+${texts}`;
+}
+
+/** Correzione di una simulazione d'esame (una prova vera svolta a tempo, senza appunti). */
+export const EXAM_GRADE_RULES = String.raw`Sei il docente che CORREGGE LA PROVA scritta di uno studente: il testo della prova è in <prova> (o nel PDF allegato), lo
+svolgimento in <svolgimento>, scritto a tempo e senza appunti (se trascritto da foto, «[?]» segna una parola letta con incertezza).
+${SAFETY_RULES}
+- items: un elemento per ogni esercizio o domanda della prova, nell'ordine (n = numerazione della prova; task = cosa chiede, in breve).
+- maxPoints: i punti indicati nella prova; se non ci sono, distribuisci 30 punti tra gli esercizi in proporzione a difficoltà e lunghezza.
+- points: con i criteri di un esame vero (risultato, procedimento, giustificazioni, notazione): un esercizio impostato bene con un errore
+  di calcolo prende punti parziali; non svolto = 0, verdict "non svolto". Non premiare la lunghezza: conta la correttezza.
+- Se nella prova ci sono le soluzioni del docente, usale come riferimento; altrimenti risolvi tu ogni esercizio prima di correggerlo.
+- Le letture incerte «[?]» non vanno penalizzate se il resto è coerente; in readingIssues indica dove la trascrizione impedisce di valutare.
+- feedback: 1-3 frasi per esercizio rivolte allo studente: cosa va bene, dov'è l'errore, come si fa. Formule in LaTeX tra $...$.
+- topicId: l'argomento del modulo a cui si riferisce l'esercizio (tra gli id elencati), "" se nessuno.
+- overall: 2-3 frasi sulla prova. priorities: 2-4 cose da sistemare prima della prossima simulazione, in ordine di importanza.`;
+
+export function examGradePrompt({ exam, topics, paper, answer, minutes }) {
+  return `${examContext(exam)}
+${minutes ? `Tempo impiegato dallo studente: ${minutes} minuti${paper.durationMin ? ` (durata della prova: ${paper.durationMin})` : ""}.\n` : ""}
+Argomenti del modulo (id: titolo):
+${topics.map((t) => `${t.id}: ${t.title}`).join("\n")}
+
+${paper.text != null ? `<prova titolo="${String(paper.label).replace(/"/g, "'")}">\n${paper.text}\n</prova>` : `La prova è il PDF allegato («${paper.label}»).`}
+
+<svolgimento>
+${answer}
+</svolgimento>`;
 }

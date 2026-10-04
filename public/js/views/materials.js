@@ -10,7 +10,9 @@ import { addRange, applyUpdate, compactModule, markSent, mathyPages, parseRange,
 import { officeText } from "../office-text.js";
 import { extractPdfPages } from "../pdf-pages.js";
 import { readPdf } from "../pdf-text.js";
-import { guessRole, roleOf, ROLES } from "../material-roles.js";
+import { guessRole, isPractice, roleOf, ROLES } from "../material-roles.js";
+import { applyExamBoost, papersOf, parseStarts, preparePapers } from "../past-exams.js";
+import { paperStartsOf } from "../lessons.js";
 import * as store from "../store.js";
 import { fmtDate, today } from "../dates.js";
 import { richParas } from "../math.js";
@@ -79,7 +81,7 @@ async function addFiles(exam, files) {
         const scanned = text.replace(/\f/g, "").trim().length < 80;
         if (scanned && !core.pdfPageImages) toast(`«${file.name}»: PDF senza testo selezionabile (scansione): incolla il testo a mano.`, "error");
         else {
-          exam.materials.push({ id: uid(), kind: "notes", role: guessRole(file.name, true), title: `${name} (da PDF)`, text: scanned ? Array(pages).fill("").join("\f") : text, size: text.length, numPages: pages, fromPdf: true, pdfFileId, fileName: file.name, addedAt: now() });
+          exam.materials.push(structure({ id: uid(), kind: "notes", role: guessRole(file.name, true), title: `${name} (da PDF)`, text: scanned ? Array(pages).fill("").join("\f") : text, size: text.length, numPages: pages, fromPdf: true, pdfFileId, fileName: file.name, addedAt: now() }));
           if (scanned) toast(`«${file.name}» è una scansione: scegli le pagine e usa «Leggi formule e testo con Claude».`);
         }
       } catch (e) {
@@ -99,13 +101,15 @@ async function addFiles(exam, files) {
       } catch {
         /* il conteggio serve solo a scegliere le pagine */
       }
-      exam.materials.push({ id: uid(), kind: "pdf", role: guessRole(file.name, true), title: name, fileId, size: file.size, numPages, addedAt: now() });
+      const m = { id: uid(), kind: "pdf", role: guessRole(file.name, true), title: name, fileId, size: file.size, numPages, addedAt: now() };
+      exam.materials.push(m);
+      if (m.role === "esami") await findPdfPapers(m);
       pdfTotal += file.size;
     } else if (/\.(docx|pptx)$/i.test(file.name)) {
       try {
         const { text, pages } = await officeText(await file.arrayBuffer(), file.name);
         if (text.replace(/\f/g, "").trim().length < 20) toast(`«${file.name}»: nessun testo trovato (solo immagini?).`, "error");
-        else exam.materials.push(withLessons({ id: uid(), kind: "notes", role: guessRole(file.name, /\.pptx$/i.test(file.name)), title: name, text, size: text.length, numPages: pages || undefined, addedAt: now() }));
+        else exam.materials.push(structure({ id: uid(), kind: "notes", role: guessRole(file.name, /\.pptx$/i.test(file.name)), title: name, text, size: text.length, numPages: pages || undefined, addedAt: now() }));
       } catch (e) {
         toast(`«${file.name}»: ${e.message}`, "error");
       }
@@ -113,7 +117,7 @@ async function addFiles(exam, files) {
       toast(`«${file.name}»: il vecchio formato Office non è supportato. Salvalo come .docx/.pptx o PDF.`, "error");
     } else if (/\.(txt|md|markdown)$/i.test(file.name) || file.type.startsWith("text/")) {
       const text = await readFileAs(file, "text");
-      exam.materials.push(withLessons({ id: uid(), kind: "notes", role: guessRole(file.name), title: name, text, size: text.length, addedAt: now() }));
+      exam.materials.push(structure({ id: uid(), kind: "notes", role: guessRole(file.name), title: name, text, size: text.length, addedAt: now() }));
     } else toast(`«${file.name}»: formato non supportato (usa .pdf, .docx, .pptx, .txt o .md).`, "error");
   }
   store.save();
@@ -125,6 +129,7 @@ async function removeMaterial(exam, m) {
   if (m.pdfFileId) await store.delFile(m.pdfFileId);
   for (const id of m.imageIds ?? []) await store.delFile(id);
   exam.materials = exam.materials.filter((x) => x.id !== m.id);
+  if (roleOf(m) === "esami" && exam.module) { applyExamBoost(exam); exam.plan = null; } // senza quelle prove la frequenza cambia
   store.save();
   core.rerender();
 }
@@ -135,6 +140,50 @@ function withLessons(m) {
   const r = splitLessons(m.text);
   if (r) Object.assign(m, { text: r.text, numPages: r.sections.length, sections: r.sections, unit: "lezioni" });
   return m;
+}
+
+/** Esami passati: un file con più prove diviso per prova; gli altri documenti lunghi divisi per lezione. */
+const structure = (m) => (roleOf(m) === "esami" ? preparePapers(m) : withLessons(m));
+
+/** PDF di esami passati (versione con server): dal testo delle pagine si trova dove inizia ogni prova. */
+async function findPdfPapers(m) {
+  if (m.paperStarts || !(m.numPages > 1)) return;
+  try {
+    const data = await store.getFile(m.fileId);
+    const { pages } = await readPdf(Uint8Array.from(atob(data), (c) => c.charCodeAt(0)), { maxPages: 300 });
+    const texts = pages.map((p) => {
+      const lines = new Map();
+      for (const it of p.items) { const y = Math.round(it.y / 3); lines.set(y, [...(lines.get(y) ?? []), it]); }
+      return [...lines.entries()].sort((a, b) => b[0] - a[0]).map(([, its]) => its.sort((a, b) => a.x - b.x).map((i) => i.str).join(" ")).join("\n");
+    });
+    const r = paperStartsOf(texts);
+    if (r) Object.assign(m, { paperStarts: r.starts, paperLabels: r.labels });
+  } catch {
+    /* PDF scansionato o illeggibile: le prove si indicano a mano */
+  }
+}
+
+/** Esami passati: quante prove, dove iniziano (modificabile), e a cosa servono. */
+function papersRow(exam, m) {
+  if (roleOf(m) !== "esami") return null;
+  const papers = papersOf(m);
+  const paged = m.numPages > 1 && m.unit !== "prove";
+  const starts = paged ? h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400, flexWrap: "wrap" } },
+    `Dove inizia ogni prova (${m.imageIds ? "foto" : m.fileId || m.fromPdf ? "pagine" : "slide"})`,
+    h("input", { class: "paper-starts", value: (m.paperStarts ?? [1]).join(", "), placeholder: "es. 1, 4, 7", "aria-label": `Pagine dove inizia ogni prova (${m.title})`, style: { width: "130px", padding: "4px 8px" },
+      onchange: (e) => {
+        const v = parseStarts(e.target.value, m.numPages);
+        if (v) { m.paperStarts = v; m.paperLabels = null; } else delete m.paperStarts;
+        store.save();
+        rerenderSoon();
+      } })) : null;
+  return h("div", { class: "stack small", style: { gap: "4px" } },
+    h("div", { class: "row", style: { gap: "8px", alignItems: "center" } },
+      badge(`${papers.length} ${papers.length === 1 ? "prova" : "prove"}`, "brand"),
+      h("span", { class: "muted" }, papers.slice(0, 4).map((p) => p.label).join(" · ") + (papers.length > 4 ? ` · … (altre ${papers.length - 4})` : "")),
+      h("a", { href: `#/exam/${exam.id}/esami` }, "Simula →")),
+    starts,
+    h("div", { class: "muted" }, "Le prove vere non diventano flashcard né domande del quiz: le tieni intatte per le simulazioni a tempo. Il modulo ne imita lo stile con esercizi nuovi."));
 }
 
 /** Testo mandato all'AI, per verificare che le citazioni del docente ci siano davvero. */
@@ -207,7 +256,7 @@ async function update(exam) {
 
 function updateLocal(exam) {
   const pending = pendingMaterials(exam);
-  const text = pending.filter((m) => m.kind === "notes" && roleOf(m) !== "esercizi").map((m) => sliceText(m.text, unsentPages(m))).join("\n\n");
+  const text = pending.filter((m) => m.kind === "notes" && !isPractice(m)).map((m) => sliceText(m.text, unsentPages(m))).join("\n\n");
   if (!text.trim()) return toast("La modalità base usa solo appunti testuali (non PDF).", "error");
   const delta = { ...localDelta(text, "Appunti nuovi"), examHints: localHints(pending, unsentPages) };
   toast(updateSummary(applyUpdate(exam, { delta, mode: "local" }, pending.map((m) => m.id), undefined, { sentText: pending.map((m) => m.text).join("\n") })), "ok");
@@ -217,7 +266,7 @@ function updateLocal(exam) {
 }
 
 function generateLocal(exam) {
-  const text = exam.materials.filter((m) => m.kind === "notes" && roleOf(m) !== "esercizi").map((m) => sliceText(m.text, m.pages)).join("\n\n");
+  const text = exam.materials.filter((m) => m.kind === "notes" && !isPractice(m)).map((m) => sliceText(m.text, m.pages)).join("\n\n");
   if (!text.trim()) return toast("La modalità base funziona solo con appunti testuali (non PDF).", "error");
   const mod = buildLocalModule(text, exam.name);
   if (!mod.topics.length) return toast("Non ho trovato argomenti: aggiungi titoli (#, 1., MAIUSCOLO) agli appunti.", "error");
@@ -442,7 +491,7 @@ async function transcribe(exam, m, r, data) {
 /** «Pagine 45–120 di 380»: per libri e slide si sceglie la parte da usare (vuoto = tutte). */
 function pagePicker(m) {
   const r = parseRange(m.pages, m.numPages);
-  const unit = m.unit === "lezioni" ? "lezioni" : m.imageIds ? "foto" : m.fileId || m.fromPdf || m.title.endsWith("(da PDF)") ? "pagine" : "slide";
+  const unit = m.unit === "lezioni" || m.unit === "prove" ? m.unit : m.imageIds ? "foto" : m.fileId || m.fromPdf || m.title.endsWith("(da PDF)") ? "pagine" : "slide";
   const num = (v, label) => h("input", { type: "number", min: 1, max: m.numPages, value: v ?? "", placeholder: label, "aria-label": `${label} (${m.title})`, style: { width: "78px", padding: "4px 8px" },
     onchange: (e) => {
       const box = e.target.parentElement.querySelectorAll("input");
@@ -454,7 +503,7 @@ function pagePicker(m) {
     } });
   const count = r ? r.to - r.from + 1 : m.numPages;
   return h("label", { class: "small muted page-pick", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } },
-    { pagine: "Pagine", slide: "Slide", foto: "Foto", lezioni: "Lezioni" }[unit], num(r?.from, "da"), "–", num(r?.to, "a"), `di ${m.numPages}`,
+    { pagine: "Pagine", slide: "Slide", foto: "Foto", lezioni: "Lezioni", prove: "Prove" }[unit], num(r?.from, "da"), "–", num(r?.to, "a"), `di ${m.numPages}`,
     h("span", {}, r ? ` · ne uso ${count}` : " · tutte"),
     m.sections ? h("span", { class: "lesson-names" }, ` (${r ? (r.from === r.to ? m.sections[r.from - 1] : `${m.sections[r.from - 1]} → ${m.sections[r.to - 1]}`) : `${m.sections[0]} → ${m.sections.at(-1)}`})`) : null,
     m.kind === "notes" ? h("span", {}, ` (${chars(sliceText(m.text, m.pages).length)})`) : null);
@@ -472,10 +521,10 @@ export function materialsTab(exam) {
   const paste = h("form", { class: "stack", onsubmit: (e) => {
     e.preventDefault();
     if (!text.value.trim()) return toast("Incolla del testo.", "error");
-    exam.materials.push(withLessons({ id: uid(), kind: "notes", role: pasteRole.value, title: title.value.trim() || `${ROLES[pasteRole.value].replace(/ \(.*\)$/, "")} ${exam.materials.length + 1}`, text: text.value, size: text.value.length, addedAt: now() }));
+    exam.materials.push(structure({ id: uid(), kind: "notes", role: pasteRole.value, title: title.value.trim() || `${ROLES[pasteRole.value].replace(/ \(.*\)$/, "")} ${exam.materials.length + 1}`, text: text.value, size: text.value.length, addedAt: now() }));
     store.save();
     core.rerender();
-  } }, h("h3", {}, "Incolla appunti, esercizi o parti di libro"), h("div", { class: "row", style: { gap: "8px", flexWrap: "nowrap" } }, title, pasteRole), text, h("div", {}, h("button", { class: "btn", type: "submit" }, "Aggiungi")));
+  } }, h("h3", {}, "Incolla appunti, esercizi, temi d'esame o parti di libro"), h("div", { class: "row", style: { gap: "8px", flexWrap: "nowrap" } }, title, pasteRole), text, h("div", {}, h("button", { class: "btn", type: "submit" }, "Aggiungi")));
 
   /* --- carica file --- */
   const input = h("input", { type: "file", multiple: true, accept: `${core.ai.pdf === false && !core.pdfText ? "" : ".pdf,application/pdf,"}.docx,.pptx,.txt,.md,.markdown,text/plain,image/*,.heic`, hidden: true });
@@ -495,7 +544,7 @@ export function materialsTab(exam) {
   input.addEventListener("change", () => addFiles(exam, [...input.files]));
   const drop = h("div", { class: "file-drop", tabindex: 0, role: "button", onclick: () => input.click(), onkeydown: (e) => (e.key === "Enter" || e.key === " ") && input.click(),
     ondragover: (e) => e.preventDefault(), ondrop: (e) => { e.preventDefault(); addFiles(exam, [...e.dataTransfer.files]); } },
-    h("b", {}, "Carica libro, dispense, slide, esercizi"), h("div", { class: "small" }, core.ai.pdf === false
+    h("b", {}, "Carica libro, dispense, slide, esercizi, esami passati"), h("div", { class: "small" }, core.ai.pdf === false
       ? (core.pdfText ? ".pdf, .docx, .pptx, .txt, .md: di un PDF si legge il testo (le scansioni no; le formule possono uscire male)" : ".docx, .pptx, .txt o .md (i PDF non sono supportati qui: copia il testo e incollalo)")
       : ".pdf (anche scansioni e formule: il PDF viene letto dall'AI), .docx, .pptx, .txt, .md, foto"),
       h("div", { class: "small muted" }, "Di un libro scegli poi le pagine dei capitoli del programma."), input);
@@ -538,12 +587,13 @@ export function materialsTab(exam) {
         h("div", { class: "card flat" },
           h("div", { class: "row between" }, h("div", {}, h("b", {}, m.title), " ", badge(KIND[m.kind], m.kind === "web" ? "brand" : ""), " ", isPending.has(m.id) ? badge("non ancora nel modulo", "warn") : null, " ", h("span", { class: "muted small" }, kb(m.size)),
               m.kind !== "web" ? h("div", { class: "row", style: { gap: "6px", marginTop: "4px" } }, h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Tipo",
-                h("select", { class: "role-select", "aria-label": `Tipo di ${m.title}`, onchange: (e) => { m.role = e.target.value; if (m.role === "sbobine") withLessons(m); store.save(); rerenderSoon(); } },
+                h("select", { class: "role-select", "aria-label": `Tipo di ${m.title}`, onchange: async (e) => { m.role = e.target.value; if (m.role === "sbobine") withLessons(m); if (m.role === "esami") { if (m.kind === "pdf") await findPdfPapers(m); else preparePapers(m); } store.save(); rerenderSoon(); } },
                   Object.entries(ROLES).map(([k, t]) => h("option", { value: k, selected: roleOf(m) === k }, t)))),
                 roleOf(m) === "sbobine" ? h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Anno accademico",
                   h("input", { class: "sbobina-year", value: m.year ?? "", placeholder: "es. 2025-26", "aria-label": `Anno accademico di ${m.title}`, style: { width: "100px", padding: "4px 8px" }, onchange: (e) => { m.year = e.target.value.trim(); store.save(); } })) : null,
                 m.numPages > 1 ? pagePicker(m) : null) : null,
               roleOf(m) === "sbobine" ? h("div", { class: "small muted" }, "Sbobine: le frasi del docente sull'esame finiscono nel modulo (verificate sul testo). Possono contenere errori di trascrizione su termini e formule, e se sono di un altro anno docente e programma potrebbero essere cambiati.") : null,
+              papersRow(exam, m),
               m.kind === "notes" ? (m.handwritten ? handwrittenRow(exam, m) : formulaRow(exam, m)) : null),
             h("button", { class: "btn small danger", onclick: () => removeMaterial(exam, m), "aria-label": `Rimuovi ${m.title}` }, "Rimuovi")),
           m.kind === "web" ? h("details", {}, h("summary", { class: "small" }, m.generated ? "Anteprima (bozza dalla conoscenza di Claude, senza fonti)" : `Anteprima e ${m.sources.length} fonti`),

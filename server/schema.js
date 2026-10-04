@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { FORMATS, KINDS, LEVELS } from "../shared/normalize.js";
 
-export { normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeImportRows, normalizeModule, quoteChecker, repairLatex } from "../shared/normalize.js";
+export { normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex } from "../shared/normalize.js";
 
 // Schema del "modulo di studio" generato dall'AI. Tutti i campi sono obbligatori
 // (gli output strutturati non gestiscono bene i campi opzionali): dove un campo
@@ -101,4 +101,36 @@ export const ExamFormatSchema = z.object({
   academicYear: z.string(),
   teacher: z.string(),
   caveats: z.array(z.string()),
+});
+
+// Analisi delle prove d'esame passate (una voce per prova, esercizi collegati agli argomenti del modulo).
+export const PastExamsSchema = z.object({
+  papers: z.array(z.object({
+    id: z.string(),
+    label: z.string(),
+    year: z.string(),
+    durationMin: z.number(),
+    hasSolutions: z.boolean(),
+    items: z.array(z.object({ n: z.string(), summary: z.string(), topicIds: z.array(z.string()), kind: z.enum(["esercizio", "teoria", "test", "altro"]), points: z.number() })),
+  })),
+  structure: z.string(),
+  recurring: z.array(z.object({ pattern: z.string(), topicId: z.string(), paperIds: z.array(z.string()) })),
+  uncovered: z.array(z.string()),
+  caveats: z.array(z.string()),
+});
+
+// Correzione di una simulazione d'esame.
+export const ExamGradeSchema = z.object({
+  items: z.array(z.object({
+    n: z.string(),
+    task: z.string(),
+    maxPoints: z.number(),
+    points: z.number(),
+    verdict: z.enum(["corretto", "parziale", "errato", "non svolto"]),
+    feedback: z.string(),
+    topicId: z.string(),
+  })),
+  overall: z.string(),
+  priorities: z.array(z.string()),
+  readingIssues: z.array(z.string()),
 });

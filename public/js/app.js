@@ -12,6 +12,7 @@ import { profileView } from "./views/profile.js";
 import { hubView, topicView } from "./views/hub.js";
 import { flashView } from "./views/flash.js";
 import { explainView, quizView } from "./views/quiz.js";
+import { simView } from "./views/sim.js";
 
 const main = document.getElementById("main");
 
@@ -36,6 +37,7 @@ function route() {
       case "quiz": return quizView(exam, query);
       case "explain": return explainView(exam, c, query);
       case "topic": return topicView(exam, c, query);
+      case "sim": return simView(exam, query);
       case "edit": return examFormView(exam);
       default: return hubView(exam, b || "today");
     }
