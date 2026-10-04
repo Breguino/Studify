@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODEL, aiConfigured, buildModule, curriculum, degrees, examFormat, examFormatFromText, extendModule, transcribe, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
+import { MODEL, aiConfigured, buildModule, curriculum, degrees, examFormat, examFormatFromText, extendModule, transcribe, writeDispensa, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
 import { findExamHints, localDelta } from "../public/js/local-builder.js";
 import { formatFromSyllabus } from "../public/js/exam-type.js";
 import { IMPORT_HEADERS } from "../shared/prompts.js";
@@ -31,9 +31,9 @@ const jobs = new Map();
 
 function startJob(kind, fn) {
   const id = randomUUID();
-  const job = { id, kind, status: "running", chars: 0, startedAt: Date.now(), result: null, error: null };
+  const job = { id, kind, status: "running", chars: 0, startedAt: Date.now(), result: null, error: null, partial: null };
   jobs.set(id, job);
-  fn((n) => (job.chars += n))
+  fn((n) => (job.chars += n), (p) => (job.partial = p)) // partial: risultati parziali (es. capitoli già pronti)
     .then((result) => Object.assign(job, { status: "done", result }))
     .catch((e) => {
       console.error(`[job ${kind}]`, e?.message);
@@ -56,6 +56,20 @@ async function mockRun(onProgress, result) {
     onProgress(900);
   }
   return result;
+}
+
+/** Demo: capitoli costruiti dal riassunto dell'argomento (nessuna AI), con una formula, una citazione e le soluzioni. */
+async function mockDispensa({ topics, solutions }, onProgress, onPartial) {
+  const chapters = [];
+  for (const [k, t] of topics.entries()) {
+    await sleep(250);
+    onProgress(800);
+    const quote = t.hints[0] ? `### Il docente ha detto\n> «${t.hints[0].quote}» (${t.hints[0].source})\n\n` : "";
+    chapters.push({ topicId: t.id, title: t.title, body: `### Spiegazione\n${t.summary || "Testo del capitolo (demo)."} [Appunti]\n\n### Formule e definizioni chiave\n- Elasticità al prezzo: $$\\varepsilon_P=\\left|\\frac{\\Delta\\%Q}{\\Delta\\%P}\\right|$$\n\n${quote}### Errori da evitare\n- Confondere **movimento lungo** la curva e **spostamento** della curva.\n\n### Mettiti alla prova\n1. Spiega ${t.title.toLowerCase()} con un esempio.\n2. Se il prezzo sale del 10% e la quantità scende del 5%, quanto vale $\\varepsilon_P$?`,
+      solutions: solutions ? `1. Vedi la spiegazione.\n2. $\\varepsilon_P=\\frac{5}{10}=0{,}5$: domanda anelastica.` : "" });
+    onPartial({ chapters: [...chapters], done: k + 1, total: topics.length });
+  }
+  return { chapters };
 }
 
 /** Demo: una trascrizione finta per pagina (con una parola incerta negli appunti a mano). */
@@ -115,6 +129,30 @@ function sameOriginOk(req) {
 
 const str = (v, max = 500) => (typeof v === "string" ? v.slice(0, max) : "");
 
+/** Materiali e ricerca online come li manda il browser (moduli e dispensa). */
+function parseMaterials(body) {
+  const materials = (Array.isArray(body.materials) ? body.materials : []).slice(0, 40).map((m) => ({
+    kind: ["pdf", "notes", "web"].includes(m.kind) ? m.kind : "notes",
+    role: ["appunti", "libro", "dispense", "esercizi", "sbobine", "altro"].includes(m.role) ? m.role : "appunti",
+    unit: m.unit === "lezioni" ? "lezioni" : "pagine",
+    year: str(m.year, 20),
+    pages: /^\d{1,4}-\d{1,4}$/.test(m.pages ?? "") ? m.pages : "",
+    handwritten: !!m.handwritten,
+    title: str(m.title, 200) || "Appunti",
+    text: str(m.text, 2_000_000),
+    data: m.kind === "pdf" && typeof m.data === "string" ? m.data : "",
+  }));
+  const research = body.research && typeof body.research.notes === "string"
+    ? {
+        notes: str(body.research.notes, 400_000),
+        sources: (Array.isArray(body.research.sources) ? body.research.sources : []).slice(0, 30).map((s) => ({
+          id: str(s.id, 10), title: str(s.title, 300), url: str(s.url, 1000),
+        })),
+      }
+    : null;
+  return { materials, research };
+}
+
 /** Il modulo esistente come lo manda il browser (solo ciò che serve a dire al modello cosa c'è già). */
 function parseExisting(e = {}) {
   const arr = (a, n) => (Array.isArray(a) ? a.slice(0, n) : []);
@@ -154,7 +192,7 @@ async function api(req, res, url) {
   if (req.method === "GET" && url.pathname.startsWith("/api/jobs/")) {
     const job = jobs.get(url.pathname.split("/").pop());
     if (!job) return send(res, 404, { error: "Job non trovato (server riavviato?)." });
-    return send(res, 200, { status: job.status, chars: job.chars, result: job.result, error: job.error });
+    return send(res, 200, { status: job.status, chars: job.chars, result: job.result, error: job.error, partial: job.status === "running" ? job.partial : null });
   }
 
   if (req.method !== "POST") return send(res, 405, { error: "Metodo non consentito." });
@@ -291,26 +329,21 @@ async function api(req, res, url) {
     return send(res, 202, { jobId: id });
   }
 
+  if (url.pathname === "/api/dispensa") {
+    const { materials, research } = parseMaterials(body);
+    if (!materials.some((m) => m.text || m.data) && !research) return send(res, 400, { error: "Aggiungi almeno un materiale." });
+    const topic = (t) => ({ id: str(t?.id, 12), title: str(t?.title, 300), importance: Math.min(3, Math.max(1, Number(t?.importance) || 2)), summary: str(t?.summary, 3000),
+      hints: (Array.isArray(t?.hints) ? t.hints : []).slice(0, 10).map((x) => ({ quote: str(x?.quote, 400), source: str(x?.source, 160) })) });
+    const outline = (Array.isArray(body.outline) ? body.outline : []).slice(0, 80).map(topic).filter((t) => t.title);
+    const topics = (Array.isArray(body.topics) ? body.topics : []).slice(0, 40).map(topic).filter((t) => t.id && t.title);
+    if (!topics.length) return send(res, 400, { error: "Nessun capitolo da scrivere." });
+    const input = { exam: parseExam(body.exam), materials, research, outline, topics, length: body.length === "sintetica" ? "sintetica" : "completa", solutions: body.solutions !== false };
+    const id = startJob("dispensa", (p, partial) => (MOCK ? mockDispensa(input, p, partial) : writeDispensa(input, p, partial)));
+    return send(res, 202, { jobId: id });
+  }
+
   if (url.pathname === "/api/module" || url.pathname === "/api/module-extend") {
-    const materials = (Array.isArray(body.materials) ? body.materials : []).slice(0, 40).map((m) => ({
-      kind: ["pdf", "notes", "web"].includes(m.kind) ? m.kind : "notes",
-      role: ["appunti", "libro", "dispense", "esercizi", "sbobine", "altro"].includes(m.role) ? m.role : "appunti",
-      unit: m.unit === "lezioni" ? "lezioni" : "pagine",
-      year: str(m.year, 20),
-      pages: /^\d{1,4}-\d{1,4}$/.test(m.pages ?? "") ? m.pages : "",
-      handwritten: !!m.handwritten,
-      title: str(m.title, 200) || "Appunti",
-      text: str(m.text, 2_000_000),
-      data: m.kind === "pdf" && typeof m.data === "string" ? m.data : "",
-    }));
-    const res0 = body.research && typeof body.research.notes === "string"
-      ? {
-          notes: str(body.research.notes, 400_000),
-          sources: (Array.isArray(body.research.sources) ? body.research.sources : []).slice(0, 30).map((s) => ({
-            id: str(s.id, 10), title: str(s.title, 300), url: str(s.url, 1000),
-          })),
-        }
-      : null;
+    const { materials, research: res0 } = parseMaterials(body);
     if (!materials.some((m) => m.text || m.data) && !res0) return send(res, 400, { error: "Aggiungi almeno un materiale." });
     const input = { exam: parseExam(body.exam), materials, research: res0 };
     if (url.pathname === "/api/module") {

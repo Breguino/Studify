@@ -23,13 +23,13 @@ export async function status() {
   }
 }
 
-/** Avvia un job lungo e ne segue l'avanzamento (chars = caratteri generati finora). */
+/** Avvia un job lungo e ne segue l'avanzamento (chars = caratteri generati finora; partial = risultati parziali, se il job ne dà). */
 export async function runJob(path, body, onProgress = () => {}) {
   const { jobId } = await call(path, { method: "POST", body });
   for (;;) {
     await new Promise((r) => setTimeout(r, 1500));
     const job = await call(`/api/jobs/${jobId}`);
-    onProgress(job.chars);
+    onProgress(job.chars, undefined, job.partial);
     if (job.status === "done") return job.result;
     if (job.status === "error") throw new Error(job.error);
   }

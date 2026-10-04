@@ -1,7 +1,7 @@
 // Generazione con Claude dentro la pagina pubblicata (capability `sample`): nessuna chiave API,
 // usa l'account Claude di chi apre la pagina. Limiti: nessuna navigazione web, nessun PDF,
 // prompt ≤ 256 KiB e risposte brevi → il modulo si costruisce a passi (schema → carte/domande per argomento).
-import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXERCISES_TASK, EXTEND_RULES, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, JSON_LATEX_RULE, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt } from "../shared/prompts.js";
+import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXERCISES_TASK, EXTEND_RULES, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, JSON_LATEX_RULE, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, DISPENSA_SYSTEM, chapterPrompt, splitChapter } from "../shared/prompts.js";
 import { normalizeCurriculum, normalizeExamFormat, normalizeImportRows, normalizeModule, quoteChecker, repairLatex } from "../shared/normalize.js";
 
 const MAX_MATERIAL_CHARS = 200_000;
@@ -254,6 +254,37 @@ export async function transcribePages({ images, firstPage, title = "", handwritt
   const out = parts.flat();
   if (out.every((p) => p == null)) throw new Error("Claude non ha restituito la trascrizione delle pagine. Riprova con meno pagine.");
   return out;
+}
+
+/**
+ * Dispensa nella pagina Claude: un capitolo per richiesta, con tutti i materiali (testo) nel prompt.
+ * `onProgress(chars, label, partial)`: partial = { chapters } già pronti, così si salvano anche se poi qualcosa va storto.
+ */
+export async function writeDispensa({ exam, materials, research, outline, topics, length, solutions }, onProgress = () => {}, sampleFn) {
+  const sample = sampleFn ?? (await getSample());
+  if (!sample) throw new Error("Claude non è disponibile in questa pagina.");
+  const body = materialBlock({ materials, research });
+  if (!body.trim()) throw new Error("Per la dispensa servono materiali testuali (qui i PDF si usano come testo: caricali di nuovo se mancano).");
+  if (body.length > MAX_MATERIAL_CHARS) throw new Error(`Materiali troppo estesi per una volta (${Math.round(body.length / 1000)}k caratteri, max ${MAX_MATERIAL_CHARS / 1000}k): scegli meno pagine o lezioni.`);
+  const chapters = [];
+  for (const [k, topic] of topics.entries()) {
+    onProgress(0, `Scrivo il capitolo ${k + 1}/${topics.length}: ${topic.title}…`, { chapters: [...chapters] });
+    try {
+      const { text, truncated } = await sample(`${DISPENSA_SYSTEM}\n\nMateriali dello studente:\n\n${body}\n\n${chapterPrompt({ exam, topic, outline, hints: topic.hints ?? [], length, solutions })}`, {
+        modelTier: "default",
+        onText: ({ text: t }) => onProgress(t.length, `Scrivo il capitolo ${k + 1}/${topics.length}: ${topic.title}… ~${Math.round(t.length / 1000)}k caratteri`),
+      });
+      const ch = { topicId: topic.id, title: topic.title, ...splitChapter(text) };
+      if (truncated) ch.body += "\n\n> Il capitolo è stato interrotto perché troppo lungo: riscrivilo in versione «sintetica».";
+      chapters.push(ch);
+    } catch (e) {
+      if (["not_granted", "sampling_disabled", "rate_limited"].includes(e?.code) && !chapters.length) throw explain(e);
+      chapters.push({ topicId: topic.id, title: topic.title, body: "", solutions: "", error: explain(e).message });
+    }
+    onProgress(0, `Capitoli pronti: ${k + 1}/${topics.length}`, { chapters: [...chapters] });
+  }
+  if (chapters.every((c) => c.error)) throw new Error(chapters[0]?.error || "Non sono riuscito a scrivere la dispensa.");
+  return { chapters };
 }
 
 /** Senza ricerca web: una traccia di studio scritta da Claude dal programma indicato. Bozza non verificata. */

@@ -78,6 +78,12 @@ function transcription(prompt) {
 const sample = async (prompt, opts = {}) => {
   calls.push({ kind: "text", chars: prompt.length, prompt, images: opts.images?.length ?? 0 });
   await sleep(120);
+  if (prompt.includes("DISPENSA UNICA")) {
+    const title = prompt.match(/Scrivi ora il capitolo «([^»]+)»/)?.[1] ?? "Capitolo";
+    const text = `### Spiegazione\nTesto integrato su ${title} dai materiali [Appunti] e dalle sbobine [Sbobine, lez. 2].\n\n> Integrazione (non è nei tuoi materiali): un passaggio aggiunto per capire.\n\n### Formule e definizioni chiave\n- Elasticità:\n\n$$\\varepsilon_P=\\left|\\frac{\\Delta\\%Q}{\\Delta\\%P}\\right|$$\n\n| Valore | Domanda |\n| --- | --- |\n| $\\varepsilon_P>1$ | elastica |\n| $\\varepsilon_P<1$ | anelastica |\n\n### Errori da evitare\n- Confondere **movimento** e *spostamento* della curva.\n\n### Mettiti alla prova\n1. Definisci ${title}.\n2. Calcola $\\varepsilon_P$ se $\\Delta\\%Q=-5$ e $\\Delta\\%P=10$.\n\n=== SOLUZIONI ===\n1. Vedi la spiegazione.\n2. $\\varepsilon_P=0{,}5$.`;
+    opts.onText?.({ text, delta: text });
+    return { text, truncated: false, modelTierApplied: "default" };
+  }
   if (prompt.includes("Trascrivi fedelmente")) {
     const text = transcription(prompt);
     opts.onText?.({ text, delta: text });

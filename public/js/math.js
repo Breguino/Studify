@@ -68,6 +68,8 @@ export const hasMath = (text) => splitMath(text).some((p) => p.type === "math");
 
 const OPTS = { throwOnError: false, strict: "ignore", trust: false, maxSize: 20, maxExpand: 1000, output: "htmlAndMathml" };
 
+export const mathEl = (tex, display = false) => mathNode(tex, display);
+
 function mathNode(tex, display) {
   const el = document.createElement(display ? "div" : "span");
   el.className = display ? "math math-display" : "math";

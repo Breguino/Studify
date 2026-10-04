@@ -133,7 +133,16 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
    argomenti nuovi, argomenti esistenti approfonditi (riassunto aggiornato, concetti in più) e carte/domande sui contenuti nuovi,
    senza doppioni. Gli id esistenti non cambiano, quindi ripasso dilazionato, statistiche dei quiz e argomenti studiati restano;
    le lacune vengono aggiornate. «Rigenera tutto» resta disponibile ma azzera i progressi (e lo dice prima).
-4. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
+4. **Dispensa (facoltativa)**: dalla scheda «Dispensa» l'AI scrive un documento unico da studiare, un capitolo per argomento del
+   modulo, che integra appunti, sbobine, slide, libro ed esercizi senza ripetizioni: spiegazione con le fonti tra parentesi
+   ([Libro p. 45], [Sbobine, lez. 3]), formule e definizioni, esempio svolto, frasi del docente, errori da evitare e «Mettiti alla
+   prova», con le soluzioni in appendice. Le parti che non vengono dai materiali sono marcate «Integrazione»; senza materiali la
+   dispensa non si scrive. Lunghezza sintetica o completa (proporzionale all'importanza). Con il server i materiali partono una
+   volta sola e restano in cache tra un capitolo e l'altro (prompt caching); i capitoli si salvano man mano e quelli il cui
+   argomento è cambiato con materiali nuovi risultano «da aggiornare». «Stampa o salva in PDF» (un capitolo per pagina, formule
+   intere) oppure «Scarica il file»: un HTML autonomo con formule e font incorporati, da aprire e stampare in PDF.
+   Rileggere da solo dà l'illusione di sapere: la dispensa serve a capire la prima volta e a consultare, flashcard e quiz a ricordare.
+5. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
 
 | Sessione | Cosa fa |
 |---|---|

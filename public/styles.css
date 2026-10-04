@@ -185,3 +185,32 @@ mark.uncertain { background: #fde68a; color: #1b1f2a; border-radius: 3px; paddin
 .callout.hints li { margin-bottom: 6px; }
 .callout.hints q { font-style: italic; }
 .lesson-names { max-width: 100%; overflow-wrap: anywhere; }
+
+/* Dispensa */
+.dispensa-doc { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px clamp(16px, 4vw, 44px); line-height: 1.6; }
+.dispensa-cover h1 { margin: 0 0 4px; font-size: 1.9rem; }
+.dispensa-cover p { margin: 4px 0; }
+.dispensa-toc ol { columns: 2 260px; padding-left: 20px; }
+.dispensa-toc .toc-extra { list-style: none; margin-top: 4px; font-weight: 600; }
+.dispensa-chapter { border-top: 1px solid var(--line); margin-top: 28px; padding-top: 18px; }
+.dispensa-chapter h2 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dispensa-chapter h2 .no-print { display: inline-flex; gap: 6px; align-items: center; font-size: 0.8rem; font-weight: 400; }
+.dispensa-chapter h3 { margin-top: 1.3em; }
+.dispensa-doc blockquote { margin: 0.8em 0; padding: 6px 14px; border-left: 4px solid var(--brand); background: var(--brand-soft); border-radius: 0 8px 8px 0; }
+.dispensa-doc blockquote p { margin: 0.3em 0; }
+.dispensa-doc .table-wrap { overflow-x: auto; }
+.dispensa-doc table { border-collapse: collapse; margin: 0.6em 0; }
+.dispensa-doc th, .dispensa-doc td { border: 1px solid var(--line); padding: 4px 10px; text-align: left; }
+.dispensa-hints q { font-style: italic; }
+@media print {
+  @page { margin: 18mm 16mm; }
+  .no-print, header.app, .topbar, #toasts, .toast, nav.tabs, .skip-link { display: none !important; }
+  body, main, .app-main { background: #fff !important; color: #111 !important; padding: 0 !important; margin: 0 !important; max-width: none !important; }
+  .dispensa-doc { border: 0; padding: 0; background: #fff; color: #111; }
+  .dispensa-doc blockquote { background: #f3f2ff; }
+  .dispensa-chapter { break-before: page; border-top: 0; margin-top: 0; }
+  .dispensa-doc h2, .dispensa-doc h3 { break-after: avoid; }
+  .katex-display, .dispensa-doc table, .dispensa-doc blockquote, .dispensa-doc li { break-inside: avoid; }
+  .dispensa-toc ol { columns: 1; }
+  a { color: inherit; text-decoration: none; }
+}

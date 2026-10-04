@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { buildModule, curriculum, examFormat, examFormatFromText, extendModule, transcribe, degrees, gradeAnswer, importRows, parseCurriculum, research, setClient } from "../server/ai.js";
+import { buildModule, curriculum, examFormat, examFormatFromText, extendModule, transcribe, writeDispensa, degrees, gradeAnswer, importRows, parseCurriculum, research, setClient } from "../server/ai.js";
 import { CurriculumSchema, GradeSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees } from "../server/schema.js";
 
 const stream = (msg) => ({ on() {}, finalMessage: async () => msg });
@@ -320,4 +320,37 @@ test("buildModule: regole per le sbobine e le indicazioni sull'esame; citazioni 
   assert.match(calls[0].system, /INDICAZIONI SULL'ESAME \(examHints\)[\s\S]*COPIATA alla lettera/);
   assert.equal(calls[0].output_config.format.schema.properties.examHints.type, "array", "campo nello schema strutturato");
   assert.deepEqual(mod.examHints.map((x) => [x.quote, x.topicId, x.verified]), [["questo all'esame lo chiedo sempre", "t1", true]], "la frase inventata è scartata");
+});
+
+test("writeDispensa: un capitolo per argomento, materiali come prefisso in cache, un errore non ferma gli altri", async () => {
+  const calls = [];
+  const chapter = (t) => ({ stop_reason: "end_turn", content: [{ type: "text", text: `### Spiegazione\n${t} [Libro p. 3]\n\n### Mettiti alla prova\n1. Domanda\n=== SOLUZIONI ===\n1. Risposta` }] });
+  setClient(fake([chapter("media"), { stop_reason: "refusal", content: [] }, chapter("boxplot")], calls));
+  const partials = [];
+  const r = await writeDispensa({
+    exam: { name: "Statistica", type: "problemi", level: 2, daysLeft: 20, language: "italiano" },
+    materials: [{ kind: "pdf", role: "libro", title: "Manuale", pages: "1-40", data: "QUJD" }, { kind: "notes", role: "sbobine", unit: "lezioni", pages: "1-3", title: "Sbobine", text: "Lezione 1\nla media la chiedo sempre" }],
+    research: null,
+    outline: [{ title: "Media" }, { title: "Varianza" }, { title: "Boxplot" }],
+    topics: [{ id: "t1", title: "Media", importance: 3, summary: "La media…", hints: [{ quote: "la media la chiedo sempre", source: "Sbobine · Lezione 1" }] }, { id: "t2", title: "Varianza", importance: 2 }, { id: "t3", title: "Boxplot", importance: 1 }],
+    length: "completa", solutions: true,
+  }, () => {}, (p) => partials.push(p.done));
+  assert.equal(calls.length, 3);
+  const prefix = (c) => JSON.stringify(c.messages[0].content.slice(0, -1));
+  assert.equal(prefix(calls[0]), prefix(calls[2]), "stesso prefisso dei materiali per ogni capitolo");
+  const c0 = calls[0].messages[0].content;
+  assert.equal(c0[0].type, "document");
+  assert.deepEqual(c0.at(-2).cache_control, { type: "ephemeral" }, "punto di cache alla fine dei materiali");
+  assert.match(c0.at(-2).text, /<sbobina titolo="Sbobine" lezioni="1-3">/);
+  assert.match(c0.at(-1).text, /Scrivi ora il capitolo «Media» \(importanza 3\/3\), circa 1000-1600 parole/);
+  assert.match(c0.at(-1).text, /### Il docente ha detto[\s\S]*«la media la chiedo sempre» \(Sbobine · Lezione 1\)/);
+  assert.match(c0.at(-1).text, /riassunto così[\s\S]*La media…/);
+  assert.match(calls[2].messages[0].content.at(-1).text, /circa 400-700 parole/, "importanza 1: capitolo più breve");
+  assert.match(calls[0].system, /DISPENSA UNICA[\s\S]*FEDELTÀ[\s\S]*Integrazione \(non è nei tuoi materiali\)/);
+  assert.deepEqual(r.chapters.map((c) => [c.topicId, !!c.body, !!c.error]), [["t1", true, false], ["t2", false, true], ["t3", true, false]]);
+  assert.equal(r.chapters[0].solutions, "1. Risposta");
+  assert.ok(!r.chapters[0].body.includes("SOLUZIONI"), "le soluzioni vanno in appendice");
+  assert.deepEqual(partials, [1, 2, 3], "capitoli salvati man mano");
+  setClient(fake([{ stop_reason: "refusal", content: [] }], []));
+  await assert.rejects(writeDispensa({ exam: { name: "x", type: "orale", level: 3, daysLeft: 3 }, materials: [{ kind: "notes", title: "a", text: "b" }], research: null, outline: [], topics: [{ id: "t1", title: "A" }] }), /rifiutato/);
 });

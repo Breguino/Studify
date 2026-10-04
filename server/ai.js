@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXERCISES_TASK, EXTEND_RULES, MATERIAL_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, where } from "../shared/prompts.js";
+import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_TYPE_LABEL, EXERCISES_TASK, EXTEND_RULES, MATERIAL_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, where, DISPENSA_SYSTEM, chapterPrompt, splitChapter } from "../shared/prompts.js";
 import { CurriculumSchema, DegreesSchema, ExamFormatSchema, GradeSchema, ImportRowsSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeImportRows, normalizeModule, quoteChecker, repairLatex } from "./schema.js";
 
 export const MODEL = process.env.STUDIFY_MODEL || "claude-opus-5-5";
@@ -431,6 +431,58 @@ export async function transcribe({ images, firstPage = 1, title = "", handwritte
   }
   if (pages.every((p) => p == null)) throw new Error("Claude non ha restituito la trascrizione delle pagine. Riprova con meno foto.");
   return { pages };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Dispensa: un documento da studiare, un capitolo per argomento              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * I materiali come prefisso fisso della richiesta (PDF + testo), con il punto di cache alla fine: ogni capitolo
+ * rimanda gli stessi materiali, che dal secondo in poi vengono letti dalla cache.
+ */
+function materialsPrefix({ materials, research }) {
+  const blocks = [];
+  for (const m of materials) {
+    if (m.kind === "pdf" && m.data)
+      blocks.push({ type: "document", title: `${MATERIAL_LABEL[m.role] ?? "Materiale"} — ${m.title}${m.pages ? ` (pagine ${m.pages})` : ""}`, source: { type: "base64", media_type: "application/pdf", data: m.data } });
+  }
+  const parts = materials.filter((m) => m.kind !== "pdf" && m.text).map(materialText);
+  if (research?.notes) parts.push(`<ricerca_online>\n${research.notes}\n</ricerca_online>`);
+  if (parts.length) blocks.push({ type: "text", text: `Materiali dello studente:\n\n${parts.join("\n\n")}` });
+  if (blocks.length) blocks.at(-1).cache_control = { type: "ephemeral" };
+  return blocks;
+}
+
+/**
+ * Scrive i capitoli della dispensa (uno per argomento), in ordine; `onPartial` riceve i capitoli già pronti.
+ * Un capitolo che non riesce non ferma gli altri: resta con `error`.
+ * @returns {Promise<{chapters: {topicId:string, title:string, body:string, solutions:string, error?:string}[]}>}
+ */
+export async function writeDispensa({ exam, materials, research, outline, topics, length, solutions }, onProgress = () => {}, onPartial = () => {}) {
+  const prefix = materialsPrefix({ materials, research });
+  const chapters = [];
+  for (const [k, topic] of topics.entries()) {
+    try {
+      const stream = client().messages.stream({
+        model: MODEL,
+        max_tokens: 16000,
+        thinking: { type: "adaptive" },
+        output_config: { effort: "medium" },
+        system: DISPENSA_SYSTEM,
+        messages: [{ role: "user", content: [...prefix, { type: "text", text: chapterPrompt({ exam, topic, outline, hints: topic.hints ?? [], length, solutions }) }] }],
+      });
+      stream.on("text", (d) => onProgress(d.length));
+      const msg = await stream.finalMessage();
+      assertUsable(msg);
+      chapters.push({ topicId: topic.id, title: topic.title, ...splitChapter(textOf(msg.content)) });
+    } catch (e) {
+      chapters.push({ topicId: topic.id, title: topic.title, body: "", solutions: "", error: friendlyError(e) });
+    }
+    onPartial({ chapters: [...chapters], done: k + 1, total: topics.length });
+  }
+  if (chapters.every((c) => c.error)) throw new Error(chapters[0]?.error || "Non sono riuscito a scrivere la dispensa.");
+  return { chapters };
 }
 
 /* -------------------------------------------------------------------------- */

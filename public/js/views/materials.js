@@ -592,3 +592,6 @@ export function materialsTab(exam) {
     h("div", { class: "grid" }, h("div", { class: "card stack" }, paste, drop), handBox, researchBox),
     formatBox, h("h2", { style: { margin: "6px 0 0" } }, `Materiali (${exam.materials.length})`), list, gen);
 }
+
+// La dispensa usa gli stessi materiali (pagine e lezioni scelte, limiti controllati).
+export { payload as materialsPayload, sentInfo };

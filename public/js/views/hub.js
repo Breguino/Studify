@@ -11,11 +11,13 @@ import { badge, emptyState, h } from "../ui.js";
 import { core } from "../core.js";
 import { materialsTab } from "./materials.js";
 import { methodsTab, progressTab } from "./insights.js";
+import { dispensaTab } from "./dispensa.js";
 
 const TABS = [
   ["today", "Oggi"],
   ["materials", "Materiali"],
   ["module", "Modulo"],
+  ["dispensa", "Dispensa"],
   ["methods", "Metodi"],
   ["progress", "Progressi"],
 ];
@@ -25,11 +27,11 @@ export function hubView(exam, tab) {
   const dl = daysLeft(exam);
   const apHere = exam.appelli?.find((a) => a.date === exam.date);
   const others = (exam.appelli ?? []).filter((a) => a.date !== exam.date && a.date >= today());
-  const body = { today: todayTab, materials: materialsTab, module: moduleTab, methods: methodsTab, progress: progressTab }[tab](exam);
+  const body = { today: todayTab, materials: materialsTab, module: moduleTab, dispensa: dispensaTab, methods: methodsTab, progress: progressTab }[tab](exam);
   return h(
     "div",
     { class: "stack", style: { gap: "0" } },
-    h("div", { class: "row between" },
+    h("div", { class: "row between no-print" },
       h("div", {}, h("h1", { style: { marginBottom: "2px" } }, exam.name),
         h("div", { class: "muted" }, `${fmtDate(exam.date)}${exam.dateTentative ? " (data provvisoria)" : ""}${apHere?.time ? ` ore ${apHere.time}` : ""}${apHere?.room ? ` · ${apHere.room}` : ""} · ${dl > 0 ? `tra ${exam.dateTentative ? "circa " : ""}${dl} giorni` : dl === 0 ? "oggi" : "già passato"} · ${EXAM_TYPES[exam.type]}`,
           exam.formatSource?.url ? h("span", {}, " (", h("a", { href: exam.formatSource.url, target: "_blank", rel: "noopener noreferrer" }, "fonte del formato"), ")") : null),
@@ -38,7 +40,7 @@ export function hubView(exam, tab) {
         others.length ? h("div", { class: "muted small" }, `Altri appelli: ${others.map((a) => fmtDate(a.date)).join(", ")} (cambia da «Modifica»)`) : null,
         exam.university ? h("div", { class: "muted small" }, [exam.university, exam.degree, exam.year ? `${exam.year}° anno` : "", exam.cfu ? `${exam.cfu} CFU` : ""].filter(Boolean).join(" · ")) : null),
       h("a", { class: "btn ghost", href: `#/exam/${exam.id}/edit` }, "Modifica")),
-    h("nav", { class: "tabs", "aria-label": "Sezioni" }, TABS.map(([k, t]) => h("a", { href: `#/exam/${exam.id}/${k}`, "aria-current": k === tab ? "page" : null }, t))),
+    h("nav", { class: "tabs no-print", "aria-label": "Sezioni" }, TABS.map(([k, t]) => h("a", { href: `#/exam/${exam.id}/${k}`, "aria-current": k === tab ? "page" : null }, t))),
     body,
   );
 }
