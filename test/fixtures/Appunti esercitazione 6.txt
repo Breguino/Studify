@@ -1,0 +1,9 @@
+Appunti esercitazione 6 (in aula, 6 ottobre)
+Es. 1
+Q = 100 - 40 = 60
+dQ/dP = -2
+elasticità = -2 · 20/60 = -0,67 → anelastica
+Es. 2
+MR = 50 - 2Q
+MR = MC → 50 - 2Q = 10 → Q = 20
+P = 50 - 20 = 30

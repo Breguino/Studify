@@ -217,6 +217,12 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
    nel quiz viene riconosciuto (stessi numeri e parole) e prende testo e soluzione ufficiali, senza doppioni e senza perdere i progressi.
    «Fai l'esercitazione» propone gli esercizi nell'ordine; la soluzione ufficiale compare dopo il tuo tentativo. Nel piano l'esercitazione
    sull'argomento segue lo studio. Versione con server: un PDF di esercitazione lo legge Claude (formule comprese) e diventa testo.
+   **Esercitazioni in aula**: se il foglio è sul sito ma le soluzioni le avete fatte alla lavagna, carica i tuoi appunti (anche foto)
+   e nella scheda del foglio scegli «Soluzioni fatte in aula, nei tuoi appunti»: l'app prende la soluzione di ogni esercizio dagli
+   appunti, con lo stesso numero («Es. 1», «Esercizio 2»), e nel quiz la segna come **svolta in aula**, non come ufficiale (è la tua
+   copia della lavagna). Segnando quegli appunti come «Esercizi svolti dal docente» se ne ricava anche il metodo (esercizi guidati).
+   «Appunti esercitazione 6» è riconosciuto come appunti, non come foglio di esercizi; se poi arriva il file delle soluzioni ufficiali,
+   la soluzione e l'etichetta si aggiornano e i progressi restano.
 10. **Dispense del docente** (tipo «Dispense del docente»): il corso scritto per esteso da chi fa l'esame, quindi la fonte principale.
    L'AI usa le sue definizioni, i suoi simboli e la sua impostazione in carte, risposte e dispensa, ne copre tutti i capitoli e, se su
    una definizione o una formula non concordano con il libro, usa le dispense e **segnala la differenza** tra le lacune (può essere una

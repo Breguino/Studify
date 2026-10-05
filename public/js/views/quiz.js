@@ -158,7 +158,7 @@ export function quizView(exam, query) {
     if (phase === "done") return summary();
     const q = it?.q;
     const w = examStats.weight(q);
-    const examBadge = w ? badge(`domanda d'esame vera${w > 1 ? ` · chiesta ${w} volte` : ""}`, "bad") : q.official ? badge(`${q.official.source} · ${q.official.quiz ? "risposta del docente" : "soluzione ufficiale"}`, "good") : null;
+    const examBadge = w ? badge(`domanda d'esame vera${w > 1 ? ` · chiesta ${w} volte` : ""}`, "bad") : q.official ? badge(`${q.official.source} · ${q.official.quiz ? "risposta del docente" : q.official.aula ? "svolta in aula" : "soluzione ufficiale"}`, q.official.aula ? "" : "good") : null;
     const body = [head(), bar(i / items.length, { label: "avanzamento" }), h("div", { class: "card stack", style: { marginTop: "14px" } }, h("div", { class: "row" }, badge(KIND[q.kind]), examBadge), h("div", { class: "q-prompt" }, richParas(q.prompt)))];
     const card = body.at(-1);
 
@@ -181,10 +181,12 @@ export function quizView(exam, query) {
           h("div", {}, h("button", { class: "btn primary", onclick: () => advanceReview(ok ? 1 : 0) }, i < items.length - 1 ? "Avanti" : "Vedi il risultato")));
       } else {
         card.append(h("div", { class: "callout", style: { background: "var(--surface-2)" } }, h("b", { class: "small" }, "La tua risposta"), h("p", { style: { margin: "4px 0 0", whiteSpace: "pre-wrap" } }, it.answer.trim() || "(vuota)")));
-        const rv = openReview({ question: q.prompt, reference: q.modelAnswer, rubric: q.rubric, answer: it.answer, language: exam.language, referenceLabel: q.official ? "Soluzione ufficiale" : undefined });
+        const rv = openReview({ question: q.prompt, reference: q.modelAnswer, rubric: q.rubric, answer: it.answer, language: exam.language, referenceLabel: q.official ? (q.official.aula ? "Soluzione svolta in aula (dai tuoi appunti)" : "Soluzione ufficiale") : undefined });
         // append() del DOM scrive «null» come testo: i pezzi facoltativi si filtrano
         card.append(...[rv.el, q.explanation && !q.official ? h("div", { class: "muted small" }, richParas(q.explanation)) : null,
-          q.official ? h("p", { class: "muted small", style: { margin: 0 } }, "Se la tua strada è diversa ma arriva allo stesso risultato, non è per forza sbagliata; e anche le soluzioni ufficiali a volte hanno errori: nel dubbio chiedi la correzione a Claude.") : null,
+          q.official ? h("p", { class: "muted small", style: { margin: 0 } }, q.official.aula
+            ? "È la tua copia della lavagna: un numero o un passaggio può essere stato copiato male. Se qualcosa non torna, nel dubbio chiedi la correzione a Claude."
+            : "Se la tua strada è diversa ma arriva allo stesso risultato, non è per forza sbagliata; e anche le soluzioni ufficiali a volte hanno errori: nel dubbio chiedi la correzione a Claude.") : null,
           q.followUp && w ? h("div", { class: "callout follow-up" }, h("b", {}, "Il docente potrebbe incalzare: "), rich(q.followUp),
             h("div", { class: "small muted" }, "Rispondi a voce, senza guardare: all'orale conta saper andare oltre la prima risposta.")) : null,
           h("div", {}, h("button", { class: "btn primary", onclick: () => advanceReview(rv.score()) }, i < items.length - 1 ? "Conferma e avanti" : "Conferma e vedi il risultato"))].filter(Boolean));

@@ -21,7 +21,9 @@ export function ensurePlan(exam, force = false) {
   const asked = examQuestionStats(exam).inQuiz.length;
   const official = new Map();
   const fromQuiz = new Map(); // domande dei quiz del docente (Moodle): nel piano «Quiz del docente», non «Esercitazione»
-  for (const q of exam.module.questions) if (q.official) { official.set(q.topicId, (official.get(q.topicId) ?? 0) + 1); if (q.official.quiz) fromQuiz.set(q.topicId, (fromQuiz.get(q.topicId) ?? 0) + 1); }
+  const fromClass = new Map(); // soluzioni dagli appunti presi in aula: nel piano «la soluzione vista in aula»
+  const inc = (m, k) => m.set(k, (m.get(k) ?? 0) + 1);
+  for (const q of exam.module.questions) if (q.official) { inc(official, q.topicId); if (q.official.quiz) inc(fromQuiz, q.topicId); if (q.official.aula) inc(fromClass, q.topicId); }
   const reading = readingByTopic(exam);
   const stamp = `${exam.moduleBuiltAt}|${exam.moduleUpdatedAt ?? ""}|${tt?.importedAt ?? ""}|${tt?.until ?? ""}|${exam.date}|${exam.studyDays ?? 0}|${papers.length}|${exam.pastExams?.analyzedAt ?? ""}|${asked}|${[...official.values()].reduce((a, b) => a + b, 0)}|${[...reading].map(([k, r]) => `${k}:${r.pages}`).join(",")}`;
   if (force || !exam.plan || exam.plan.builtOn !== today() || exam.plan.stamp !== stamp) {
@@ -32,7 +34,7 @@ export function ensurePlan(exam, force = false) {
         level: exam.level,
         hoursPerDay: exam.hoursPerDay,
         topics: exam.module.topics.map((t) => (official.get(t.id) || reading.get(t.id)
-          ? { ...t, officialCount: official.get(t.id) ?? 0, officialQuizOnly: !!official.get(t.id) && fromQuiz.get(t.id) === official.get(t.id), readPages: reading.get(t.id)?.pages ?? 0, readLabel: reading.get(t.id)?.label ?? "" } : t)),
+          ? { ...t, officialCount: official.get(t.id) ?? 0, officialQuizOnly: !!official.get(t.id) && fromQuiz.get(t.id) === official.get(t.id), officialClassOnly: !!official.get(t.id) && fromClass.get(t.id) === official.get(t.id), readPages: reading.get(t.id)?.pages ?? 0, readLabel: reading.get(t.id)?.label ?? "" } : t)),
         learned: exam.learned,
         today: today(),
         start: studyStart(exam, today()),

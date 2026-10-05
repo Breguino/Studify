@@ -109,7 +109,7 @@ export function buildPlan({ examDate, examType, level, hoursPerDay, topics, lear
           add(day, { kind: "guided", key: `${t.id}-${k}`, topicId: t.id, methodIndex: k, title: `Esercizi guidati: ${m.name} (metodo del docente)`, minutes: 25, method: "practice" }));
         // esercitazioni con la soluzione e quiz del docente: le domande ufficiali sull'argomento appena studiato
         if (t.officialCount)
-          add(day, { kind: "quiz", key: `off-${t.id}`, mode: "official", topicIds: [t.id], title: t.officialQuizOnly ? `Quiz del docente su ${t.title}: rispondi senza guardare, poi la sua risposta` : `Esercitazione su ${t.title}: prova da solo, poi la soluzione ufficiale`, minutes: 25, method: "practice" });
+          add(day, { kind: "quiz", key: `off-${t.id}`, mode: "official", topicIds: [t.id], title: t.officialQuizOnly ? `Quiz del docente su ${t.title}: rispondi senza guardare, poi la sua risposta` : `Esercitazione su ${t.title}: prova da solo, poi la soluzione ${t.officialClassOnly ? "vista in aula" : "ufficiale"}`, minutes: 25, method: "practice" });
       }
       const prev = i > 0 ? learnByDay[i - 1] : [];
       if (prev.length)

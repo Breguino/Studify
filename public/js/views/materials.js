@@ -262,19 +262,37 @@ function exercisesRow(exam, m) {
   const inQuiz = new Set(officialQuestions(exam.module).map((q) => q.official.key));
   const missing = solved.filter((e) => !inQuiz.has(e.key));
   const fromOther = solved.some((e) => e.solutionFrom && e.solutionFrom !== m.id);
+  const fromClass = solved.filter((e) => e.aula).length;
+  // soluzioni fatte alla lavagna e copiate negli appunti: si abbinano qui (il nome del file non c'entra)
+  const CLASS_ROLES = ["appunti", "colleghi", "svolti", "sbobine", "altro"]; // appunti (anche a mano o di un collega), svolti, sbobine dell'esercitazione
+  const notes = exam.materials.filter((x) => x.id !== m.id && x.kind === "notes" && x.text && CLASS_ROLES.includes(roleOf(x)));
+  const classPick = (m.classNotesId || items.some((e) => !e.solution)) && notes.length
+    ? h("label", { class: "row small", style: { gap: "6px", fontWeight: 400 } }, "Soluzioni fatte in aula, nei tuoi appunti:",
+        h("select", { "aria-label": `Soluzioni in aula di ${m.title}`, onchange: (e) => { m.classNotesId = e.target.value || null; exam.plan = null; store.save(); core.rerender(); } },
+          h("option", { value: "" }, "nessuno"), notes.map((x) => h("option", { value: x.id, selected: m.classNotesId === x.id }, x.title)))) : null;
   const mangled = m.fromPdf && !rangesCover(m.mathPages, 1, m.numPages ?? 1) && mathyPages(m.text);
   return h("div", { class: "stack small", style: { gap: "4px" } },
     h("div", { class: "row", style: { gap: "8px", alignItems: "center" } },
       badge(`${items.length} ${items.length === 1 ? "esercizio" : "esercizi"}`, "brand"),
-      badge(`${solved.length} con soluzione${fromOther ? " (dal file delle soluzioni)" : ""}`, solved.length ? "good" : "warn"),
+      badge(`${solved.length} con soluzione${fromClass ? ` (${fromClass === solved.length ? "" : `${fromClass} `}dai tuoi appunti dell'aula)` : fromOther ? " (dal file delle soluzioni)" : ""}`, solved.length ? "good" : "warn"),
       exam.module && solved.length && !missing.length ? h("a", { href: `#/exam/${exam.id}/quiz?mode=official&set=${encodeURIComponent(m.id)}` }, "Fai l'esercitazione →") : null),
     h("details", {}, h("summary", {}, "Esercizi e soluzioni riconosciuti"),
-      h("ol", { class: "paper-items" }, items.map((e) => h("li", { value: Number.parseInt(e.n, 10) || null }, rich(clipRich(e.text.split("\n")[0], 110)), " ", e.solution ? badge("soluzione", "good") : badge("senza soluzione", "warn"))))),
+      h("ol", { class: "paper-items" }, items.map((e) => h("li", { value: Number.parseInt(e.n, 10) || null }, rich(clipRich(e.text.split("\n")[0], 110)), " ", e.solution ? badge(e.aula ? "svolta in aula" : "soluzione", e.aula ? "" : "good") : badge("senza soluzione", "warn"))))),
+    classPick,
+    m.classNotesId && !fromClass ? h("div", { class: "callout warn" }, "Negli appunti scelti non trovo le soluzioni per numero: scrivile con lo stesso numero del foglio («Es. 1», «Esercizio 2»), una sotto l'altra.") : null,
+    fromClass ? h("div", { class: "muted" }, "Le soluzioni dagli appunti dell'aula sono la tua copia della lavagna: nel quiz sono segnate così, non come ufficiali. Se vuoi anche il metodo passo passo (esercizi guidati), segna quegli appunti come «Esercizi svolti dal docente»: restano abbinati.") : null,
     mangled ? h("div", { class: "muted" }, "Le formule prese dal testo del PDF escono storpiate: prima «Leggi formule e figure con Claude», poi metti gli esercizi nel quiz.") : null,
     exam.module && missing.length ? h("div", { class: "row", style: { gap: "8px" } },
       h("button", { class: "btn small primary", disabled: jobs.has(exam.id) || !core.ai.ai, onclick: () => run(exam, "update", async (p) => { toast(officialToast(await syncOfficial(exam, p)), "ok"); }) }, `Metti nel quiz ${missing.length === 1 ? "l'esercizio" : `i ${missing.length} esercizi`} con soluzione`),
-      h("span", { class: "muted" }, "Testo e soluzione restano quelli ufficiali: Claude sceglie solo l'argomento.")) : null,
+      h("span", { class: "muted" }, fromClass ? "Testo e soluzione restano quelli del foglio e dei tuoi appunti: Claude sceglie solo l'argomento." : "Testo e soluzione restano quelli ufficiali: Claude sceglie solo l'argomento.")) : null,
     !exam.module && solved.length ? h("div", { class: "muted" }, "Quando generi il modulo, gli esercizi con soluzione entrano nel quiz così come sono.") : null);
+}
+
+/** Appunti usati come soluzioni di un'esercitazione fatta in aula. */
+function classNotesRow(exam, m) {
+  const sheets = exam.materials.filter((x) => x.classNotesId === m.id && roleOf(x) === "esercizi");
+  if (!sheets.length) return null;
+  return h("div", { class: "small" }, badge("soluzioni svolte in aula", ""), h("span", { class: "muted" }, ` per ${sheets.map((x) => `«${x.title}»`).join(", ")}: le trovi nel quiz sotto ogni esercizio.`));
 }
 
 /** Slide del docente: a cosa servono, le note del relatore lette, e le figure che da un PowerPoint non si leggono. */
@@ -413,7 +431,7 @@ async function payload(list, { onlyNew = false } = {}) {
 }
 
 /** «Esercitazioni: …», «Quiz del docente: …» o tutti e due, secondo che cosa è entrato nel quiz. */
-const officialToast = (off) => `${!off ? "Esercitazioni" : /esercitazion/.test(off) && /quiz del docente/.test(off) ? "Esercitazioni e quiz del docente" : /quiz del docente/.test(off) ? "Quiz del docente" : "Esercitazioni"}: ${off ?? "niente da aggiungere."}`;
+const officialToast = (off) => `${!off ? "Esercitazioni" : /esercitazion|in aula/.test(off) && /quiz del docente/.test(off) ? "Esercitazioni e quiz del docente" : /quiz del docente/.test(off) ? "Quiz del docente" : "Esercitazioni"}: ${off ?? "niente da aggiungere."}`;
 
 /**
  * Esercitazioni: gli esercizi con la soluzione ufficiale entrano nel quiz così come sono. Prima si collegano quelli che l'AI ha già
@@ -422,7 +440,9 @@ const officialToast = (off) => `${!off ? "Esercitazioni" : /esercitazion/.test(o
  */
 async function syncOfficial(exam, onProgress = () => {}) {
   if (!exam.module) return null;
-  const quizBefore = officialQuestions(exam.module).filter((q) => q.official.quiz).length;
+  const count = (k) => officialQuestions(exam.module).filter((q) => q.official[k]).length;
+  const quizBefore = count("quiz");
+  const classBefore = count("aula");
   const all = officialExercises(exam);
   const local = applyOfficial(exam.module, all);
   let rest = pendingOfficial(exam);
@@ -443,9 +463,11 @@ async function syncOfficial(exam, onProgress = () => {}) {
   const n = local.linked + added;
   if (!n && !local.refreshed && !rest.length) return null;
   exam.plan = null;
-  const nq = officialQuestions(exam.module).filter((q) => q.official.quiz).length - quizBefore;
-  const ne = n - nq;
+  const nq = count("quiz") - quizBefore;
+  const na = Math.max(0, count("aula") - classBefore);
+  const ne = n - nq - na;
   return [ne ? `${ne} ${ne === 1 ? "esercizio dell'esercitazione" : "esercizi delle esercitazioni"} nel quiz con la soluzione ufficiale` : "",
+    na ? `${na} ${na === 1 ? "esercizio" : "esercizi"} nel quiz con la soluzione svolta in aula (dai tuoi appunti)` : "",
     nq ? `${nq} ${nq === 1 ? "domanda del quiz del docente" : "domande dei quiz del docente"} nel quiz con la sua risposta` : "",
     local.refreshed ? `${local.refreshed} aggiornati` : "", rest.length ? `${rest.length} senza argomento (${core.ai.ai ? "riprova" : "serve Claude"})` : ""].filter(Boolean).join(", ") + ".";
 }
@@ -831,7 +853,7 @@ export function materialsTab(exam) {
               roleOf(m) === "sbobine" ? h("div", { class: "small muted" }, m.auto
                 ? `Trascrizione automatica di una registrazione${m.duration ? ` (${clock(m.duration)})` : ""}: sono le parole del docente, ma il programma di trascrizione sbaglia termini tecnici, numeri e formule (dette a parole). L'AI le controlla su dispense e libro. I segni come [12:30] sono i minuti della registrazione: le frasi del docente sull'esame te li indicano, così puoi riascoltarle.`
                 : "Sbobine: le frasi del docente sull'esame finiscono nel modulo (verificate sul testo). Possono contenere errori di trascrizione su termini e formule, e se sono di un altro anno docente e programma potrebbero essere cambiati.") : null,
-              papersRow(exam, m), questionsRow(m), exercisesRow(exam, m), quizRow(exam, m), slidesRow(m), dispenseRow(exam, m),
+              papersRow(exam, m), questionsRow(m), exercisesRow(exam, m), classNotesRow(exam, m), quizRow(exam, m), slidesRow(m), dispenseRow(exam, m),
               roleOf(m) === "colleghi" ? h("div", { class: "small muted" }, "Appunti di colleghi: dicono che cosa ha spiegato e sottolineato il docente, ma sono di seconda mano. L'AI controlla definizioni e formule su dispense, libro e i tuoi appunti, e ti segnala gli argomenti che sono solo qui. Se sono di un altro anno, scrivilo: programma e docente potrebbero essere cambiati.") : null,
               roleOf(m) === "svolti" ? h("div", { class: "small muted" }, "Esercizi svolti dal docente: l'AI ne ricava il metodo in passi (come li risolve lui, con la sua notazione) e crea esercizi dello stesso tipo. Li ritrovi negli argomenti come «Esercizi guidati». Se sono scansioni o appunti a mano, controlla le formule nell'anteprima.") : null,
               m.kind === "notes" ? (m.handwritten ? handwrittenRow(exam, m) : formulaRow(exam, m)) : null),

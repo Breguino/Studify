@@ -64,22 +64,26 @@ const clean = (t) => String(t ?? "").replace(/ \(da PDF\)$/, "");
 
 /**
  * Gli esercizi delle esercitazioni (materiali di tipo «esercizi»), abbinati alle soluzioni. Un file di sole soluzioni si abbina al
- * file degli esercizi con lo stesso nome («Esercitazione 3» ↔ «Esercitazione 3 - soluzioni»).
- * @returns {{key: string, materialId: string, n: string, text: string, solution: string, solutionFrom: string|null, label: string}[]}
+ * file degli esercizi con lo stesso nome («Esercitazione 3» ↔ «Esercitazione 3 - soluzioni»). Le soluzioni fatte in aula, negli
+ * appunti dello studente, si abbinano a mano (`classNotesId`): sono la sua copia della lavagna, non la soluzione ufficiale (`aula`).
+ * @returns {{key: string, materialId: string, n: string, text: string, solution: string, solutionFrom: string|null, label: string, aula?: boolean}[]}
  */
 export function officialExercises(exam) {
   const mats = exam.materials.filter((m) => roleOf(m) === "esercizi" && m.kind === "notes" && m.text);
   const solFiles = mats.filter(isSolutionsFile);
-  const exFiles = mats.filter((m) => !isSolutionsFile(m));
+  const classNotes = new Set(mats.map((m) => m.classNotesId).filter(Boolean));
+  const exFiles = mats.filter((m) => !isSolutionsFile(m) && !classNotes.has(m.id));
   const out = [];
   for (const m of exFiles) {
     const items = splitExercises(m.text);
-    const partner = solFiles.find((s) => stemOf(s.title) === stemOf(m.title));
+    const fromClass = m.classNotesId ? exam.materials.find((x) => x.id === m.classNotesId && x.kind === "notes" && x.text) : null;
+    const partner = fromClass ?? solFiles.find((s) => stemOf(s.title) === stemOf(m.title));
     const extra = partner ? new Map(splitExercises(partner.text, { solutionsOnly: true }).map((x) => [x.n, x.solution || x.text])) : new Map();
     for (const it of items) {
       if (!it.text) continue;
       const sol = it.solution || extra.get(it.n) || "";
-      out.push({ key: `${m.id}#${it.n}`, materialId: m.id, n: it.n, text: it.text, solution: sol, solutionFrom: it.solution ? m.id : sol ? partner.id : null, label: `${clean(m.title)} · es. ${it.n}` });
+      out.push({ key: `${m.id}#${it.n}`, materialId: m.id, n: it.n, text: it.text, solution: sol, solutionFrom: it.solution ? m.id : sol ? partner.id : null, label: `${clean(m.title)} · es. ${it.n}`,
+        ...(fromClass && !it.solution && sol ? { aula: true } : {}) });
     }
   }
   return [...out, ...quizItems(exam)];
@@ -152,13 +156,15 @@ export function applyOfficial(mod, exercises, assign = new Map(), now = new Date
       // il materiale è cambiato (per esempio le formule rilette con Claude): testo e soluzione si aggiornano, i progressi restano
       const changed = old.prompt !== e.text || old.modelAnswer !== mcqAnswer(e) || (e.kind === "mcq" && (old.correctIndex !== e.correctIndex || String(old.options) !== String(e.options)));
       if (changed) { Object.assign(old, { prompt: e.text, modelAnswer: mcqAnswer(e), ...(e.kind === "mcq" ? { options: e.options, correctIndex: e.correctIndex } : {}) }); refreshed++; }
+      // la soluzione può passare dagli appunti dell'aula al file ufficiale (o viceversa): l'etichetta segue
+      if (!!old.official.aula !== !!e.aula) { old.official = { key: e.key, source: e.label, ...(e.aula ? { aula: true } : {}) }; old.explanation = e.aula ? `Soluzione svolta in aula, dai tuoi appunti (${e.label}).` : `Soluzione ufficiale (${e.label}).`; refreshed++; }
       continue;
     }
     if (have.has(e.key)) continue;
     const mcq = e.kind === "mcq";
     const copy = mod.questions.find((q) => !q.official && (q.kind === "mcq") === mcq && sameExercise(q.prompt, e.text));
-    const official = { key: e.key, source: e.label, ...(e.quiz ? { quiz: true } : {}) };
-    const explanation = e.quiz ? `${e.feedback ? `${e.feedback} ` : ""}(Risposta del docente: ${e.label}.)` : `Soluzione ufficiale (${e.label}).`;
+    const official = { key: e.key, source: e.label, ...(e.quiz ? { quiz: true } : {}), ...(e.aula ? { aula: true } : {}) };
+    const explanation = e.quiz ? `${e.feedback ? `${e.feedback} ` : ""}(Risposta del docente: ${e.label}.)` : e.aula ? `Soluzione svolta in aula, dai tuoi appunti (${e.label}).` : `Soluzione ufficiale (${e.label}).`;
     if (copy) {
       // testo e soluzione ufficiali insieme: anche se la somiglianza ingannasse, domanda e soluzione restano della stessa coppia
       Object.assign(copy, { official, prompt: e.text, modelAnswer: mcqAnswer(e), explanation, ...(mcq ? { options: e.options, correctIndex: e.correctIndex } : {}) });

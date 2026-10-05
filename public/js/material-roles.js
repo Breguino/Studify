@@ -13,6 +13,8 @@ export function guessRole(fileName, isPdf = false) {
   if (/\btemi\b|\btema d esame|prov[ae] d esame|prov[ae] scritt[ae]|prov[ae] intermedi[ae]|\bcompit[io]\b|appell[oi]|esoner[oi]|esami (passati|vecchi|anni)|past (exams?|papers?)/.test(n)) return "esami";
   // esercizi risolti dal docente (a lezione, in esercitazione): il procedimento da imparare
   if (/\bsvolt[aeio]\b|\brisolt[aeio]\b|worked|svolgiment/.test(n)) return "svolti";
+  // «Appunti esercitazione 6», «Appunti in aula»: gli appunti presi all'esercitazione (le soluzioni alla lavagna), non il foglio
+  if (/appunt/.test(n) && /esercitaz|\baula\b|lavagna/.test(n)) return "appunti";
   // «Esercizi per l'esame» è un eserciziario, non una prova
   if (/eserciz|esercitaz|soluzion|exercis|problem set/.test(n)) return "esercizi";
   // appunti presi da un altro studente (dopo domande ed esercizi: «Domande d'esame dei colleghi» resta un elenco di domande)
