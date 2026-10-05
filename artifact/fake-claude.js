@@ -5,6 +5,7 @@ import { demoAnalysis, demoGrade } from "../public/js/past-exams.js";
 import { demoExamQuestions } from "../public/js/exam-questions.js";
 import { demoMethods } from "../public/js/worked.js";
 import { demoAssign } from "../public/js/exercises.js";
+import { demoBooks, demoChapterLinks } from "../public/js/books.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const calls = (window.__sampleCalls = []);
@@ -50,6 +51,15 @@ const methodNamesByTopic = (prompt) => {
 };
 
 const answer = (prompt) => {
+  if (prompt.includes("LIBRI DI TESTO DA ESTRARRE")) {
+    const text = prompt.split("<scheda_insegnamento>")[1].split("</scheda_insegnamento>")[0];
+    // più un libro che nella scheda non c'è: l'app lo deve scartare
+    return { found: true, books: [...demoBooks(text), { title: "Un manuale inventato", authors: "Nessuno", edition: "", publisher: "", chapters: "", main: false, quote: "" }] };
+  }
+  if (prompt.includes("CAPITOLI DA COLLEGARE")) {
+    const chapters = [...prompt.split("Capitoli dei libri:\n")[1].matchAll(/^(L\d+-\d+): (.+?)(?: — paragrafi: (.+))?$/gm)].map((m) => ({ id: m[1], title: m[2], sections: m[3] ? m[3].split("; ") : [] }));
+    return { links: [...demoChapterLinks(chapters, topicsIn(prompt)), { topicId: "t1", chapterIds: ["L9-99"] }] };
+  }
   if (prompt.includes("ESERCIZI DA ASSEGNARE")) {
     const ex = [...prompt.matchAll(/<esercizio id="(E\d+)"[^>]*>\n([\s\S]*?)\n<soluzione_ufficiale>\n([\s\S]*?)\n<\/soluzione_ufficiale>/g)].map((m) => ({ id: m[1], text: m[2], solution: m[3] }));
     const topics = topicsIn(prompt);

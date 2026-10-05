@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { ASSIGN_RULES, assignPrompt, CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_GRADE_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, PAST_EXAMS_RULES, examGradePrompt, pastExamsPrompt, practiceTasks, MATERIAL_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, where, DISPENSA_SYSTEM, chapterPrompt, splitChapter } from "../shared/prompts.js";
-import { AssignSchema, CurriculumSchema, DegreesSchema, ExamFormatSchema, ExamGradeSchema, GradeSchema, ImportRowsSchema, ModuleSchema, PastExamsSchema, normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex, identityRefs, exampleChecker, normalizeAssignments } from "./schema.js";
+import { ASSIGN_RULES, assignPrompt, BOOKS_RULES, CHAPTERS_RULES, chaptersPrompt, CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_GRADE_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, PAST_EXAMS_RULES, examGradePrompt, pastExamsPrompt, practiceTasks, MATERIAL_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, where, DISPENSA_SYSTEM, chapterPrompt, splitChapter } from "../shared/prompts.js";
+import { AssignSchema, BooksSchema, ChapterLinksSchema, CurriculumSchema, DegreesSchema, ExamFormatSchema, ExamGradeSchema, GradeSchema, ImportRowsSchema, ModuleSchema, PastExamsSchema, normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex, identityRefs, exampleChecker, normalizeAssignments, normalizeBooks, normalizeChapterLinks } from "./schema.js";
 
 export const MODEL = process.env.STUDIFY_MODEL || "claude-opus-5-5";
 
@@ -480,6 +480,38 @@ export async function assignExercises({ exam, topics, exercises }) {
   }
   const m = normalizeAssignments(raw, { ids: exercises.map((e) => e.id), topicIds: topics.map((t) => t.id) });
   return { assign: [...m].map(([id, a]) => ({ id, ...a })) };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Libri consigliati: dalla scheda dell'insegnamento, capitoli e argomenti    */
+/* -------------------------------------------------------------------------- */
+
+export async function extractBooks({ text }) {
+  const msg = await client().messages.create({
+    model: MODEL, max_tokens: 8000, thinking: { type: "adaptive" },
+    output_config: { effort: "low", format: zodOutputFormat(BooksSchema) },
+    system: BOOKS_RULES,
+    messages: [{ role: "user", content: `<scheda_insegnamento>\n${text}\n</scheda_insegnamento>` }],
+  });
+  assertUsable(msg);
+  let raw;
+  try { raw = BooksSchema.parse(JSON.parse(textOf(msg.content))); } catch { throw new Error("Non sono riuscito a leggere i libri dalla scheda. Riprova."); }
+  return normalizeBooks(raw, { sourceText: text });
+}
+
+/** @returns {Promise<{links: {topicId: string, chapterIds: string[]}[]}>} */
+export async function linkChapters({ exam, topics, chapters }) {
+  const msg = await client().messages.create({
+    model: MODEL, max_tokens: 8000, thinking: { type: "adaptive" },
+    output_config: { effort: "low", format: zodOutputFormat(ChapterLinksSchema) },
+    system: CHAPTERS_RULES,
+    messages: [{ role: "user", content: chaptersPrompt({ exam, topics, chapters }) }],
+  });
+  assertUsable(msg);
+  let raw;
+  try { raw = ChapterLinksSchema.parse(JSON.parse(textOf(msg.content))); } catch { throw new Error("Il collegamento dei capitoli è arrivato in un formato non valido. Riprova."); }
+  const m = normalizeChapterLinks(raw, { chapterIds: chapters.map((c) => c.id), topicIds: topics.map((t) => t.id) });
+  return { links: [...m].map(([topicId, chapterIds]) => ({ topicId, chapterIds })) };
 }
 
 /* -------------------------------------------------------------------------- */

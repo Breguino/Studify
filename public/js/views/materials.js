@@ -10,9 +10,11 @@ import { addRange, applyUpdate, compactModule, markSent, mathyPages, parseRange,
 import { officeText } from "../office-text.js";
 import { extractPdfPages } from "../pdf-pages.js";
 import { readPdf } from "../pdf-text.js";
+import { pdfPageTexts as pageTexts } from "../pdf-page-texts.js";
 import { guessRole, isPractice, roleOf, ROLES } from "../material-roles.js";
 import { applyExamBoost, papersOf, parseStarts, preparePapers } from "../past-exams.js";
 import { countLabel, numberedQuestions, questionsOf, remapExamRefs } from "../exam-questions.js";
+import { booksCard, syncChapterLinks } from "./books.js";
 import { applyOfficial, isSolutionsFile, officialExercises, officialQuestions, orphanSolutions, pendingOfficial, stemOf } from "../exercises.js";
 import { paperStartsOf } from "../lessons.js";
 import * as store from "../store.js";
@@ -150,15 +152,7 @@ function withLessons(m) {
 const structure = (m) => (roleOf(m) === "esami" ? preparePapers(m) : roleOf(m) === "domande" ? m : withLessons(m));
 
 /** Testo di ogni pagina di un PDF salvato (versione con server), riga per riga. */
-async function pdfPageTexts(m, maxPages = 300) {
-  const data = await store.getFile(m.fileId);
-  const { pages } = await readPdf(Uint8Array.from(atob(data), (c) => c.charCodeAt(0)), { maxPages });
-  return pages.map((p) => {
-    const lines = new Map();
-    for (const it of p.items) { const y = Math.round(it.y / 3); lines.set(y, [...(lines.get(y) ?? []), it]); }
-    return [...lines.entries()].sort((a, b) => b[0] - a[0]).map(([, its]) => its.sort((a, b) => a.x - b.x).map((i) => i.str).join(" ")).join("\n");
-  });
-}
+const pdfPageTexts = async (m, maxPages = 300) => pageTexts(await store.getFile(m.fileId), maxPages);
 
 /** PDF di esami passati (versione con server): dal testo delle pagine si trova dove inizia ogni prova. */
 async function findPdfPapers(m) {
@@ -384,6 +378,8 @@ async function generate(exam) {
     applyExamBoost(exam);
     const off = await syncOfficial(exam, onProgress);
     if (off) toast(`Esercitazioni: ${off}`, "ok");
+    const books = await syncChapterLinks(exam, onProgress);
+    if (books) toast(`Libri: ${books}`, "ok");
     exam.materials.forEach(markSent);
     toast("Modulo pronto!", "ok");
   });
@@ -406,6 +402,8 @@ async function update(exam) {
     pending.forEach(markSent);
     const off = await syncOfficial(exam, onProgress);
     if (off) toast(`Esercitazioni: ${off}`, "ok");
+    const books = await syncChapterLinks(exam, onProgress);
+    if (books) toast(`Libri: ${books}`, "ok");
   });
 }
 
@@ -796,7 +794,7 @@ export function materialsTab(exam) {
 
   return h("div", { class: "stack" },
     h("div", { class: "grid" }, h("div", { class: "card stack" }, paste, drop), handBox, researchBox),
-    formatBox, h("h2", { style: { margin: "6px 0 0" } }, `Materiali (${exam.materials.length})`), list, gen);
+    formatBox, booksCard(exam), h("h2", { style: { margin: "6px 0 0" } }, `Materiali (${exam.materials.length})`), list, gen);
 }
 
 // La dispensa usa gli stessi materiali (pagine e lezioni scelte, limiti controllati).

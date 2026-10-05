@@ -16,6 +16,7 @@ import { esamiTab } from "./esami.js";
 import { allPapers, analysisValid, topicFrequency } from "../past-exams.js";
 import { examQuestionStats } from "../exam-questions.js";
 import { renderMarkdown } from "../markdown.js";
+import { readingMinutes, topicReading, uncoveredChapters } from "../books.js";
 
 const TABS = [
   ["today", "Oggi"],
@@ -123,6 +124,15 @@ function hintsBox(hints, mod, title = "Cosa ha detto il docente sull'esame") {
     h("div", { class: "small muted" }, "Frasi copiate dai materiali: se vengono da sbobine di un anno precedente, il docente potrebbe aver cambiato idea."));
 }
 
+/** Capitoli del programma (dai libri consigliati) che nessun argomento del modulo copre. */
+function uncoveredBox(exam) {
+  const u = uncoveredChapters(exam);
+  if (!u.length) return null;
+  return h("div", { class: "callout warn" }, h("b", {}, `Nel programma ma non nei tuoi materiali (${u.length} ${u.length === 1 ? "capitolo" : "capitoli"})`),
+    h("ul", {}, u.map((x) => h("li", {}, h("i", {}, x.book.title), ` — cap. ${x.chapter.n} «`, rich(x.chapter.title), "»"))),
+    h("div", { class: "small" }, "Il programma li comprende: studiali sul libro o aggiungi gli appunti e le slide di quelle lezioni, poi «Aggiungi al modulo»."));
+}
+
 /** Aggiunto o approfondito con gli appunti nelle ultime due settimane. */
 const recent = (iso) => !!iso && daysBetween(today(new Date(iso)), today()) <= 14;
 
@@ -154,6 +164,7 @@ function moduleTab(exam) {
       h("a", { class: "btn small", href: `#/exam/${exam.id}/esami` }, freq.n ? "Esami passati" : "Analizza")) : null,
     asked.inQuiz.length ? h("div", { class: "callout row between" }, h("span", {}, `${asked.inQuiz.length} domande d'esame vere sono nel quiz, con la risposta modello.${asked.uncovered.length ? ` Altre ${asked.uncovered.length} dell'elenco non ancora.` : ""}`),
       h("a", { class: "btn small", href: `#/exam/${exam.id}/quiz?mode=exam` }, "Allenati")) : null,
+    uncoveredBox(exam),
     mod.gaps?.length ? h("div", { class: "callout warn" }, h("b", {}, "Cose da verificare / lacune individuate"), h("ul", {}, mod.gaps.map((g) => h("li", {}, rich(g))))) : null,
     h("div", { class: "stack", style: { gap: "10px" } }, mod.topics.map((t) =>
       h("a", { class: "topic card flat", href: `#/exam/${exam.id}/topic/${t.id}`, style: { textDecoration: "none", color: "inherit" } },
@@ -166,6 +177,18 @@ function moduleTab(exam) {
 }
 
 /* ---------------------------------- ARGOMENTO ---------------------------------- */
+
+/** Che cosa leggere sui libri consigliati per questo argomento (dall'indice), con le pagine e il tempo. */
+function readingBox(exam, t) {
+  const r = topicReading(exam, t.id);
+  if (!r.length) return null;
+  const mins = (n) => { const m = readingMinutes(n, exam.level); return m >= 60 ? `~${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}` : `~${m} min`; };
+  return h("div", { class: "callout" }, h("b", {}, "Da leggere sul libro"),
+    h("ul", {}, r.map((x) => h("li", {}, h("i", {}, x.book.title), ` — cap. ${x.chapter.n} «`, rich(x.chapter.title), "»",
+      x.pages ? h("span", { class: "muted small" }, ` · pp. ${x.pages.from}${x.pages.to ? `–${x.pages.to}` : ""}${x.count ? ` (${x.count} pagine, ${mins(x.count)})` : ""}`) : null,
+      x.book.own === "no" ? h("span", { class: "muted small" }, " · non ce l'hai: in biblioteca?") : null))),
+    h("div", { class: "small muted" }, "Leggi dopo aver provato a ricordare (vedi sopra) e chiudi il libro per rispondere alle domande: rileggere da solo non fissa."));
+}
 
 /** «3 esercizi con soluzione»: esercizi delle esercitazioni su questo argomento. */
 const officialBadge = (mod, t) => {
@@ -245,6 +268,7 @@ export function topicView(exam, tid, query) {
     hintsBox((mod.examHints ?? []).filter((x) => x.topicId === t.id), mod, "Il docente su questo argomento"),
     askedBox(exam, t),
     examQuestionsBox(exam, t),
+    readingBox(exam, t),
     methodsBox(exam, t),
     officialBox(exam, t),
     h("div", { class: "card" }, h("h3", {}, "In breve"), richParas(t.summary)),

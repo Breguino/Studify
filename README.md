@@ -194,7 +194,17 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
    - i **grafici con i dati**, come tabelle («[Grafico a barre: …]»), e il testo alternativo delle immagini.
    I grafici disegnati con linee e frecce e le immagini senza descrizione da un PowerPoint non si leggono: l'app indica in quali slide
    sono e consiglia di caricare la presentazione in PDF, che Claude legge con le figure.
-8. **Esercitazioni con le soluzioni** (tipo «Esercizi»): l'app divide il testo in esercizi («Esercizio 3», o «1.», «2.» consecutivi)
+8. **Libri consigliati** (riquadro nei Materiali): i testi di riferimento della scheda dell'insegnamento, aggiunti a mano o ricavati da
+   Claude dalla scheda incollata (un titolo che nel testo non c'è viene scartato), con i capitoli del programma («capp. 1-6») e se li
+   hai in PDF, cartacei o no. Anche se il libro è cartaceo basta l'**indice** (incollato, o fotografato e trascritto da Claude): l'app ne
+   legge capitoli, pagine e paragrafi, e Claude collega i capitoli agli argomenti del modulo (id controllati). Così:
+   - nell'argomento: **che cosa leggere**, con le pagine e il tempo (circa 4 minuti a pagina partendo da zero, 3 con basi solide);
+   - nel modulo: i **capitoli del programma che i tuoi materiali non coprono**;
+   - nel piano: «Studia: Elasticità (leggi Mankiw cap. 5, pp. 89–112)», con il tempo di lettura (un capitolo che serve a più argomenti
+     divide le sue pagine tra loro; un libro che non hai non entra nel piano);
+   - con il PDF: l'app trova di quante pagine i capitoli sono spostati rispetto ai numeri stampati (copertina, indice) e usa nel modulo
+     solo le pagine dei capitoli del programma.
+9. **Esercitazioni con le soluzioni** (tipo «Esercizi»): l'app divide il testo in esercizi («Esercizio 3», o «1.», «2.» consecutivi)
    e trova la soluzione di ciascuno: sotto l'esercizio («Soluzione»), in una sezione «Soluzioni» in fondo, o in un file a parte con lo
    stesso nome («Esercitazione 3» ↔ «Esercitazione 3 - soluzioni»; «Esercitazione 4 con soluzioni» è un file unico). Gli esercizi con
    soluzione entrano nel quiz **così come sono**, testo e soluzione ufficiali: a Claude si chiede solo l'argomento e una rubrica, e se
@@ -202,7 +212,7 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
    nel quiz viene riconosciuto (stessi numeri e parole) e prende testo e soluzione ufficiali, senza doppioni e senza perdere i progressi.
    «Fai l'esercitazione» propone gli esercizi nell'ordine; la soluzione ufficiale compare dopo il tuo tentativo. Nel piano l'esercitazione
    sull'argomento segue lo studio. Versione con server: un PDF di esercitazione lo legge Claude (formule comprese) e diventa testo.
-9. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
+10. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
 
 | Sessione | Cosa fa |
 |---|---|
@@ -239,6 +249,8 @@ una prima lettura guidata e da esempi svolti (expertise reversal); con pochi gio
   La frequenza degli argomenti su poche prove è rumorosa, e prove di un altro docente o di un programma vecchio possono ingannare.
   Gli elenchi di domande raccolti dagli studenti riflettono ciò che chi li ha scritti ricorda: i conteggi sono indicativi. E sapere
   a memoria le risposte dell'elenco non basta all'orale, dove il docente incalza.
+- **Libri consigliati**: i capitoli «non coperti» sono quelli che nessun argomento del modulo tratta, non la prova che non li sai; e un
+  argomento collegato a un capitolo non vuol dire che i tuoi materiali lo trattino come il libro. Il tempo di lettura è una stima.
 - **Esercitazioni**: rifare più volte gli stessi esercizi fa ricordare i numeri, non il metodo: dopo i primi giri passa agli esercizi
   nuovi dello stesso tipo (quelli creati dall'AI) e agli esercizi misti. Le soluzioni ufficiali possono essere sintetiche («Q = 20»):
   in quel caso la correzione di Claude confronta anche il procedimento.
@@ -268,7 +280,7 @@ artifact/         versione pagina Claude: generate.js (sample), backend.js (db),
 scripts/          build-artifact.mjs (esbuild)
 public/js/        logica pura (testata): dates, methods, srs, planner, progress, local-builder, tabular (CSV/xlsx), importers, timetable,
                   lessons (lezioni e prove), past-exams (prove, frequenze, voto), exam-questions (elenchi di domande d'esame),
-                  worked (metodi del docente ed esercizi guidati), exercises (esercitazioni con le soluzioni)
+                  worked (metodi del docente ed esercizi guidati), exercises (esercitazioni con le soluzioni), books (libri consigliati)
                   stato/UI: store (IndexedDB), domain, api, ui, views/*
 public/demo/      modulo demo (Microeconomia)
 test/             node --test: logica pura + client AI con SDK simulato

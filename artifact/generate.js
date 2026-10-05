@@ -1,8 +1,8 @@
 // Generazione con Claude dentro la pagina pubblicata (capability `sample`): nessuna chiave API,
 // usa l'account Claude di chi apre la pagina. Limiti: nessuna navigazione web, nessun PDF,
 // prompt ≤ 256 KiB e risposte brevi → il modulo si costruisce a passi (schema → carte/domande per argomento).
-import { ASSIGN_RULES, assignPrompt, CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_GRADE_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, GRADE_RULES, PAST_EXAMS_RULES, examGradePrompt, pastExamsPrompt, IMPORT_HEADERS, IMPORT_RULES, JSON_LATEX_RULE, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, DISPENSA_SYSTEM, chapterPrompt, splitChapter } from "../shared/prompts.js";
-import { exampleChecker, examQuestionLines, identityRefs, normalizeAssignments, normalizeCurriculum, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex } from "../shared/normalize.js";
+import { ASSIGN_RULES, assignPrompt, BOOKS_RULES, CHAPTERS_RULES, chaptersPrompt, CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_GRADE_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, GRADE_RULES, PAST_EXAMS_RULES, examGradePrompt, pastExamsPrompt, IMPORT_HEADERS, IMPORT_RULES, JSON_LATEX_RULE, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, DISPENSA_SYSTEM, chapterPrompt, splitChapter } from "../shared/prompts.js";
+import { exampleChecker, examQuestionLines, identityRefs, normalizeAssignments, normalizeBooks, normalizeChapterLinks, normalizeCurriculum, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex } from "../shared/normalize.js";
 
 const MAX_MATERIAL_CHARS = 200_000;
 const CONCURRENCY = 2; // `sample` ne esegue un paio alla volta, le altre aspettano: oltre si rischia rate_limited
@@ -484,6 +484,39 @@ ${assignPrompt({ exam, topics, exercises: group })}`;
     }
   }
   return { assign: out };
+}
+
+/** Libri di testo dalla scheda dell'insegnamento incollata (solo titoli che compaiono nel testo). */
+export async function extractBooks({ text }, onProgress = () => {}, sampleFn) {
+  const sample = sampleFn ?? (await getSample());
+  if (!sample) throw new Error("Claude non è disponibile in questa pagina.");
+  const prompt = `${BOOKS_RULES}
+Rispondi SOLO con un oggetto JSON: {"found": boolean, "books": [{"title": string, "authors": string, "edition": string, "publisher": string, "chapters": string, "main": boolean, "quote": string}]}
+
+<scheda_insegnamento>
+${String(text).slice(0, 40_000)}
+</scheda_insegnamento>`;
+  try {
+    return normalizeBooks(await sample.json(prompt, { modelTier: "default" }), { sourceText: text });
+  } catch (e) {
+    throw explain(e);
+  }
+}
+
+/** Capitoli dei libri collegati agli argomenti del modulo (id verificati). */
+export async function linkChapters({ exam, topics, chapters }, onProgress = () => {}, sampleFn) {
+  const sample = sampleFn ?? (await getSample());
+  if (!sample) throw new Error("Claude non è disponibile in questa pagina.");
+  const prompt = `${CHAPTERS_RULES}
+Rispondi SOLO con un oggetto JSON: {"links": [{"topicId": string, "chapterIds": [string]}]}
+
+${chaptersPrompt({ exam, topics, chapters })}`;
+  try {
+    const m = normalizeChapterLinks(await sample.json(prompt, { modelTier: "default" }), { chapterIds: chapters.map((c) => c.id), topicIds: topics.map((t) => t.id) });
+    return { links: [...m].map(([topicId, chapterIds]) => ({ topicId, chapterIds })) };
+  } catch (e) {
+    throw explain(e);
+  }
 }
 
 /** Correzione di una risposta libera. */

@@ -423,3 +423,28 @@ ${topics.map((t) => `${t.id}: ${t.title}`).join("\n")}
 
 ${exercises.map((e) => `<esercizio id="${e.id}" titolo="${String(e.label).replace(/"/g, "'")}">\n${String(e.text).slice(0, 2500)}\n<soluzione_ufficiale>\n${String(e.solution).slice(0, 4000)}\n</soluzione_ufficiale>\n</esercizio>`).join("\n\n")}`;
 }
+
+
+/* --------------------------- libri consigliati --------------------------- */
+
+export const BOOKS_RULES = `Dal testo della scheda di un insegnamento estrai i LIBRI DI TESTO DA ESTRARRE («Testi di riferimento», «Bibliografia», «Testi
+consigliati»). Per ogni libro: title = il titolo come è scritto; authors = gli autori ("" se non ci sono); edition = edizione o anno ("");
+publisher = editore (""); chapters = i capitoli indicati per il programma come sono scritti (es. "1-10, 12"; "" se non indicati);
+main = true per il testo principale o obbligatorio, false per quelli facoltativi o di approfondimento; quote = la riga del testo da cui
+viene, COPIATA. Non aggiungere libri che non sono nel testo. found = false se il testo non contiene libri.
+${SAFETY_RULES}`;
+
+export const CHAPTERS_RULES = `Collega i CAPITOLI DA COLLEGARE dei libri di testo (ognuno con un id come «L1-5») agli argomenti del modulo di studio
+dello studente: per ogni argomento, chapterIds = gli id dei capitoli (o del capitolo) dove si studia quell'argomento, guardando titoli
+e paragrafi; [] se nessun capitolo lo tratta. Un capitolo può servire a più argomenti. Non inventare id.
+${SAFETY_RULES}`;
+
+export function chaptersPrompt({ exam, topics, chapters }) {
+  return `${examContext(exam)}
+
+Argomenti del modulo (id: titolo):
+${topics.map((t) => `${t.id}: ${t.title}`).join("\n")}
+
+Capitoli dei libri:
+${chapters.map((c) => `${c.id}: ${c.title}${c.sections?.length ? ` — paragrafi: ${c.sections.slice(0, 12).join("; ")}` : ""}`).join("\n")}`;
+}

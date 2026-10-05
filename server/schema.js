@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { FORMATS, KINDS, LEVELS } from "../shared/normalize.js";
 
-export { normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex, identityRefs, exampleChecker, normalizeAssignments } from "../shared/normalize.js";
+export { normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex, identityRefs, exampleChecker, normalizeAssignments, normalizeBooks, normalizeChapterLinks } from "../shared/normalize.js";
 
 // Schema del "modulo di studio" generato dall'AI. Tutti i campi sono obbligatori
 // (gli output strutturati non gestiscono bene i campi opzionali): dove un campo
@@ -144,3 +144,10 @@ export const ExamGradeSchema = z.object({
 export const AssignSchema = z.object({
   assign: z.array(z.object({ id: z.string(), topicId: z.string(), rubric: z.array(z.string()), note: z.string() })),
 });
+
+// Libri di testo dalla scheda dell'insegnamento, e capitoli collegati agli argomenti.
+export const BooksSchema = z.object({
+  found: z.boolean(),
+  books: z.array(z.object({ title: z.string(), authors: z.string(), edition: z.string(), publisher: z.string(), chapters: z.string(), main: z.boolean(), quote: z.string() })),
+});
+export const ChapterLinksSchema = z.object({ links: z.array(z.object({ topicId: z.string(), chapterIds: z.array(z.string()) })) });

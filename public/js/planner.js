@@ -3,6 +3,7 @@
 // Fasi: Comprensione → Consolidamento → Simulazione → Ripasso leggero (ultimo giorno).
 // Il piano è ricalcolabile: gli argomenti già "studiati" non vengono riproposti e, se
 // il tempo non basta, vengono tenuti quelli più importanti (e gli altri segnalati).
+import { readingMinutes } from "./books.js";
 import { addDays, daysBetween } from "./dates.js";
 
 const LEVEL_FACTOR = { 1: 1.5, 2: 1.25, 3: 1, 4: 0.8, 5: 0.65 };
@@ -57,7 +58,9 @@ export function buildPlan({ examDate, examType, level, hoursPerDay, topics, lear
 
   // --- argomenti da studiare, con selezione per importanza se il tempo non basta
   // load = studio + esercizi guidati sui metodi del docente (25 min ciascuno, al massimo 2): conta per capacità e distribuzione
-  const pending = topics.filter((t) => !learned[t.id]).map((t) => ({ ...t, minutes: topicMinutes(t, level), load: topicMinutes(t, level) + 25 * Math.min(2, t.methods?.length ?? 0) + (t.officialCount ? 25 : 0) }));
+  // con un libro collegato: anche il tempo per leggere il capitolo (al massimo 2 ore e mezza per argomento)
+  const study = (t) => topicMinutes(t, level) + Math.min(150, readingMinutes(t.readPages, level));
+  const pending = topics.filter((t) => !learned[t.id]).map((t) => ({ ...t, minutes: study(t), load: study(t) + 25 * Math.min(2, t.methods?.length ?? 0) + (t.officialCount ? 25 : 0) }));
   // Nei giorni quasi pieni di lezioni (meno del 30% del tempo libero) non si introducono argomenti nuovi.
   const learnIdx = days.slice(0, ph.learn).map((_, i) => i);
   let eligible = learnIdx.filter((i) => days[i].avail >= budget * 0.3);
@@ -100,7 +103,7 @@ export function buildPlan({ examDate, examType, level, hoursPerDay, topics, lear
 
     if (day.phase === "learn") {
       for (const t of learnByDay[i]) {
-        add(day, { kind: "learn", key: t.id, topicId: t.id, title: `Studia: ${t.title}`, minutes: t.minutes, method: level <= 2 ? "firstpass" : "elaborate" });
+        add(day, { kind: "learn", key: t.id, topicId: t.id, title: `Studia: ${t.title}${t.readLabel ? ` (leggi ${t.readLabel})` : ""}`, minutes: t.minutes, method: level <= 2 ? "firstpass" : "elaborate" });
         // esercizi svolti dal docente: subito dopo averlo studiato, il suo metodo (esempio → completamento → da solo)
         (t.methods ?? []).slice(0, 2).forEach((m, k) =>
           add(day, { kind: "guided", key: `${t.id}-${k}`, topicId: t.id, methodIndex: k, title: `Esercizi guidati: ${m.name} (metodo del docente)`, minutes: 25, method: "practice" }));

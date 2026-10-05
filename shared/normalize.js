@@ -528,3 +528,33 @@ export function normalizeAssignments(raw, { ids = [], topicIds = [] } = {}) {
   }
   return out;
 }
+
+/** Libri estratti da una scheda: solo quelli il cui titolo compare davvero nel testo incollato. */
+export function normalizeBooks(raw, { sourceText = "" } = {}) {
+  const hay = flatQ(sourceText);
+  const seen = new Set();
+  const books = [];
+  for (const b of Array.isArray(raw?.books) ? raw.books : []) {
+    const title = str(b?.title).slice(0, 200);
+    const k = flatQ(title);
+    if (k.length < 3 || seen.has(k) || !hay.includes(k.slice(0, 40))) continue;
+    seen.add(k);
+    books.push({ title, authors: str(b?.authors).slice(0, 200), edition: str(b?.edition).slice(0, 40), publisher: str(b?.publisher).slice(0, 80),
+      program: /\d/.test(str(b?.chapters)) ? str(b.chapters).slice(0, 80) : "", main: !!b?.main });
+  }
+  if (books.length && !books.some((b) => b.main)) books[0].main = true;
+  return { found: books.length > 0, books };
+}
+
+/** Capitoli collegati agli argomenti: solo id di capitoli e argomenti esistenti. @returns {Map<string, string[]>} argomento → capitoli */
+export function normalizeChapterLinks(raw, { chapterIds = [], topicIds = [] } = {}) {
+  const validC = new Set(chapterIds);
+  const validT = new Set(topicIds);
+  const out = new Map();
+  for (const l of Array.isArray(raw?.links) ? raw.links : []) {
+    if (!validT.has(l?.topicId)) continue;
+    const ids = [...new Set((Array.isArray(l.chapterIds) ? l.chapterIds : []).filter((id) => validC.has(id)))];
+    if (ids.length) out.set(l.topicId, [...new Set([...(out.get(l.topicId) ?? []), ...ids])]);
+  }
+  return out;
+}

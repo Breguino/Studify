@@ -3,16 +3,17 @@ import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODEL, aiConfigured, analyzePastExams, assignExercises, transcribePdf, buildModule, curriculum, degrees, examFormat, examFormatFromText, extendModule, gradeExam, transcribe, writeDispensa, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
+import { MODEL, aiConfigured, analyzePastExams, assignExercises, transcribePdf, extractBooks, linkChapters, buildModule, curriculum, degrees, examFormat, examFormatFromText, extendModule, gradeExam, transcribe, writeDispensa, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
 import { demoAnalysis, demoGrade } from "../public/js/past-exams.js";
 import { demoExamQuestions } from "../public/js/exam-questions.js";
 import { demoMethods } from "../public/js/worked.js";
 import { demoAssign } from "../public/js/exercises.js";
+import { demoBooks, demoChapterLinks } from "../public/js/books.js";
 import { extractPages } from "../public/js/pdf-extract.js";
 import { findExamHints, localDelta } from "../public/js/local-builder.js";
 import { formatFromSyllabus } from "../public/js/exam-type.js";
 import { IMPORT_HEADERS } from "../shared/prompts.js";
-import { normalizeAssignments, normalizeExamGrade, normalizeModule, normalizePastExams } from "./schema.js";
+import { normalizeAssignments, normalizeBooks, normalizeChapterLinks, normalizeExamGrade, normalizeModule, normalizePastExams } from "./schema.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
 const PORT = Number(process.env.PORT || 3000);
@@ -388,6 +389,25 @@ async function api(req, res, url) {
       return { ...d, topics: [...d.topics, ...mt], questions: [...d.questions, ...examQs, ...mq], examHints: [...findExamHints(notes, "sbobine"), { quote: "Questa frase non è nei materiali: il docente non l'ha mai detta.", source: "inventata", note: "", topicId: "" }] };
     };
     const id = startJob("module", (p) => (MOCK ? mockRun(p, { delta: mockDelta(), sources: [], mode: "local" }) : extendModule(input, p)));
+    return send(res, 202, { jobId: id });
+  }
+
+  if (url.pathname === "/api/books-from-text") {
+    const text = str(body.text, 40_000);
+    if (text.trim().length < 20) return send(res, 400, { error: "Incolla i testi di riferimento dalla scheda dell'insegnamento." });
+    const id = startJob("books", (p) => (MOCK ? mockRun(p, normalizeBooks({ books: demoBooks(text) }, { sourceText: text })) : extractBooks({ text })));
+    return send(res, 202, { jobId: id });
+  }
+
+  if (url.pathname === "/api/link-chapters") {
+    const topics = parseTopics(body.topics);
+    const chapters = (Array.isArray(body.chapters) ? body.chapters : []).slice(0, 200).map((c) => ({ id: str(c?.id, 12), title: str(c?.title, 300),
+      sections: (Array.isArray(c?.sections) ? c.sections : []).slice(0, 20).map((x) => str(x, 200)) })).filter((c) => /^L\d{1,2}-\d{1,2}$/.test(c.id) && c.title);
+    if (!topics.length || !chapters.length) return send(res, 400, { error: "Servono gli argomenti del modulo e i capitoli dei libri." });
+    const input = { exam: parseExam(body.exam), topics, chapters };
+    const id = startJob("chapters", (p) => (MOCK
+      ? mockRun(p, { links: [...normalizeChapterLinks({ links: demoChapterLinks(chapters, topics) }, { chapterIds: chapters.map((c) => c.id), topicIds: topics.map((t) => t.id) })].map(([topicId, chapterIds]) => ({ topicId, chapterIds })) })
+      : linkChapters(input)));
     return send(res, 202, { jobId: id });
   }
 

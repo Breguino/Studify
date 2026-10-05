@@ -9,6 +9,7 @@ import * as store from "./store.js";
 import { studyStart, windowDays } from "./workload.js";
 import { allPapers, attemptsOf, paperMinutes } from "./past-exams.js";
 import { examQuestionStats } from "./exam-questions.js";
+import { readingByTopic } from "./books.js";
 import { save } from "./store.js";
 
 export const daysLeft = (exam) => daysBetween(today(), exam.date);
@@ -20,7 +21,8 @@ export function ensurePlan(exam, force = false) {
   const asked = examQuestionStats(exam).inQuiz.length;
   const official = new Map();
   for (const q of exam.module.questions) if (q.official) official.set(q.topicId, (official.get(q.topicId) ?? 0) + 1);
-  const stamp = `${exam.moduleBuiltAt}|${exam.moduleUpdatedAt ?? ""}|${tt?.importedAt ?? ""}|${tt?.until ?? ""}|${exam.date}|${exam.studyDays ?? 0}|${papers.length}|${exam.pastExams?.analyzedAt ?? ""}|${asked}|${[...official.values()].reduce((a, b) => a + b, 0)}`;
+  const reading = readingByTopic(exam);
+  const stamp = `${exam.moduleBuiltAt}|${exam.moduleUpdatedAt ?? ""}|${tt?.importedAt ?? ""}|${tt?.until ?? ""}|${exam.date}|${exam.studyDays ?? 0}|${papers.length}|${exam.pastExams?.analyzedAt ?? ""}|${asked}|${[...official.values()].reduce((a, b) => a + b, 0)}|${[...reading].map(([k, r]) => `${k}:${r.pages}`).join(",")}`;
   if (force || !exam.plan || exam.plan.builtOn !== today() || exam.plan.stamp !== stamp) {
     exam.plan = {
       ...buildPlan({
@@ -28,7 +30,8 @@ export function ensurePlan(exam, force = false) {
         examType: exam.type,
         level: exam.level,
         hoursPerDay: exam.hoursPerDay,
-        topics: exam.module.topics.map((t) => (official.get(t.id) ? { ...t, officialCount: official.get(t.id) } : t)),
+        topics: exam.module.topics.map((t) => (official.get(t.id) || reading.get(t.id)
+          ? { ...t, officialCount: official.get(t.id) ?? 0, readPages: reading.get(t.id)?.pages ?? 0, readLabel: reading.get(t.id)?.label ?? "" } : t)),
         learned: exam.learned,
         today: today(),
         start: studyStart(exam, today()),
