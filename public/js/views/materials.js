@@ -589,7 +589,7 @@ async function addHandwritten(exam, files) {
 async function readPhotos(exam, m, r) {
   await run(exam, "transcribe", async (onProgress) => {
     const blobs = await photoBlobs(m, r.from, r.to);
-    if (!blobs) throw new Error("Le foto non sono più disponibili (dopo una ricarica la pagina Claude non le conserva): caricale di nuovo.");
+    if (!blobs) throw new Error("Le foto non sono più disponibili (dopo una ricarica questa versione non le conserva): caricale di nuovo.");
     const pages = [];
     const step = core.ai.artifact ? blobs.length : SERVER_BATCH;
     for (let k = 0; k < blobs.length; k += step) {

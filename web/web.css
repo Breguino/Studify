@@ -1,0 +1,30 @@
+/* Solo versione web: accesso e piè di pagina */
+.site-footer { max-width: 1120px; margin: 0 auto; padding: 0 24px 32px; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: .88rem; color: var(--muted); }
+.site-footer a { color: var(--muted); }
+.auth-gate { position: fixed; inset: 0; z-index: 40; overflow-y: auto; background: var(--bg); display: grid; padding: 24px 16px; }
+.auth-wrap { margin: auto; width: 100%; max-width: 1000px; display: grid; gap: 32px; grid-template-columns: 1.1fr 1fr; align-items: center; }
+.auth-pitch h1 { font-size: clamp(1.9rem, 4.4vw, 2.9rem); line-height: 1.1; margin: 18px 0 14px; }
+.auth-pitch p { color: var(--muted); font-size: 1.08rem; max-width: 34em; }
+.auth-logo { font-size: 1.35rem; }
+.auth-points { list-style: none; padding: 0; margin: 18px 0 0; display: grid; gap: 10px; }
+.auth-points li { display: flex; gap: 10px; align-items: flex-start; }
+.auth-points li::before { content: ""; flex: 0 0 8px; height: 8px; margin-top: .55em; border-radius: 50%; background: var(--brand); }
+.auth-card { padding: 28px; display: grid; gap: 14px; }
+.auth-card h2 { margin: 0; font-size: 1.5rem; }
+.auth-tabs { margin: 0; }
+.auth-tabs a { flex: 1; text-align: center; }
+.auth-status:empty { display: none; }
+.auth-status ul { margin: 0; padding-left: 18px; }
+.auth-legal { margin: 0; text-align: center; }
+.consents { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin: 0; display: grid; gap: 10px; }
+.consents legend { padding: 0 6px; font-weight: 700; font-size: .9rem; }
+label.check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; font-size: .94rem; }
+label.check input { width: 20px; height: 20px; margin-top: 2px; flex: 0 0 auto; }
+@media (max-width: 820px) {
+  .auth-wrap { grid-template-columns: 1fr; gap: 20px; max-width: 480px; }
+  .auth-pitch p, .auth-points { display: none; }
+  .auth-pitch h1 { font-size: 1.7rem; margin: 12px 0 0; }
+  .auth-card { padding: 22px 18px; }
+}
+@media (max-width: 520px) { #account-btn { padding: 6px 8px; } }
+@media print { .site-footer { display: none; } }

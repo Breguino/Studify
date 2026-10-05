@@ -38,6 +38,44 @@ Differenze rispetto alla versione con server:
 `npm run build:harness` crea `dist/harness.html`: la pagina con un `window.claude` finto, per provarla in un browser normale.
 I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `artifact/api.js` e `artifact/backend.js` in fase di build.
 
+## Versione web (Vercel + Supabase): account, dati sincronizzati, termini
+
+Per aprire Studify ad altri studenti, con registrazione e accesso:
+
+```
+npm run build:web          # crea dist-web/: index.html (app), termini.html, privacy.html
+```
+
+È la stessa app della pagina Claude, con al posto di `window.claude` un sostituto (`web/claude.js`):
+
+| | Come funziona |
+|---|---|
+| Accesso | Supabase Auth: registrazione con conferma dell'email, accesso, password dimenticata, cambio password, uscita, eliminazione dell'account (`web/auth.js`, `web/gate.js`). |
+| Consenso | Alla registrazione sono obbligatorie tre caselle: Termini, Informativa privacy (compreso l'invio dei materiali a Claude negli USA), maggiore età. Versione e data finiscono nei metadati dell'account e nella tabella `consents`. |
+| Dati | Tabella `docs` su Supabase (progetto `studify`, Francoforte), con row level security: ognuno legge e scrive solo le proprie righe. Stesso formato a blocchi della pagina Claude. I file (PDF, foto) restano nel browser (IndexedDB) e si cancellano all'uscita. |
+| Claude | Funzione Vercel `api/claude.js`: verifica il token Supabase, controlla il credito del mese, chiama Claude con la **chiave del gestore** in streaming e registra token e costo (`ai_usage`). Risponde con righe JSON (NDJSON). |
+| Limiti di spesa | Per utente (`USER_MONTHLY_LIMIT_USD`, predefinito 3 $) e complessivo (`TOTAL_MONTHLY_LIMIT_USD`, predefinito 30 $) al mese. |
+| Pagine legali | `web/termini.html`, `web/privacy.html`: **bozze con segnaposto** ([NOME COGNOME], [INDIRIZZO], [EMAIL DI CONTATTO], [DA VERIFICARE]) da far rivedere a un legale prima dell'apertura al pubblico. |
+
+**Variabili d'ambiente su Vercel**
+
+| Variabile | Default | Note |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | – | **Obbligatoria** per le funzioni AI (tipo *Sensitive*). Senza, l'app funziona ma Claude risulta non configurato. |
+| `ANTHROPIC_MODEL` | `claude-opus-5-5` | `claude-sonnet-5-5` costa la metà (2/10 $ per milione di token contro 4/20). |
+| `ANTHROPIC_MAX_TOKENS` | `32000` | Tetto di una singola risposta. |
+| `USER_MONTHLY_LIMIT_USD` / `TOTAL_MONTHLY_LIMIT_USD` | `3` / `30` | Credito al mese per utente / per tutto il servizio. |
+| `SUPABASE_URL` / `SUPABASE_KEY` | progetto `studify` | Solo se cambi progetto (anche `STUDIFY_SUPABASE_URL`/`_KEY` al build). La chiave è quella pubblica: i dati li protegge la RLS. |
+
+**Supabase** (schema in `supabase/schema.sql`): tabelle `docs`, `ai_usage`, `consents` con RLS; funzioni `record_ai_usage`,
+`ai_spend_this_month`, `delete_my_account`. In *Authentication → URL Configuration* vanno impostati **Site URL** e
+**Redirect URLs** con l'indirizzo Vercel, altrimenti i link delle email (conferma, recupero password) portano a `localhost`.
+Il server email predefinito di Supabase invia pochissime email l'ora: per un uso reale serve un SMTP proprio
+(*Authentication → Emails → SMTP Settings*).
+
+`vercel.json` imposta build, cartella `dist-web`, durata massima della funzione (300 s) e intestazioni di sicurezza (CSP, niente iframe).
+Prove: `test/web.test.js` (funzione, accesso, `sample`, `db`, controlli di registrazione).
+
 ## Come funziona
 
 0. **Ateneo, corso di studio, anni e materie** (scheda «Ateneo»):
@@ -371,7 +409,10 @@ dollaro per materiali molto lunghi: parti da pochi appunti per farti un'idea.
 server/           index.js (HTTP, job asincroni, sicurezza) · ai.js (Anthropic SDK) · schema.js (zod)
 shared/           prompts.js, normalize.js: usati sia dal server sia dalla pagina Claude (nessuna dipendenza)
 artifact/         versione pagina Claude: generate.js (sample), backend.js (db), api.js, entry.js, template, fake-claude (prove)
-scripts/          build-artifact.mjs (esbuild)
+web/              versione web: entry, auth (Supabase Auth), claude (sample/db/user), gate (accesso e account), backend, template, pagine legali
+api/              funzione Vercel /api/claude (_lib.js: controlli, costi, streaming; testata)
+supabase/         schema.sql (tabelle, RLS, funzioni)
+scripts/          build-artifact.mjs (esbuild: pagina Claude, harness, --web)
 public/js/        logica pura (testata): dates, methods, srs, planner, progress, local-builder, tabular (CSV/xlsx), importers, timetable,
                   lessons (lezioni e prove), past-exams (prove, frequenze, voto), exam-questions (elenchi di domande d'esame),
                   worked (metodi del docente ed esercizi guidati), exercises (esercitazioni con le soluzioni), books (libri consigliati),
@@ -385,4 +426,4 @@ test/             node --test: logica pura + client AI con SDK simulato
 ## Idee per dopo
 
 Import da Notion/Drive, OCR di foto degli appunti, calendario con più esami in competizione per il tempo,
-calibrazione della fiducia (quanto sei sicuro prima di vedere la risposta), versione sincronizzata multi-dispositivo.
+calibrazione della fiducia (quanto sei sicuro prima di vedere la risposta), file (PDF, foto) sincronizzati anche nella versione web (Supabase Storage).

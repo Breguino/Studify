@@ -27,10 +27,17 @@ export function explain(e) {
     refused: "Claude ha rifiutato la richiesta. Prova a cambiare il materiale.",
     empty_completion: "Claude non ha prodotto una risposta. Riprova con meno materiale.",
     session_expired: "Sessione scaduta: riapri la pagina ed effettua l'accesso.",
+    quota_exceeded: "Hai usato tutto il credito di Claude di questo mese.",
+    server_error: "Il server di Studify non ha risposto. Riprova tra poco.",
     cancelled: "Operazione annullata.",
   }[e?.code] ?? "Errore di comunicazione con Claude. Riprova.";
+  if (e?.message && (e.code === "quota_exceeded" || e.code === "sampling_disabled")) return new Error(e.message); // messaggio preciso dal server di Studify
   return new Error(msg);
 }
+
+// Errori per cui non ha senso continuare con gli altri passi (le altre richieste fallirebbero allo stesso modo).
+const FATAL = new Set(["not_granted", "sampling_disabled", "rate_limited", "quota_exceeded", "session_expired"]);
+const isFatal = (e) => FATAL.has(e?.code);
 
 /** Esegue `fn` su ogni elemento con al più `n` richieste in volo. */
 async function pool(items, n, fn) {
@@ -98,7 +105,7 @@ Rispondi SOLO con un oggetto JSON: {"methods": [{"name": string, "steps": [strin
     const r = await sample.json(prompt, { modelTier: "default" });
     return Array.isArray(r?.methods) ? r.methods.slice(0, 3) : [];
   } catch (e) {
-    if (["not_granted", "sampling_disabled", "rate_limited"].includes(e?.code)) throw explain(e);
+    if (isFatal(e)) throw explain(e);
     return [];
   }
 }
@@ -148,7 +155,7 @@ Rispondi SOLO con un oggetto JSON: {"questions": [{"kind": "open"|"problem", "pr
       const r = await sample.json(prompt, { modelTier: "default" });
       return { t, ids, questions: Array.isArray(r?.questions) ? r.questions : [] };
     } catch (e) {
-      if (["not_granted", "sampling_disabled", "rate_limited"].includes(e?.code)) throw explain(e);
+      if (isFatal(e)) throw explain(e);
       return { t, ids, questions: [], failed: true };
     } finally {
       done++;
@@ -202,7 +209,7 @@ export async function generateModule({ exam, materials, research }, onProgress =
       const r = await sample.json(prompt, { modelTier: "default" });
       return { flashcards: Array.isArray(r?.flashcards) ? r.flashcards : [], questions: Array.isArray(r?.questions) ? r.questions : [] };
     } catch (e) {
-      if (e?.code === "not_granted" || e?.code === "sampling_disabled" || e?.code === "rate_limited") throw explain(e);
+      if (isFatal(e)) throw explain(e);
       failed.push(t.title);
       return { flashcards: [], questions: [] };
     } finally {
@@ -287,7 +294,7 @@ export async function extendModule({ exam, materials, research, existing }, onPr
       const r = await sample.json(prompt, { modelTier: "default" });
       return { flashcards: Array.isArray(r?.flashcards) ? r.flashcards : [], questions: Array.isArray(r?.questions) ? r.questions : [] };
     } catch (e) {
-      if (e?.code === "not_granted" || e?.code === "sampling_disabled" || e?.code === "rate_limited") throw explain(e);
+      if (isFatal(e)) throw explain(e);
       failed.push(t.title);
       return { flashcards: [], questions: [] };
     } finally {
@@ -366,7 +373,7 @@ export async function writeDispensa({ exam, materials, research, outline, topics
       if (truncated) ch.body += "\n\n> Il capitolo è stato interrotto perché troppo lungo: riscrivilo in versione «sintetica».";
       chapters.push(ch);
     } catch (e) {
-      if (["not_granted", "sampling_disabled", "rate_limited"].includes(e?.code) && !chapters.length) throw explain(e);
+      if (isFatal(e) && !chapters.length) throw explain(e);
       chapters.push({ topicId: topic.id, title: topic.title, body: "", solutions: "", error: explain(e).message });
     }
     onProgress(0, `Capitoli pronti: ${k + 1}/${topics.length}`, { chapters: [...chapters] });

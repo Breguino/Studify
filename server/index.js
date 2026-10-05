@@ -493,6 +493,11 @@ const VENDOR = {
   "/vendor/pdfjs/pdf.worker.min.mjs": join("pdfjs-dist", "legacy", "build", "pdf.worker.min.mjs"),
   "/vendor/pdf-lib/pdf-lib.esm.min.js": join("pdf-lib", "dist", "pdf-lib.esm.min.js"),
 };
+// Figtree (carattere dell'interfaccia): servito da qui, non da Google Fonts (che riceverebbe l'IP di chi visita).
+const FONTS = {
+  "/vendor/figtree/latin.woff2": join("@fontsource-variable", "figtree", "files", "figtree-latin-wght-normal.woff2"),
+  "/vendor/figtree/latin-ext.woff2": join("@fontsource-variable", "figtree", "files", "figtree-latin-ext-wght-normal.woff2"),
+};
 
 // Codice condiviso server/browser (fuori da public/): solo i file elencati.
 const SHARED = { "/shared/normalize.js": "normalize.js", "/shared/prompts.js": "prompts.js" };
@@ -512,6 +517,13 @@ async function serveStatic(req, res, url) {
       return send(res, 200, await readFile(file), { "Content-Type": type, "Cache-Control": "public, max-age=86400" });
     } catch {
       return send(res, 404, "KaTeX non installato (npm install)");
+    }
+  }
+  if (FONTS[url.pathname]) {
+    try {
+      return send(res, 200, await readFile(join(NODE_MODULES, FONTS[url.pathname])), { "Content-Type": "font/woff2", "Cache-Control": "public, max-age=604800" });
+    } catch {
+      return send(res, 404, "Carattere non installato (npm install)");
     }
   }
   if (VENDOR[url.pathname]) {

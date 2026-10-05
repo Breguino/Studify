@@ -5,7 +5,7 @@ import { analyzePastExams, assignExercises, extractBooks, linkChapters, gradeExa
 export async function status() {
   const sample = await getSample();
   return sample
-    ? { ai: true, label: "Claude", model: "Claude (tuo account)", web: false, pdf: false, artifact: true }
+    ? { ai: true, label: "Claude", model: window.claude?.web ? "Claude (credito Studify)" : "Claude (tuo account)", web: false, pdf: false, artifact: true }
     : { ai: false, label: "Modalità base", web: false, pdf: false, artifact: true };
 }
 
