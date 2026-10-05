@@ -14,6 +14,7 @@ import { methodsTab, progressTab } from "./insights.js";
 import { dispensaTab } from "./dispensa.js";
 import { esamiTab } from "./esami.js";
 import { ricevimentoTab } from "./ricevimento.js";
+import { groupCard } from "./group.js";
 import { allPapers, analysisValid, topicFrequency } from "../past-exams.js";
 import { examQuestionStats } from "../exam-questions.js";
 import { renderMarkdown } from "../markdown.js";
@@ -194,6 +195,7 @@ function moduleTab(exam) {
           h("div", { class: "row" }, examBadge(t, freq), askedBadge(t), officialBadge(mod, t), t.methods?.length ? badge(t.methods.length === 1 ? "metodo del docente" : `${t.methods.length} metodi del docente`, "brand") : null, (mod.examHints ?? []).some((x) => x.topicId === t.id) ? badge("il docente ne parla per l'esame", "bad") : null, recent(t.addedAt) ? badge("nuovo", "brand") : recent(t.updatedAt) ? badge("approfondito", "brand") : null, badge(["", "marginale", "importante", "centrale"][t.importance], t.importance === 3 ? "bad" : t.importance === 2 ? "warn" : ""), exam.learned[t.id] ? badge("studiato", "good") : null)),
         h("p", { class: "muted small", style: { margin: "6px 0 0" } }, rich(clipRich(t.summary, 180)))))),
     mod.sources?.length ? h("details", {}, h("summary", {}, `Fonti online (${mod.sources.length})`), h("ul", { class: "source-list" }, mod.sources.map((s) => h("li", {}, h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer" }, s.title || s.url))))) : null,
+    groupCard(exam),
     h("p", { class: "muted small" }, "Il modulo è una bozza generata da te + AI: confrontalo con il programma e con il docente. Le fonti web e le conoscenze generali vanno verificate."),
   );
 }

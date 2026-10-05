@@ -276,6 +276,19 @@ Si aggiungono domande proprie, si copia l'elenco (per la mail di prenotazione o 
 il materiale «Ricevimento del …», che l'AI usa come indicazioni del docente di prima mano (sciolgono i dubbi segnati, e ciò che dicono
 sull'esame finisce tra le sue frasi). Un file con «ricevimento» nel nome è riconosciuto allo stesso modo.
 
+### In gruppo: condividere l'esame e interrogarsi a turno
+
+Nel modulo, il riquadro **«Studiate in gruppo?»**:
+- **Condividi l'esame con il gruppo** salva un file con il modulo (argomenti, flashcard, quiz, frasi del docente), i libri con
+  l'indice e, se si vuole, il testo dei materiali (non i PDF e le foto). Non partono i progressi, il piano, le simulazioni e le bozze
+  del ricevimento. Chi lo riceve lo apre dalla home con **«Importa un esame dal gruppo»**: un esame suo, con il modulo pronto e i
+  progressi a zero (il nome si distingue se c'è già; un backup completo viene riconosciuto e non importato al posto suo). Così uno
+  prepara il modulo con i materiali di tutti e gli altri non devono rigenerarlo.
+- **Interrogatevi a turno**: dieci domande aperte, prima quelle d'esame vere, poi quelle degli argomenti più importanti, al più due
+  per argomento nel primo giro. Chi risponde parla senza appunti; solo chi interroga apre la traccia (i punti da sentire da spuntare,
+  la risposta modello, la domanda con cui incalzare). Alla fine: quante sapute e quali rivedere. I risultati non entrano nei
+  progressi di chi ha il telefono, perché a rispondere poteva essere un altro.
+
 ### Libretto: esami superati e da superare
 
 Dal piano di studi (pagina «Ateneo e corso di studio») la pagina **Libretto** fa la checklist degli insegnamenti per anno:
