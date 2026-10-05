@@ -13,6 +13,7 @@ import { materialsTab } from "./materials.js";
 import { methodsTab, progressTab } from "./insights.js";
 import { dispensaTab } from "./dispensa.js";
 import { esamiTab } from "./esami.js";
+import { ricevimentoTab } from "./ricevimento.js";
 import { allPapers, analysisValid, topicFrequency } from "../past-exams.js";
 import { examQuestionStats } from "../exam-questions.js";
 import { renderMarkdown } from "../markdown.js";
@@ -27,6 +28,7 @@ const TABS = [
   ["dispensa", "Dispensa"],
   ["esami", "Esami passati"],
   ["methods", "Metodi"],
+  ["ricevimento", "Ricevimento"],
   ["progress", "Progressi"],
 ];
 
@@ -35,7 +37,7 @@ export function hubView(exam, tab) {
   const dl = daysLeft(exam);
   const apHere = exam.appelli?.find((a) => a.date === exam.date);
   const others = (exam.appelli ?? []).filter((a) => a.date !== exam.date && a.date >= today());
-  const body = { today: todayTab, materials: materialsTab, module: moduleTab, dispensa: dispensaTab, esami: esamiTab, methods: methodsTab, progress: progressTab }[tab](exam);
+  const body = { today: todayTab, materials: materialsTab, module: moduleTab, dispensa: dispensaTab, esami: esamiTab, methods: methodsTab, ricevimento: ricevimentoTab, progress: progressTab }[tab](exam);
   return h(
     "div",
     { class: "stack", style: { gap: "0" } },

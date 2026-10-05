@@ -15,6 +15,8 @@ export function guessRole(fileName, isPdf = false) {
   if (/\bsvolt[aeio]\b|\brisolt[aeio]\b|worked|svolgiment/.test(n)) return "svolti";
   // «Appunti esercitazione 6», «Appunti in aula»: gli appunti presi all'esercitazione (le soluzioni alla lavagna), non il foglio
   if (/appunt/.test(n) && /esercitaz|\baula\b|lavagna/.test(n)) return "appunti";
+  // le risposte del docente al ricevimento, scritte dallo studente
+  if (/ricevimento/.test(n)) return "appunti";
   // tutorato: di solito esercizi con le soluzioni (che sia del tutor e non del docente lo dice `tutor`, vedi isTutorFile)
   if (/tutor/.test(n)) return "esercizi";
   // «Esercizi per l'esame» è un eserciziario, non una prova

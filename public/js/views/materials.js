@@ -145,6 +145,8 @@ async function addFiles(exam, files) {
   }
   // dal nome: «Tutorato 3», «Esercizi del tutor» sono del tutor, non del docente
   for (const m of exam.materials) if (!before.has(m.id) && (isTutorFile(m.title) || isTutorFile(m.fileName))) m.tutor = true;
+  // «Ricevimento 12 ottobre»: le risposte del docente, scritte dallo studente
+  for (const m of exam.materials) if (!before.has(m.id) && /ricevimento/i.test(m.title) && roleOf(m) === "appunti") m.ricevimento = true;
   for (const d of await syncDispense(exam)) {
     toast(`«${d.title}»: dispense con ${d.chapters} capitoli (${d.from === "indice" ? "dalla pagina dell'indice" : "dai titoli nelle pagine"}). Per ogni argomento ti dirò quali pagine leggere${exam.module ? ", dopo «Aggiungi al modulo»" : ""}.`, "ok");
   }
@@ -426,7 +428,7 @@ async function payload(list, { onlyNew = false } = {}) {
       pages += r ? r.to - r.from + 1 : m.numPages ?? 0;
       bytes += data.length;
       materials.push({ kind: "pdf", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", year: m.year ?? "", tutor: !!m.tutor, data });
-    } else materials.push({ kind: "notes", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", unit: m.unit ?? "pagine", year: m.year ?? "", handwritten: !!m.handwritten, auto: !!m.auto, tutor: !!m.tutor, text: sliceText(m.text, range) });
+    } else materials.push({ kind: "notes", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", unit: m.unit ?? "pagine", year: m.year ?? "", handwritten: !!m.handwritten, auto: !!m.auto, tutor: !!m.tutor, ricevimento: !!m.ricevimento, text: sliceText(m.text, range) });
   }
   if (pages > MAX_SEND_PAGES || bytes > MAX_SEND_BYTES)
     throw new Error(`Troppo materiale PDF per una volta (${pages} pagine, ${kb(bytes * 0.75)}): il limite è ${MAX_SEND_PAGES} pagine e ~${kb(MAX_SEND_BYTES * 0.75)}. Nel materiale scegli le pagine (es. i capitoli del programma) e aggiungi il resto dopo con «Aggiungi al modulo».`);
@@ -856,6 +858,7 @@ export function materialsTab(exam) {
                 h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } },
                   h("input", { type: "checkbox", checked: !!m.tutor, "aria-label": `${m.title}: preparato dal tutor`, onchange: async (e) => { m.tutor = e.target.checked; exam.plan = null; await syncDispense(exam); store.save(); rerenderSoon(); } }), "dal tutorato"),
                 m.numPages > 1 ? pagePicker(m) : null) : null,
+              m.ricevimento ? h("div", { class: "small muted" }, "Ricevimento: le risposte del docente alle tue domande. L'AI le usa come sue indicazioni di prima mano: sciolgono i dubbi segnati e, se dicono che cosa chiede l'esame, finiscono tra le sue frasi sull'esame.") : null,
               m.tutor ? h("div", { class: "small muted" }, "Dal tutorato: l'AI lo usa per studiare ed esercitarti, ma non come parola del docente. Se notazione o procedimento sono diversi da quelli del docente, segue il docente e te lo segnala; le frasi sull'esame del tutor non diventano «il docente ha detto».") : null,
               roleOf(m) === "sbobine" ? h("div", { class: "small muted" }, m.auto
                 ? `Trascrizione automatica di una registrazione${m.duration ? ` (${clock(m.duration)})` : ""}: sono le parole del docente, ma il programma di trascrizione sbaglia termini tecnici, numeri e formule (dette a parole). L'AI le controlla su dispense e libro. I segni come [12:30] sono i minuti della registrazione: le frasi del docente sull'esame te li indicano, così puoi riascoltarle.`

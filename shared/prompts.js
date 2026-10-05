@@ -119,6 +119,10 @@ export const MODULE_PRINCIPLES = `Principi inderogabili:
      punteggiatura è inaffidabile, i termini tecnici possono essere storpiati (deducili dal contesto e dalle altre fonti) e le formule
      sono dette a parole («x al quadrato fratto due»): riscrivile in LaTeX. Le voci con un nome davanti («Mario Rossi: …») sono di chi
      parla (anche studenti che fanno domande). I segni come «[12:30]» sono i minuti della registrazione: non copiarli nel modulo.
+   - appunti di un ricevimento (ricevimento="sì"): domande dello studente e risposte del docente, scritte dallo studente subito dopo.
+     Sono indicazioni del docente di prima mano e prevalgono sulle altre fonti per ciò di cui parlano: se una risposta scioglie un
+     dubbio o un contrasto, non riportarlo più in "gaps" e segui la risposta; se dice che cosa chiede l'esame o che cosa è nel programma,
+     mettila in examHints (quote copiata dalla risposta, source = titolo del ricevimento) e regola l'importanza degli argomenti.
    - materiali con autore="tutor" (o «dal tutorato» nel titolo): preparati da un tutor (un dottorando o uno studente più avanti), non
      dal docente, qualunque sia il tipo. Esercizi, soluzioni e spiegazioni valgono come materiale di studio, ma non come parola del
      docente: definizioni e notazione restano quelle di dispense, slide e appunti delle lezioni; se differiscono, segui il docente e
@@ -254,8 +258,9 @@ export function materialText(m) {
   const hand = m.handwritten ? ` scritti_a_mano="sì"` : "";
   const auto = m.auto ? ` trascrizione_automatica="sì"` : "";
   const tutor = m.tutor ? ` autore="tutor"` : "";
+  const ric = m.ricevimento ? ` ricevimento="sì"` : "";
   const year = m.year ? ` anno="${String(m.year).replace(/"/g, "")}"` : "";
-  return `<${tag} titolo="${String(m.title ?? "").replace(/"/g, "'")}"${pages}${year}${hand}${auto}${tutor}>\n${m.text}\n</${tag}>`;
+  return `<${tag} titolo="${String(m.title ?? "").replace(/"/g, "'")}"${pages}${year}${hand}${auto}${tutor}${ric}>\n${m.text}\n</${tag}>`;
 }
 
 /** Titolo di un PDF allegato: tipo, nome, pagine scelte e anno accademico (per sbobine e appunti di colleghi di altri anni). */

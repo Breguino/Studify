@@ -266,6 +266,16 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
 | Spiega a parole tue | Per scritto aperto/orale: spieghi senza appunti e confronti con i punti chiave. «Simulazione orale» sceglie 3 argomenti pesati per importanza. |
 | Progressi | Stima di preparazione per argomento (flashcard solide + quiz), con i punti dove conviene lavorare. |
 
+### Ricevimento: le domande da fare al docente
+
+La scheda **Ricevimento** di ogni esame raccoglie i dubbi che solo il docente può sciogliere, presi da ciò che l'app ha già trovato:
+com'è fatto l'esame (se il tipo di prova non viene da una fonte), due fonti che non concordano, una soluzione ufficiale che Claude
+trova sospetta, i capitoli del libro che i materiali non coprono («sono nel programma?»), le domande dei quiz Moodle senza risposta;
+spenti di partenza, gli argomenti che sono solo sulle slide e quello dove sbagli di più (con il consiglio di portare un esercizio).
+Si aggiungono domande proprie, si copia l'elenco (per la mail di prenotazione o il telefono) e dopo si scrivono le risposte: diventano
+il materiale «Ricevimento del …», che l'AI usa come indicazioni del docente di prima mano (sciolgono i dubbi segnati, e ciò che dicono
+sull'esame finisce tra le sue frasi). Un file con «ricevimento» nel nome è riconosciuto allo stesso modo.
+
 ### Libretto: esami superati e da superare
 
 Dal piano di studi (pagina «Ateneo e corso di studio») la pagina **Libretto** fa la checklist degli insegnamenti per anno:
