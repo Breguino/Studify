@@ -5,6 +5,7 @@ import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MODEL, aiConfigured, analyzePastExams, buildModule, curriculum, degrees, examFormat, examFormatFromText, extendModule, gradeExam, transcribe, writeDispensa, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
 import { demoAnalysis, demoGrade } from "../public/js/past-exams.js";
+import { demoExamQuestions } from "../public/js/exam-questions.js";
 import { findExamHints, localDelta } from "../public/js/local-builder.js";
 import { formatFromSyllabus } from "../public/js/exam-type.js";
 import { IMPORT_HEADERS } from "../shared/prompts.js";
@@ -134,7 +135,7 @@ const str = (v, max = 500) => (typeof v === "string" ? v.slice(0, max) : "");
 function parseMaterials(body) {
   const materials = (Array.isArray(body.materials) ? body.materials : []).slice(0, 40).map((m) => ({
     kind: ["pdf", "notes", "web"].includes(m.kind) ? m.kind : "notes",
-    role: ["appunti", "libro", "dispense", "esercizi", "esami", "sbobine", "altro"].includes(m.role) ? m.role : "appunti",
+    role: ["appunti", "libro", "dispense", "esercizi", "esami", "domande", "sbobine", "altro"].includes(m.role) ? m.role : "appunti",
     unit: ["lezioni", "prove"].includes(m.unit) ? m.unit : "pagine",
     year: str(m.year, 20),
     pages: /^\d{1,4}-\d{1,4}$/.test(m.pages ?? "") ? m.pages : "",
@@ -337,7 +338,8 @@ async function api(req, res, url) {
     const { materials, research } = parseMaterials(body);
     if (!materials.some((m) => m.text || m.data) && !research) return send(res, 400, { error: "Aggiungi almeno un materiale." });
     const topic = (t) => ({ id: str(t?.id, 12), title: str(t?.title, 300), importance: Math.min(3, Math.max(1, Number(t?.importance) || 2)), summary: str(t?.summary, 3000),
-      hints: (Array.isArray(t?.hints) ? t.hints : []).slice(0, 10).map((x) => ({ quote: str(x?.quote, 400), source: str(x?.source, 160) })) });
+      hints: (Array.isArray(t?.hints) ? t.hints : []).slice(0, 10).map((x) => ({ quote: str(x?.quote, 400), source: str(x?.source, 160) })),
+      examQuestions: (Array.isArray(t?.examQuestions) ? t.examQuestions : []).slice(0, 30).map((q) => str(q, 400)).filter(Boolean) });
     const outline = (Array.isArray(body.outline) ? body.outline : []).slice(0, 80).map(topic).filter((t) => t.title);
     const topics = (Array.isArray(body.topics) ? body.topics : []).slice(0, 40).map(topic).filter((t) => t.id && t.title);
     if (!topics.length) return send(res, 400, { error: "Nessun capitolo da scrivere." });
@@ -356,8 +358,13 @@ async function api(req, res, url) {
     }
     input.existing = parseExisting(body.existing);
     if (!input.existing.topics.length) return send(res, 400, { error: "Il modulo da aggiornare è vuoto: generalo prima." });
-    const notes = materials.filter((m) => !["esercizi", "esami"].includes(m.role)).map((m) => m.text).filter(Boolean).join("\n\n"); // come la modalità base: le prove non diventano argomenti
-    const id = startJob("module", (p) => (MOCK ? mockRun(p, { delta: { ...localDelta(notes, "Appunti nuovi"), examHints: [...findExamHints(notes, "sbobine"), { quote: "Questa frase non è nei materiali: il docente non l'ha mai detta.", source: "inventata", note: "", topicId: "" }] }, sources: [], mode: "local" }) : extendModule(input, p)));
+    const notes = materials.filter((m) => !["esercizi", "esami", "domande"].includes(m.role)).map((m) => m.text).filter(Boolean).join("\n\n"); // come la modalità base: le prove non diventano argomenti
+    const examQs = demoExamQuestions(materials.filter((m) => m.role === "domande").map((m) => m.text).join("\n"), input.existing.topics);
+    const mockDelta = () => {
+      const d = localDelta(notes, "Appunti nuovi");
+      return { ...d, questions: [...d.questions, ...examQs], examHints: [...findExamHints(notes, "sbobine"), { quote: "Questa frase non è nei materiali: il docente non l'ha mai detta.", source: "inventata", note: "", topicId: "" }] };
+    };
+    const id = startJob("module", (p) => (MOCK ? mockRun(p, { delta: mockDelta(), sources: [], mode: "local" }) : extendModule(input, p)));
     return send(res, 202, { jobId: id });
   }
 

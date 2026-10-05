@@ -27,10 +27,10 @@ export const compactModule = (mod) => ({
  * non cambiano), i materiali usati risultano inclusi, il piano si ricalcola.
  * @returns {{topics: number, updated: number, flashcards: number, questions: number}}
  */
-export function applyUpdate(exam, { delta, sources = [], mode }, usedIds, now = new Date().toISOString(), { sentText = null, hasPdf = false } = {}) {
+export function applyUpdate(exam, { delta, sources = [], mode }, usedIds, now = new Date().toISOString(), { sentText = null, hasPdf = false, examRefs = null } = {}) {
   // le citazioni del docente devono essere nei materiali appena mandati (sentText); senza testo non si possono verificare
   const checkQuote = sentText != null ? quoteChecker(sentText, { hasPdf }) : null;
-  const { module, added } = mergeModule(exam.module, delta, sources, { now, summary: mode === "local" ? "append" : "replace", replaceGaps: mode !== "local", checkQuote });
+  const { module, added } = mergeModule(exam.module, delta, sources, { now, summary: mode === "local" ? "append" : "replace", replaceGaps: mode !== "local", checkQuote, examRefs });
   module.materialIds = [...new Set([...(exam.module.materialIds ?? exam.materials.filter((m) => !usedIds.includes(m.id)).map((m) => m.id)), ...usedIds])];
   exam.module = module;
   exam.moduleUpdatedAt = now;
@@ -40,13 +40,14 @@ export function applyUpdate(exam, { delta, sources = [], mode }, usedIds, now = 
 
 /** Frase di riepilogo per l'utente. */
 export function updateSummary(a) {
-  if (!a.topics && !a.updated && !a.flashcards && !a.questions && !a.hints) return "Gli appunti nuovi non aggiungono contenuti che il modulo non abbia già.";
+  if (!a.topics && !a.updated && !a.flashcards && !a.questions && !a.hints && !a.examQuestions) return "Gli appunti nuovi non aggiungono contenuti che il modulo non abbia già.";
   const parts = [];
   if (a.topics) parts.push(`${a.topics} ${a.topics === 1 ? "argomento nuovo" : "argomenti nuovi"}`);
   if (a.updated) parts.push(`${a.updated} ${a.updated === 1 ? "argomento approfondito" : "argomenti approfonditi"}`);
   if (a.flashcards) parts.push(`${a.flashcards} flashcard`);
   if (a.questions) parts.push(`${a.questions} ${a.questions === 1 ? "domanda" : "domande"}`);
   if (a.hints) parts.push(`${a.hints} ${a.hints === 1 ? "indicazione" : "indicazioni"} del docente sull'esame`);
+  if (a.examQuestions) parts.push(`${a.examQuestions} ${a.examQuestions === 1 ? "domanda d'esame vera" : "domande d'esame vere"} nel quiz`);
   return `Aggiunti: ${parts.join(", ")}. I tuoi progressi restano.`;
 }
 

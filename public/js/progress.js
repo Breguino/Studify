@@ -61,7 +61,7 @@ export function weakTopics(module, stats, n = 3) {
  * Seleziona n domande: prima gli errori recenti, poi le mai viste, poi le meglio riuscite.
  * Interleaving: l'ordine alterna gli argomenti (a meno di blocked=true).
  */
-export function pickQuestions(questions, qstats, n, { topicIds, kind, weakOnly = false, blocked = false, rng = Math.random } = {}) {
+export function pickQuestions(questions, qstats, n, { topicIds, kind, weakOnly = false, blocked = false, rng = Math.random, bonus = () => 0 } = {}) {
   let pool = questions.filter((q) => (!topicIds || topicIds.includes(q.topicId)) && (!kind || q.kind === kind));
   if (weakOnly) pool = pool.filter((q) => qstats[q.id] && mean(qstats[q.id].recent) < 0.7);
   const prio = (q) => {
@@ -69,7 +69,8 @@ export function pickQuestions(questions, qstats, n, { topicIds, kind, weakOnly =
     if (!st) return 2; // mai vista
     return mean(st.recent) < 0.7 ? 3 : 1 - mean(st.recent); // errata > nuova > ben riuscita
   };
-  const sorted = pool.map((q) => ({ q, p: prio(q) + rng() * 0.01 })).sort((a, b) => b.p - a.p).slice(0, n).map((x) => x.q);
+  // bonus (al massimo 0,5): a parità di stato, prima le domande d'esame chieste più spesso
+  const sorted = pool.map((q) => ({ q, p: prio(q) + Math.min(0.5, bonus(q)) + rng() * 0.01 })).sort((a, b) => b.p - a.p).slice(0, n).map((x) => x.q);
   if (blocked) return sorted.sort((a, b) => a.topicId.localeCompare(b.topicId));
   const groups = new Map();
   for (const q of sorted) (groups.get(q.topicId) ?? groups.set(q.topicId, []).get(q.topicId)).push(q);

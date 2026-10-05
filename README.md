@@ -161,6 +161,17 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
      incerte segnate, da correggere prima), poi **correzione di Claude** (punti per esercizio, giudizio, cosa sbagli e come si fa,
      voto stimato in trentesimi) oppure **autocorrezione** con i punti dell'analisi. I punti si possono cambiare; il risultato va nei
      progressi degli argomenti, e nel piano le simulazioni finali usano le prove vere finché ce ne sono di mai fatte.
+   - **elenchi di domande d'esame** (tipo «Domande d'esame», riconosciuto da «Domande d'esame», «Domande dell'orale», «Domande
+     uscite»…): le domande raccolte dagli studenti, tipiche dell'orale. A differenza dei temi scritti **vanno nel quiz**, perché
+     all'orale si ripetono. L'elenco viene letto una voce per riga («-», «1.», «a)» o una riga che finisce con «?»), con le ripetizioni
+     («(x3)», «(3 volte)», «[2]», «(chiesta spesso)», la stessa domanda in più appelli) e l'appello come contesto. All'AI arriva come
+     voci numerate «D12»: per ogni domanda distinta crea una domanda del quiz con risposta modello dai tuoi materiali, rubrica e la
+     domanda con cui il docente potrebbe incalzare; ogni domanda del quiz dice quali voci riproduce (id controllati: quelle inventate
+     si scartano, quelle mancanti sono elencate come «non ancora nel quiz»). Nel quiz hanno il badge «domanda d'esame vera · chiesta
+     3 volte» e, a parità di stato, escono prima le più chieste. Un argomento chiesto almeno una volta e mezza più della media (con
+     almeno 10 domande) diventa «centrale»; nel piano c'è un giro sulle domande d'esame nei giorni di consolidamento e la
+     simulazione orale usa quelle vere. Nella dispensa ogni capitolo ha le sue «Domande uscite all'esame», con le risposte in appendice.
+     Un PDF con l'elenco (versione con server) viene letto come testo; una foto si trascrive come gli appunti a mano.
 6. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
 
 | Sessione | Cosa fa |
@@ -196,6 +207,8 @@ una prima lettura guidata e da esempi svolti (expertise reversal); con pochi gio
 - **Esami passati**: la correzione di Claude è una stima, non il voto del tuo docente (che può pesare diversamente procedimento e
   risultato); con le foto, una cattiva lettura della calligrafia pesa sulla correzione, per questo la trascrizione si controlla prima.
   La frequenza degli argomenti su poche prove è rumorosa, e prove di un altro docente o di un programma vecchio possono ingannare.
+  Gli elenchi di domande raccolti dagli studenti riflettono ciò che chi li ha scritti ricorda: i conteggi sono indicativi. E sapere
+  a memoria le risposte dell'elenco non basta all'orale, dove il docente incalza.
 - **Modalità base** (senza chiave API): argomenti e flashcard ricavati euristicamente dalle definizioni nei tuoi appunti testuali; niente quiz, PDF, né ricerca.
 - Un solo utente per browser, nessun account né sincronizzazione (usa «Dati → Esporta backup»).
 
@@ -219,7 +232,7 @@ shared/           prompts.js, normalize.js: usati sia dal server sia dalla pagin
 artifact/         versione pagina Claude: generate.js (sample), backend.js (db), api.js, entry.js, template, fake-claude (prove)
 scripts/          build-artifact.mjs (esbuild)
 public/js/        logica pura (testata): dates, methods, srs, planner, progress, local-builder, tabular (CSV/xlsx), importers, timetable,
-                  lessons (lezioni e prove), past-exams (prove, frequenze, voto)
+                  lessons (lezioni e prove), past-exams (prove, frequenze, voto), exam-questions (elenchi di domande d'esame)
                   stato/UI: store (IndexedDB), domain, api, ui, views/*
 public/demo/      modulo demo (Microeconomia)
 test/             node --test: logica pura + client AI con SDK simulato

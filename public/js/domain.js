@@ -8,6 +8,7 @@ import { busyMinutes, lessonsOn } from "./timetable.js";
 import * as store from "./store.js";
 import { studyStart, windowDays } from "./workload.js";
 import { allPapers, attemptsOf, paperMinutes } from "./past-exams.js";
+import { examQuestionStats } from "./exam-questions.js";
 import { save } from "./store.js";
 
 export const daysLeft = (exam) => daysBetween(today(), exam.date);
@@ -16,7 +17,8 @@ export function ensurePlan(exam, force = false) {
   if (!exam.module) return null;
   const tt = store.state.profile?.timetable ?? null;
   const papers = allPapers(exam);
-  const stamp = `${exam.moduleBuiltAt}|${exam.moduleUpdatedAt ?? ""}|${tt?.importedAt ?? ""}|${tt?.until ?? ""}|${exam.date}|${exam.studyDays ?? 0}|${papers.length}|${exam.pastExams?.analyzedAt ?? ""}`;
+  const asked = examQuestionStats(exam).inQuiz.length;
+  const stamp = `${exam.moduleBuiltAt}|${exam.moduleUpdatedAt ?? ""}|${tt?.importedAt ?? ""}|${tt?.until ?? ""}|${exam.date}|${exam.studyDays ?? 0}|${papers.length}|${exam.pastExams?.analyzedAt ?? ""}|${asked}`;
   if (force || !exam.plan || exam.plan.builtOn !== today() || exam.plan.stamp !== stamp) {
     exam.plan = {
       ...buildPlan({
@@ -33,7 +35,7 @@ export function ensurePlan(exam, force = false) {
       }),
       stamp,
     };
-    useRealPapers(exam.plan, exam, papers);
+    useRealExams(exam.plan, exam, papers, asked);
     save();
   }
   return exam.plan;
@@ -41,16 +43,23 @@ export function ensurePlan(exam, force = false) {
 
 /**
  * Con le prove d'esame passate, le simulazioni del piano si fanno su prove vere (finché ce ne sono di mai fatte):
- * a tempo, con la durata della prova.
+ * a tempo, con la durata della prova. Con le domande d'esame vere nel quiz (almeno 5): la simulazione orale le usa, e nei giorni
+ * di consolidamento c'è un giro sulle domande d'esame (prima le sbagliate, poi le più chieste).
  */
-function useRealPapers(plan, exam, papers) {
+function useRealExams(plan, exam, papers, asked) {
   let fresh = papers.filter((p) => !attemptsOf(exam, p.key).length).length;
-  for (const d of plan.days)
+  for (const d of plan.days) {
     for (const t of d.tasks) {
-      if (t.kind !== "mock" || fresh <= 0) continue;
-      Object.assign(t, { kind: "sim", title: "Simulazione con un tema d'esame vero (a tempo, senza appunti)", minutes: Math.min(240, paperMinutes(exam, "") + 20) });
-      fresh--;
+      if (t.kind === "mock" && fresh > 0) {
+        Object.assign(t, { kind: "sim", title: "Simulazione con un tema d'esame vero (a tempo, senza appunti)", minutes: Math.min(240, paperMinutes(exam, "") + 20) });
+        fresh--;
+      }
+      if (t.kind === "explain" && t.mode === "oral" && asked >= 5)
+        Object.assign(t, { kind: "quiz", mode: "exam", n: 5, title: "Simulazione orale con le domande d'esame vere (5 a sorpresa)", method: "practice" });
     }
+    if (d.phase === "consolidate" && asked >= 5)
+      d.tasks.push({ kind: "quiz", key: "examq", mode: "exam", title: "Domande d'esame vere: le sbagliate e le più chieste", minutes: 20, method: "retrieval", id: `${d.date}|quiz|examq`, date: d.date });
+  }
   for (const d of plan.days) {
     d.minutes = d.tasks.reduce((s, t) => s + t.minutes, 0);
     d.overload = d.minutes > d.usable * 1.15;
@@ -122,6 +131,7 @@ export function taskHref(exam, task) {
       q.set("mode", task.mode ?? "mixed");
       if (task.topicIds) q.set("topics", task.topicIds.join(","));
       if (task.questionKind) q.set("kind", task.questionKind);
+      if (task.n) q.set("n", task.n);
       return `${base}/quiz?${q}`;
     default:
       return null;

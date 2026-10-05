@@ -2,6 +2,7 @@
 // Non viene incluso nel file da pubblicare.
 import demo from "../public/demo/module.json";
 import { demoAnalysis, demoGrade } from "../public/js/past-exams.js";
+import { demoExamQuestions } from "../public/js/exam-questions.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const calls = (window.__sampleCalls = []);
@@ -31,7 +32,22 @@ function hintsFrom(prompt) {
 const papersIn = (prompt) => [...prompt.matchAll(/<prova id="(P\d+)" titolo="([^"]*)">\n?([\s\S]*?)\n?<\/prova>/g)].map((m) => ({ id: m[1], label: m[2], text: m[3] }));
 const topicsIn = (prompt) => [...(prompt.split(/Argomenti del modulo[^\n]*\n/)[1] ?? "").split("\n\n")[0].matchAll(/^(t\d+): (.+)$/gm)].map((m) => ({ id: m[1], title: m[2] }));
 
+// Domande d'esame «D12. …» nel prompt → id per argomento (dalle parole del titolo), come le assegnerebbe Claude.
+const examIdsByTopic = (prompt, topics) => {
+  const out = new Map();
+  for (const q of demoExamQuestions(prompt, topics)) out.set(q.topicId, [...(out.get(q.topicId) ?? []), ...q.examRefs]);
+  return out;
+};
+
 const answer = (prompt) => {
+  if (prompt.includes("DOMANDE D'ESAME DA PREPARARE")) {
+    const list = prompt.split("<domande_esame_argomento>")[1].split("</domande_esame_argomento>")[0];
+    const qs = demoExamQuestions(list, [{ id: "x", title: "x" }]).map(({ topicId, ...q }) => ({
+      ...q, modelAnswer: "Risposta modello dai materiali (finta): $$\\varepsilon_P=\\left|\\frac{\\Delta\\%Q}{\\Delta\\%P}\\right|$$", followUp: "E se la domanda fosse perfettamente rigida, che cosa succederebbe al ricavo?",
+    }));
+    if (qs[0]) qs[0].examRefs = [...qs[0].examRefs, "D999"]; // id inesistente: l'app deve scartarlo
+    return { questions: qs };
+  }
   if (prompt.includes("PROVE D'ESAME PASSATE")) {
     const out = demoAnalysis(papersIn(prompt), topicsIn(prompt));
     const ids = out.papers.map((p) => p.id);
@@ -62,9 +78,14 @@ const answer = (prompt) => {
     const sentence = text.replace(/\s+/g, " ").split(/(?<=[.;])\s+/).find((x) => /scritt|oral/i.test(x)) ?? "";
     return { found: !!sentence, format: /eserciz/i.test(sentence) ? "problemi" : "scritto", evidence: sentence.trim(), details: /facoltativ/i.test(text) ? "Orale facoltativo (finto)." : "", url: "", academicYear: "2026-27", teacher: "", caveats: [] };
   }
-  if (prompt.includes("<modulo_esistente>")) return { examHints: hintsFrom(prompt), gaps: ["Lacuna aggiornata dopo gli appunti nuovi (finta)."], topics: [
-    { id: "t1", title: demo.topics[0].title, importance: 3, difficulty: 2, summary: "Riassunto aggiornato con gli appunti nuovi (finto).", keyConcepts: [{ term: "Prezzo massimo", definition: "tetto imposto dallo Stato" }], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "estratto" },
-    { id: "n1", title: "Esternalità", importance: 3, difficulty: 2, summary: "Costi o benefici che ricadono su terzi.", keyConcepts: [{ term: "Esternalità", definition: "effetto su terzi" }], mustKnow: ["Definire un'esternalità"], commonMistakes: [], origin: "notes", excerpt: "estratto" } ] };
+  if (prompt.includes("<modulo_esistente>")) {
+    const byTopic = examIdsByTopic(prompt.split("Materiali NUOVI")[1] ?? "", demo.topics);
+    if (byTopic.size) // solo un elenco di domande d'esame: gli argomenti esistenti a cui si riferiscono, senza riassunto nuovo
+      return { examHints: [], gaps: demo.gaps, topics: [...byTopic].map(([id, ids]) => ({ id, title: demo.topics.find((t) => t.id === id).title, importance: 3, difficulty: 2, summary: "", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "", examQuestionIds: ids })) };
+    return { examHints: hintsFrom(prompt), gaps: ["Lacuna aggiornata dopo gli appunti nuovi (finta)."], topics: [
+      { id: "t1", title: demo.topics[0].title, importance: 3, difficulty: 2, summary: "Riassunto aggiornato con gli appunti nuovi (finto).", keyConcepts: [{ term: "Prezzo massimo", definition: "tetto imposto dallo Stato" }], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "estratto" },
+      { id: "n1", title: "Esternalità", importance: 3, difficulty: 2, summary: "Costi o benefici che ricadono su terzi.", keyConcepts: [{ term: "Esternalità", definition: "effetto su terzi" }], mustKnow: ["Definire un'esternalità"], commonMistakes: [], origin: "notes", excerpt: "estratto" } ] };
+  }
   if (prompt.includes("<argomento>")) {
     const t = JSON.parse(prompt.split("<argomento>")[1].split("</argomento>")[0]);
     const topic = demo.topics.find((x) => x.title === t.title);
@@ -77,7 +98,8 @@ const answer = (prompt) => {
       questions: demo.questions.filter((q) => q.topicId === topic.id).map(({ topicId, id, ...q }) => q),
     };
   }
-  return { title: demo.title, overview: demo.overview, gaps: demo.gaps, examHints: hintsFrom(prompt), topics: demo.topics.map((t) => ({ ...t, excerpt: "estratto dagli appunti" })) };
+  const byTopic = examIdsByTopic(prompt, demo.topics);
+  return { title: demo.title, overview: demo.overview, gaps: demo.gaps, examHints: hintsFrom(prompt), topics: demo.topics.map((t) => ({ ...t, excerpt: "estratto dagli appunti", examQuestionIds: byTopic.get(t.id) ?? [] })) };
 };
 
 // Trascrizione delle pagine (immagini): risponde con i marcatori e una formula in LaTeX per pagina.

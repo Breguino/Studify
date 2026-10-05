@@ -434,3 +434,25 @@ test("writeDispensa: un capitolo per argomento, materiali come prefisso in cache
   setClient(fake([{ stop_reason: "refusal", content: [] }], []));
   await assert.rejects(writeDispensa({ exam: { name: "x", type: "orale", level: 3, daysLeft: 3 }, materials: [{ kind: "notes", title: "a", text: "b" }], research: null, outline: [], topics: [{ id: "t1", title: "A" }] }), /rifiutato/);
 });
+
+test("buildModule: elenco di domande d'esame numerato, regola nel prompt, examRefs solo verso voci vere", async () => {
+  const calls = [];
+  const raw = { ...rawModule, questions: [
+    ...rawModule.questions.map((q) => ({ ...q, examRefs: [], followUp: "" })),
+    { id: "qx", topicId: rawModule.topics[0].id, kind: "open", prompt: "Cos'è l'elasticità?", options: [], correctIndex: -1, modelAnswer: "m", explanation: "", rubric: ["r"], examRefs: ["D1", "D2", "D77"], followUp: "E il ricavo?" },
+  ] };
+  setClient(fake([{ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(raw) }] }], calls));
+  const mod = await buildModule({
+    exam: { name: "Microeconomia", type: "orale", level: 2, daysLeft: 20, language: "italiano" },
+    materials: [{ kind: "notes", role: "domande", title: "Domande orale", text: "D1. Cos'è l'elasticità? (chiesta 3 volte)\nD2. Definisci l'elasticità" }],
+    research: null,
+  });
+  const text = calls[0].messages[0].content.at(-1).text;
+  assert.match(text, /<domande_esame titolo="Domande orale">\nD1\. Cos'è l'elasticità\? \(chiesta 3 volte\)/);
+  assert.match(text, /crea una question per OGNI domanda distinta/);
+  assert.match(calls[0].system, /domande d'esame \(elenchi di domande uscite[\s\S]*followUp = la domanda con cui[\s\S]*examRefs = \[\] e followUp = ""/);
+  const q = mod.questions.find((x) => x.prompt === "Cos'è l'elasticità?");
+  assert.deepEqual(q.examRefs, ["D1", "D2"], "id inesistente scartato");
+  assert.equal(q.followUp, "E il ricavo?");
+  assert.equal(mod.questions.filter((x) => x.examRefs).length, 1, "le altre domande restano normali");
+});

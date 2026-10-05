@@ -43,12 +43,13 @@ async function write(exam, topics) {
   };
   let saved = 0;
   try {
-    const sent = await materialsPayload(exam.materials);
+    const { examMap, ...sent } = await materialsPayload(exam.materials);
     const res = await api.runJob("/api/dispensa", {
       exam: { name: exam.name, type: exam.type, level: exam.level, daysLeft: daysLeft(exam), language: exam.language, university: exam.university, degree: exam.degree, cfu: exam.cfu },
       ...sent,
       outline: mod.topics.map(({ id, title, importance }) => ({ id, title, importance })),
-      topics: topics.map((t) => ({ id: t.id, title: t.title, importance: t.importance, summary: t.summary, hints: hintsOf(t.id) })),
+      topics: topics.map((t) => ({ id: t.id, title: t.title, importance: t.importance, summary: t.summary, hints: hintsOf(t.id),
+        examQuestions: mod.questions.filter((q) => q.topicId === t.id && q.examRefs?.length).map((q) => q.prompt) })),
       length: d.length, solutions: d.solutions,
     }, (chars, label, partial) => {
       if (label) job.label = label;

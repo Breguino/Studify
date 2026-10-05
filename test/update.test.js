@@ -44,7 +44,7 @@ test("mergeModule: id esistenti intatti, i nuovi proseguono la numerazione", () 
   assert.equal(t2.title, b.topics[1].title, "il titolo resta");
   assert.equal(t2.keyConcepts.length, b.topics[1].keyConcepts.length + 1);
   assert.equal(t2.updatedAt, NOW);
-  assert.deepEqual(added, { topics: 1, updated: 1, flashcards: 2, questions: 1, hints: 0 }, "doppione e argomento inesistente scartati");
+  assert.deepEqual(added, { topics: 1, updated: 1, flashcards: 2, questions: 1, hints: 0, examQuestions: 0 }, "doppione e argomento inesistente scartati");
   assert.deepEqual(m.gaps, ["manca il monopolio naturale"], "lacune sostituite dall'elenco aggiornato");
   assert.equal(b.topics[1].summary !== t2.summary, true, "il modulo di partenza non viene modificato");
 });
@@ -63,7 +63,7 @@ test("mergeModule: titolo uguale = approfondimento, fonti rinumerate, modalità 
   assert.deepEqual(m.topics[0].sourceIds, ["S1", "S2"], "S2 nuovo (stesso URL di S1) → S1; S1 nuovo → S2");
   assert.equal(m.flashcards[1].topicId, "t1");
   assert.deepEqual(m.gaps, ["g"]);
-  assert.deepEqual(added, { topics: 0, updated: 1, flashcards: 1, questions: 0, hints: 0 });
+  assert.deepEqual(added, { topics: 0, updated: 1, flashcards: 1, questions: 0, hints: 0, examQuestions: 0 });
 });
 
 test("pendingMaterials / applyUpdate: progressi conservati, materiali segnati, piano da ricalcolare", () => {

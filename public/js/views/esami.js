@@ -8,6 +8,8 @@ import { rich } from "../math.js";
 import { extractPdfPages } from "../pdf-pages.js";
 import { MIN_PAPERS, allPapers, analysisValid, applyExamBoost, attemptsOf, fmtGrade, nextPaper, paperMinutes, paperText, paperYear, topicFrequency, unanalyzed } from "../past-exams.js";
 import * as store from "../store.js";
+import { countLabel, examQuestionStats } from "../exam-questions.js";
+import { pendingMaterials } from "../module-update.js";
 import { badge, bar, h, toast } from "../ui.js";
 
 const jobs = new Map(); // esame → { el, label }
@@ -146,14 +148,50 @@ function simsCard(exam) {
       h("div", { class: "row" }, badge(fmtGrade(s.grade), s.grade == null ? "" : s.grade >= 18 ? "good" : "bad"), h("a", { class: "btn small ghost", href: `#/exam/${exam.id}/sim?view=${s.id}` }, "Correzione"))))));
 }
 
+/** Elenchi di domande d'esame: le più chieste, per argomento, e quante sono già nel quiz. */
+function questionsCard(exam) {
+  const s = examQuestionStats(exam);
+  if (!s.list.length) return null;
+  const topics = exam.module?.topics ?? [];
+  const pending = pendingMaterials(exam).some((m) => m.role === "domande");
+  const byTopic = topics.filter((t) => s.perTopic.get(t.id)).sort((a, b) => s.perTopic.get(b.id).weight - s.perTopic.get(a.id).weight);
+  const top = [...s.list].sort((a, b) => b.count - a.count).slice(0, 10);
+  const linkedQ = new Map(s.inQuiz.flatMap((q) => q.examRefs.map((k) => [k, q])));
+  const topicOf = (key) => topics.find((t) => t.id === linkedQ.get(key)?.topicId)?.title;
+  return h("div", { class: "card stack" },
+    h("h2", { style: { margin: 0 } }, `Domande d'esame raccolte (${s.list.length})`),
+    h("p", { class: "muted small", style: { margin: 0 } }, `${s.total} in tutto contando le ripetizioni. Le ripetizioni vengono dall'elenco: chi lo ha scritto ricorda alcune domande più di altre, quindi i conteggi sono indicativi.`),
+    !exam.module ? h("p", { class: "small", style: { margin: 0 } }, "Genera il modulo dai materiali: ogni domanda diventerà una domanda del quiz con la risposta modello.")
+      : s.uncovered.length ? h("div", { class: "callout warn row between" }, h("span", {}, `${s.uncovered.length} ${s.uncovered.length === 1 ? "domanda non è ancora" : "domande non sono ancora"} nel quiz.`),
+          pending ? h("a", { class: "btn small primary", href: `#/exam/${exam.id}/materials` }, "Aggiungi al modulo") : h("span", { class: "small muted" }, "Erano nei materiali ma l'AI non le ha incluse: ripeti l'aggiornamento o rigenera il modulo."))
+        : h("p", { class: "small", style: { margin: 0 } }, "Tutte le domande sono nel quiz, con la risposta modello e la domanda con cui il docente potrebbe incalzarti."),
+    byTopic.length ? h("div", { class: "stack", style: { gap: "6px" } }, h("b", {}, "Argomenti più chiesti"),
+      byTopic.map((t) => {
+        const a = s.perTopic.get(t.id);
+        return h("div", { class: "progress-line freq-line" },
+          h("a", { class: "small", href: `#/exam/${exam.id}/quiz?mode=exam&topics=${t.id}`, style: { minWidth: "40%" } }, rich(t.title)),
+          bar(a.weight / s.total, { tone: "warn", label: `${t.title}: ${a.weight} domande su ${s.total}` }),
+          h("span", { class: "small", style: { whiteSpace: "nowrap" } }, `${a.weight}`));
+      })) : null,
+    h("details", { class: "small" }, h("summary", {}, "Le più chieste"),
+      h("ol", { class: "paper-items" }, top.map((q) => h("li", {}, rich(q.text), h("b", {}, countLabel(q, (n) => ` ×${n}`, " (spesso)")),
+        h("span", { class: "muted" }, ` — ${[topicOf(q.key), linkedQ.has(q.key) ? null : "non ancora nel quiz"].filter(Boolean).join(" · ") || "senza argomento"}`))))),
+    s.inQuiz.length ? h("div", { class: "row" },
+      h("a", { class: "btn primary", href: `#/exam/${exam.id}/quiz?mode=exam` }, "Allenati sulle domande d'esame"),
+      h("a", { class: "btn", href: `#/exam/${exam.id}/quiz?mode=exam&n=5` }, "Simulazione orale (5 domande)")) : null,
+    h("p", { class: "muted small", style: { margin: 0 } }, "Sapere a memoria le risposte dell'elenco non basta: all'orale il docente incalza («perché?», «fammi un esempio», «disegnalo»). Rispondi anche alla domanda di approfondimento, e continua a spiegare gli argomenti a parole tue."));
+}
+
 export function esamiTab(exam) {
   const papers = allPapers(exam).sort((a, b) => (paperYear(a.label) ?? 0) - (paperYear(b.label) ?? 0));
   const draft = exam.simDraft;
+  const qCard = questionsCard(exam);
   if (!papers.length)
-    return h("div", { class: "stack", style: { maxWidth: "760px" } },
-      h("div", { class: "card stack" }, h("h2", { style: { margin: 0 } }, "Esami degli anni passati"),
+    return h("div", { class: "stack", style: { maxWidth: "760px" } }, qCard,
+      h("div", { class: "card stack" }, h("h2", { style: { margin: 0 } }, qCard ? "Temi d'esame scritti" : "Esami degli anni passati"),
         h("p", { style: { margin: 0 } }, "Le prove degli appelli passati sono il materiale più utile per prepararsi: dicono che cosa chiede davvero l'esame e permettono di allenarsi nelle condizioni vere, a tempo e senza appunti."),
         h("p", { class: "muted small", style: { margin: 0 } }, "Caricale nei Materiali (PDF, Word, testo o foto) e scegli il tipo «Esami passati». Un file con più appelli viene diviso in prove da solo; se non ci riesce, indichi tu dove inizia ciascuna."),
+        qCard ? null : h("p", { class: "muted small", style: { margin: 0 } }, "Hai invece un elenco di domande uscite (tipico dell'orale)? Caricalo con il tipo «Domande d'esame»: ogni domanda va nel quiz."),
         h("div", {}, h("a", { class: "btn primary", href: `#/exam/${exam.id}/materials` }, "Aggiungi le prove"))));
   const next = nextPaper(exam);
   const nPapers = papers.length;
@@ -163,6 +201,7 @@ export function esamiTab(exam) {
       nPapers >= 3 ? "fanne una subito, senza prepararti, per vedere dove sei; tieni le più recenti per gli ultimi giorni, a tempo e senza appunti. " : "tienile per quando hai studiato gli argomenti: una prova vera fatta a tempo vale più di dieci esercizi letti. ",
       "Non leggere le soluzioni prima di averci provato: una prova già vista non misura più niente."),
     analysisCard(exam, papers),
+    qCard,
     h("div", { class: "stack", style: { gap: "8px" } }, h("h2", { style: { margin: "6px 0 0" } }, `Le tue prove (${nPapers})`),
       h("p", { class: "muted small", style: { margin: 0 } }, `Durata della simulazione: ${paperMinutes(exam, "")} minuti, se la prova non la indica (la cambi prima di iniziare).`),
       papers.map((p) => paperRow(exam, p, next))),

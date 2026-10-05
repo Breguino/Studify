@@ -3,6 +3,7 @@
 import { paperStartsOf, splitPapers } from "./lessons.js";
 import { roleOf } from "./material-roles.js";
 import { parseRange, sliceText } from "./module-update.js";
+import { hotByQuestions } from "./exam-questions.js";
 
 /** Dopo il caricamento o il cambio di tipo: un file con più prove viene diviso (testo) o se ne trovano gli inizi (pagine). */
 export function preparePapers(m) {
@@ -128,16 +129,18 @@ export function topicFrequency(exam) {
 export const MIN_PAPERS = 3; // con meno prove la frequenza non dice quasi nulla
 
 /**
- * Gli argomenti che escono in almeno metà delle prove (con almeno MIN_PAPERS prove) diventano «centrali» per il piano.
+ * Gli argomenti che escono in almeno metà delle prove (con almeno MIN_PAPERS prove), o che negli elenchi di domande d'esame sono
+ * chiesti molto più della media (vedi hotByQuestions), diventano «centrali» per il piano.
  * Se un'analisi successiva non li conferma, tornano all'importanza di prima. Gli argomenti mai usciti non si abbassano:
  * «non è uscito» non vuol dire «non uscirà».
  * @returns {string[]} id degli argomenti alzati ora
  */
 export function applyExamBoost(exam) {
   const { n, freq } = topicFrequency(exam);
+  const asked = hotByQuestions(exam); // dagli elenchi di domande d'esame
   const raised = [];
   for (const t of exam.module?.topics ?? []) {
-    const hot = n >= MIN_PAPERS && (freq.get(t.id) ?? 0) / n >= 0.5;
+    const hot = (n >= MIN_PAPERS && (freq.get(t.id) ?? 0) / n >= 0.5) || asked.has(t.id);
     if (hot && t.importance < 3) {
       t.importanceBefore = t.importance;
       t.importance = 3;

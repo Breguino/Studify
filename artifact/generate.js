@@ -2,7 +2,7 @@
 // usa l'account Claude di chi apre la pagina. Limiti: nessuna navigazione web, nessun PDF,
 // prompt ≤ 256 KiB e risposte brevi → il modulo si costruisce a passi (schema → carte/domande per argomento).
 import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_GRADE_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, GRADE_RULES, PAST_EXAMS_RULES, examGradePrompt, pastExamsPrompt, IMPORT_HEADERS, IMPORT_RULES, JSON_LATEX_RULE, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, DISPENSA_SYSTEM, chapterPrompt, splitChapter } from "../shared/prompts.js";
-import { normalizeCurriculum, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex } from "../shared/normalize.js";
+import { examQuestionLines, identityRefs, normalizeCurriculum, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex } from "../shared/normalize.js";
 
 const MAX_MATERIAL_CHARS = 200_000;
 const CONCURRENCY = 2; // `sample` ne esegue un paio alla volta, le altre aspettano: oltre si rischia rate_limited
@@ -64,7 +64,8 @@ const OUTLINE_SHAPE = `Rispondi SOLO con un oggetto JSON (nessun testo prima o d
    "mustKnow": [string] (3-5), "commonMistakes": [string] (1-3),
    "origin": "notes"|"model",
    "excerpt": string (passaggio COPIATO alla lettera dai materiali su cui si basa l'argomento, max 1000 caratteri; "" se origin è "model"),
-   "exercises": string (1-3 esercizi COPIATI dai materiali di tipo esercizi o dai temi d'esame che riguardano l'argomento, con la soluzione se c'è, max 2000 caratteri; "" se non ce ne sono)}],
+   "exercises": string (1-3 esercizi COPIATI dai materiali di tipo esercizi o dai temi d'esame che riguardano l'argomento, con la soluzione se c'è, max 2000 caratteri; "" se non ce ne sono),
+   "examQuestionIds": [string] (id «D…» delle domande d'esame dell'elenco che riguardano l'argomento: ogni id in un solo argomento; [] se non ce ne sono)}],
  "examHints": [{"quote": string, "source": string, "note": string, "topicId": string (id dell'argomento, es. "t3", o "")}] (vedi il punto 9; [] se non ce ne sono)}
 Regole di forma: da 5 a 12 argomenti, in ordine logico. origin="notes" se il contenuto viene dai materiali dello studente;
 "model" solo per ciò che non è nei materiali (conoscenza generale, di cui sei certo). Il contenuto della <traccia_ai_non_verificata>
@@ -82,6 +83,55 @@ const exerciseBlock = (t) =>
   typeof t.exercises === "string" && t.exercises.trim()
     ? `<esercizi_dai_materiali>\n${t.exercises.slice(0, 2500)}\n</esercizi_dai_materiali>\nUsa questi esercizi come modello: almeno metà delle domande siano kind="problem" dello stesso tipo, con svolgimento in modelAnswer (se la soluzione non c'è, risolvilo e scrivi in explanation "Svolgimento non presente nei materiali: verificalo"). Non farne flashcard. Se vengono da temi d'esame passati, cambia dati e contesto: le prove vere lo studente le tiene per le simulazioni.\n`
     : "";
+
+const EXAM_Q_PER_CALL = 8; // domande d'esame per richiesta: ognuna ha risposta modello e rubrica, la risposta resta breve
+
+/**
+ * Passo 3 (se ci sono elenchi di domande d'esame): per ogni argomento, le sue domande d'esame diventano domande del quiz con
+ * risposta modello, rubrica e domanda di approfondimento. `lines` = id «D12» → testo della voce.
+ * @returns {Promise<{questions: object[], missed: string[]}>} domande con topicId; id rimasti senza argomento o non riusciti
+ */
+async function examQuestionsStep({ sample, exam, topics, lines, onProgress }) {
+  const jobs = [];
+  const assigned = new Set();
+  for (const t of topics) {
+    const ids = [...new Set((Array.isArray(t.examQuestionIds) ? t.examQuestionIds : []).filter((id) => lines.has(id) && !assigned.has(id)))];
+    ids.forEach((id) => assigned.add(id));
+    for (let k = 0; k < ids.length; k += EXAM_Q_PER_CALL) jobs.push({ t, ids: ids.slice(k, k + EXAM_Q_PER_CALL) });
+  }
+  const missed = [...lines.keys()].filter((id) => !assigned.has(id));
+  let done = 0;
+  const parts = await pool(jobs, CONCURRENCY, async ({ t, ids }) => {
+    const prompt = `${RULES}
+
+${examContext(exam)}
+
+<argomento>
+${JSON.stringify({ title: t.title, summary: t.summary, keyConcepts: t.keyConcepts, mustKnow: t.mustKnow, excerpt: t.excerpt ?? "" })}
+</argomento>
+<domande_esame_argomento>
+${ids.map((id) => `${id}. ${lines.get(id)}`).join("\n")}
+</domande_esame_argomento>
+Compito: DOMANDE D'ESAME DA PREPARARE. Per ogni domanda distinta dell'elenco crea una question come dicono le regole sulle domande d'esame
+(prompt = la domanda ripulita; examRefs = gli id che riproduce; risposta modello dall'estratto e dal riassunto, o tua se non c'è, segnalandolo).
+Rispondi SOLO con un oggetto JSON: {"questions": [{"kind": "open"|"problem", "prompt": string, "options": [], "correctIndex": -1, "modelAnswer": string,
+"explanation": string, "rubric": [string] (3-6), "followUp": string, "examRefs": [string]}]}`;
+    try {
+      const r = await sample.json(prompt, { modelTier: "default" });
+      return { t, ids, questions: Array.isArray(r?.questions) ? r.questions : [] };
+    } catch (e) {
+      if (["not_granted", "sampling_disabled", "rate_limited"].includes(e?.code)) throw explain(e);
+      return { t, ids, questions: [], failed: true };
+    } finally {
+      done++;
+      onProgress(0, `Passo 3: domande d'esame — ${done}/${jobs.length}`);
+    }
+  });
+  const questions = parts.flatMap((p) => p.questions.map((q) => ({ ...q, topicId: p.t.id, examRefs: (Array.isArray(q.examRefs) ? q.examRefs : []).filter((id) => p.ids.includes(id)) })));
+  return { questions, missed: [...missed, ...parts.filter((p) => p.failed).flatMap((p) => p.ids)] };
+}
+
+const missedGap = (n) => `${n} ${n === 1 ? "domanda d'esame non è entrata" : "domande d'esame non sono entrate"} nel quiz: ripeti l'aggiornamento o rigenera il modulo.`;
 
 /**
  * Modulo di studio a passi. `onProgress(chars, label)`: l'etichetta descrive il passo.
@@ -131,16 +181,18 @@ export async function generateModule({ exam, materials, research }, onProgress =
     }
   });
 
+  const lines = examQuestionLines(materials);
+  const exq = lines.size ? await examQuestionsStep({ sample, exam, topics, lines, onProgress }) : { questions: [], missed: [] };
   const raw = {
     title: outline.title,
     overview: outline.overview,
-    gaps: [...(Array.isArray(outline.gaps) ? outline.gaps : []), ...failed.map((f) => `Per «${f}» non sono riuscito a generare carte e domande: rigenera il modulo.`)],
+    gaps: [...(Array.isArray(outline.gaps) ? outline.gaps : []), ...failed.map((f) => `Per «${f}» non sono riuscito a generare carte e domande: rigenera il modulo.`), ...(exq.missed.length ? [missedGap(exq.missed.length)] : [])],
     topics: topics.map((t) => ({ ...t, sourceIds: [] })),
     examHints: (Array.isArray(outline.examHints) ? outline.examHints : []).map((x) => ({ ...x, topicId: hintTopic(x?.topicId) })),
     flashcards: perTopic.flatMap((r, i) => r.flashcards.map((c) => ({ ...c, topicId: topics[i].id }))),
-    questions: perTopic.flatMap((r, i) => r.questions.map((q) => ({ ...q, topicId: topics[i].id }))),
+    questions: [...perTopic.flatMap((r, i) => r.questions.map((q) => ({ ...q, topicId: topics[i].id }))), ...exq.questions],
   };
-  const mod = normalizeModule(raw, [], { checkQuote: quoteChecker(body) });
+  const mod = normalizeModule(raw, [], { checkQuote: quoteChecker(body), examRefs: identityRefs(materials) });
   if (!mod.topics.length || (mod.flashcards.length === 0 && mod.questions.length === 0)) throw new Error("Non sono riuscito a generare carte e domande. Riprova con meno materiale.");
   return mod;
 }
@@ -151,7 +203,8 @@ const EXTEND_OUTLINE_SHAPE = `Rispondi SOLO con un oggetto JSON (nessun testo pr
    "importance": 1|2|3, "difficulty": 1|2|3, "summary": string, "keyConcepts": [{"term": string, "definition": string}] (solo voci nuove),
    "mustKnow": [string] (solo voci nuove), "commonMistakes": [string] (solo voci nuove), "origin": "notes"|"model",
    "excerpt": string (passaggio COPIATO alla lettera dai MATERIALI NUOVI su cui si basa, max 1000 caratteri),
-   "exercises": string (1-3 esercizi COPIATI dai materiali nuovi di tipo esercizi o dai temi d'esame nuovi sull'argomento, con soluzione se c'è, max 2000 caratteri; "" se non ce ne sono)}],
+   "exercises": string (1-3 esercizi COPIATI dai materiali nuovi di tipo esercizi o dai temi d'esame nuovi sull'argomento, con soluzione se c'è, max 2000 caratteri; "" se non ce ne sono),
+   "examQuestionIds": [string] (id «D…» delle domande d'esame nuove che riguardano l'argomento: ogni id in un solo argomento; [] se non ce ne sono)}],
  "examHints": [{"quote": string, "source": string, "note": string, "topicId": string (id dell'argomento: esistente o nuovo, o "")}] (solo dai materiali nuovi; [] se non ce ne sono)}
 Al massimo 8 argomenti in tutto (nuovi + approfonditi). Carte e domande verranno chieste dopo, argomento per argomento.`;
 
@@ -210,14 +263,16 @@ export async function extendModule({ exam, materials, research, existing }, onPr
     }
   });
 
+  const lines = examQuestionLines(materials);
+  const exq = lines.size ? await examQuestionsStep({ sample, exam, topics, lines, onProgress }) : { questions: [], missed: [] };
   const gaps = Array.isArray(outline?.gaps) ? outline.gaps : existing.gaps ?? [];
   return {
     delta: {
-      gaps: [...gaps, ...failed.map((f) => `Per «${f}» non sono riuscito a generare carte e domande: ripeti l'aggiornamento.`)],
-      topics: topics.map(({ excerpt, exercises, ...t }) => ({ ...t, sourceIds: [] })),
+      gaps: [...gaps, ...failed.map((f) => `Per «${f}» non sono riuscito a generare carte e domande: ripeti l'aggiornamento.`), ...(exq.missed.length ? [missedGap(exq.missed.length)] : [])],
+      topics: topics.map(({ excerpt, exercises, examQuestionIds, ...t }) => ({ ...t, sourceIds: [] })),
       examHints: (Array.isArray(outline?.examHints) ? outline.examHints : []).map((x) => ({ ...x, topicId: known.has(x?.topicId) ? x.topicId : renamed.get(x?.topicId) ?? "" })),
       flashcards: perTopic.flatMap((r, i) => r.flashcards.map((c) => ({ ...c, topicId: topics[i].id }))),
-      questions: perTopic.flatMap((r, i) => r.questions.map((q) => ({ ...q, topicId: topics[i].id }))),
+      questions: [...perTopic.flatMap((r, i) => r.questions.map((q) => ({ ...q, topicId: topics[i].id }))), ...exq.questions],
     },
     sources: [],
   };
@@ -270,7 +325,7 @@ export async function writeDispensa({ exam, materials, research, outline, topics
   for (const [k, topic] of topics.entries()) {
     onProgress(0, `Scrivo il capitolo ${k + 1}/${topics.length}: ${topic.title}…`, { chapters: [...chapters] });
     try {
-      const { text, truncated } = await sample(`${DISPENSA_SYSTEM}\n\nMateriali dello studente:\n\n${body}\n\n${chapterPrompt({ exam, topic, outline, hints: topic.hints ?? [], length, solutions })}`, {
+      const { text, truncated } = await sample(`${DISPENSA_SYSTEM}\n\nMateriali dello studente:\n\n${body}\n\n${chapterPrompt({ exam, topic, outline, hints: topic.hints ?? [], examQuestions: topic.examQuestions ?? [], length, solutions })}`, {
         modelTier: "default",
         onText: ({ text: t }) => onProgress(t.length, `Scrivo il capitolo ${k + 1}/${topics.length}: ${topic.title}… ~${Math.round(t.length / 1000)}k caratteri`),
       });

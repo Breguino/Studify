@@ -12,6 +12,7 @@ import { extractPdfPages } from "../pdf-pages.js";
 import { readPdf } from "../pdf-text.js";
 import { guessRole, isPractice, roleOf, ROLES } from "../material-roles.js";
 import { applyExamBoost, papersOf, parseStarts, preparePapers } from "../past-exams.js";
+import { countLabel, numberedQuestions, questionsOf, remapExamRefs } from "../exam-questions.js";
 import { paperStartsOf } from "../lessons.js";
 import * as store from "../store.js";
 import { fmtDate, today } from "../dates.js";
@@ -104,6 +105,7 @@ async function addFiles(exam, files) {
       const m = { id: uid(), kind: "pdf", role: guessRole(file.name, true), title: name, fileId, size: file.size, numPages, addedAt: now() };
       exam.materials.push(m);
       if (m.role === "esami") await findPdfPapers(m);
+      if (m.role === "domande") await pdfToQuestions(m);
       pdfTotal += file.size;
     } else if (/\.(docx|pptx)$/i.test(file.name)) {
       try {
@@ -129,7 +131,7 @@ async function removeMaterial(exam, m) {
   if (m.pdfFileId) await store.delFile(m.pdfFileId);
   for (const id of m.imageIds ?? []) await store.delFile(id);
   exam.materials = exam.materials.filter((x) => x.id !== m.id);
-  if (roleOf(m) === "esami" && exam.module) { applyExamBoost(exam); exam.plan = null; } // senza quelle prove la frequenza cambia
+  if (["esami", "domande"].includes(roleOf(m)) && exam.module) { applyExamBoost(exam); exam.plan = null; } // senza quelle prove o domande la frequenza cambia
   store.save();
   core.rerender();
 }
@@ -142,25 +144,59 @@ function withLessons(m) {
   return m;
 }
 
-/** Esami passati: un file con più prove diviso per prova; gli altri documenti lunghi divisi per lezione. */
-const structure = (m) => (roleOf(m) === "esami" ? preparePapers(m) : withLessons(m));
+/** Esami passati: un file con più prove diviso per prova; gli elenchi di domande restano interi; gli altri documenti divisi per lezione. */
+const structure = (m) => (roleOf(m) === "esami" ? preparePapers(m) : roleOf(m) === "domande" ? m : withLessons(m));
+
+/** Testo di ogni pagina di un PDF salvato (versione con server), riga per riga. */
+async function pdfPageTexts(m, maxPages = 300) {
+  const data = await store.getFile(m.fileId);
+  const { pages } = await readPdf(Uint8Array.from(atob(data), (c) => c.charCodeAt(0)), { maxPages });
+  return pages.map((p) => {
+    const lines = new Map();
+    for (const it of p.items) { const y = Math.round(it.y / 3); lines.set(y, [...(lines.get(y) ?? []), it]); }
+    return [...lines.entries()].sort((a, b) => b[0] - a[0]).map(([, its]) => its.sort((a, b) => a.x - b.x).map((i) => i.str).join(" ")).join("\n");
+  });
+}
 
 /** PDF di esami passati (versione con server): dal testo delle pagine si trova dove inizia ogni prova. */
 async function findPdfPapers(m) {
   if (m.paperStarts || !(m.numPages > 1)) return;
   try {
-    const data = await store.getFile(m.fileId);
-    const { pages } = await readPdf(Uint8Array.from(atob(data), (c) => c.charCodeAt(0)), { maxPages: 300 });
-    const texts = pages.map((p) => {
-      const lines = new Map();
-      for (const it of p.items) { const y = Math.round(it.y / 3); lines.set(y, [...(lines.get(y) ?? []), it]); }
-      return [...lines.entries()].sort((a, b) => b[0] - a[0]).map(([, its]) => its.sort((a, b) => a.x - b.x).map((i) => i.str).join(" ")).join("\n");
-    });
-    const r = paperStartsOf(texts);
+    const r = paperStartsOf(await pdfPageTexts(m));
     if (r) Object.assign(m, { paperStarts: r.starts, paperLabels: r.labels });
   } catch {
     /* PDF scansionato o illeggibile: le prove si indicano a mano */
   }
+}
+
+/**
+ * PDF con un elenco di domande d'esame (versione con server): l'elenco serve come testo, una domanda per voce, perché ogni domanda
+ * diventa una domanda del quiz. Una scansione senza testo non si può leggere così: va fotografata o incollata.
+ */
+async function pdfToQuestions(m) {
+  try {
+    const text = (await pdfPageTexts(m, 1000)).join("\f");
+    if (text.replace(/\f/g, "").trim().length < 20) return toast(`«${m.title}» non ha testo selezionabile: fotografa l'elenco (Appunti scritti a mano, poi tipo «Domande d'esame») o incollalo.`, "error");
+    if (m.fileId) await store.delFile(m.fileId);
+    Object.assign(m, { kind: "notes", text, size: text.length, fromPdf: true, fileId: undefined });
+  } catch (e) {
+    toast(`«${m.title}»: ${e.message}`, "error");
+  }
+}
+
+/** Elenco di domande d'esame: quante, quante ripetute, a cosa servono. */
+function questionsRow(m) {
+  if (roleOf(m) !== "domande") return null;
+  const qs = questionsOf(m);
+  const repeated = qs.filter((q) => q.count > 1).length;
+  return h("div", { class: "stack small", style: { gap: "4px" } },
+    h("div", { class: "row", style: { gap: "8px", alignItems: "center" } },
+      badge(`${qs.length} ${qs.length === 1 ? "domanda" : "domande"}`, "brand"), repeated ? h("span", { class: "muted" }, `${repeated} chieste più volte`) : null),
+    qs.length ? h("details", {}, h("summary", {}, "Le domande riconosciute"),
+      h("ol", { class: "paper-items" }, qs.slice(0, 60).map((q) => h("li", {}, q.text, h("b", {}, countLabel(q, (n) => ` ×${n}`, " (spesso)")), q.when.length ? h("span", { class: "muted" }, ` — ${q.when.join("; ")}`) : null))),
+      qs.length > 60 ? h("div", { class: "muted" }, `… e altre ${qs.length - 60}.`) : null)
+      : h("div", { class: "callout warn" }, "Non ho riconosciuto domande: scrivile una per riga, con «-» o «1.» davanti, o terminando con «?»."),
+    h("div", { class: "muted" }, "Queste invece vanno nel quiz: all'orale le domande si ripetono e conviene saperle tutte. Per ognuna l'AI scrive la risposta modello dai tuoi materiali e la domanda con cui il docente potrebbe incalzarti."));
 }
 
 /** Esami passati: quante prove, dove iniziano (modificabile), e a cosa servono. */
@@ -210,10 +246,16 @@ async function payload(list, { onlyNew = false } = {}) {
   let research = null;
   let pages = 0;
   let bytes = 0;
+  const examMap = new Map(); // «D12» → chiave della domanda d'esame
   for (const m of list) {
     const range = onlyNew ? unsentPages(m) : parseRange(m.pages, m.numPages) ? m.pages : null;
     const r = parseRange(range, m.numPages);
     if (m.kind === "web") research = { notes: m.text, sources: m.sources, generated: !!m.generated };
+    else if (roleOf(m) === "domande" && m.kind === "notes") {
+      // l'elenco arriva all'AI come voci numerate «D12. …»: ogni domanda del quiz dice quali voci riproduce
+      const text = numberedQuestions(questionsOf(m, range), examMap.size + 1, examMap);
+      if (text) materials.push({ kind: "notes", role: "domande", title: m.title, pages: r ? `${r.from}-${r.to}` : "", unit: m.unit ?? "pagine", year: m.year ?? "", handwritten: false, text });
+    }
     else if (m.kind === "pdf") {
       let data = await store.getFile(m.fileId);
       if (r && extractPdfPages && (r.from > 1 || r.to < (m.numPages ?? Infinity))) data = await extractPdfPages(data, r.from, r.to);
@@ -224,14 +266,16 @@ async function payload(list, { onlyNew = false } = {}) {
   }
   if (pages > MAX_SEND_PAGES || bytes > MAX_SEND_BYTES)
     throw new Error(`Troppo materiale PDF per una volta (${pages} pagine, ${kb(bytes * 0.75)}): il limite è ${MAX_SEND_PAGES} pagine e ~${kb(MAX_SEND_BYTES * 0.75)}. Nel materiale scegli le pagine (es. i capitoli del programma) e aggiungi il resto dopo con «Aggiungi al modulo».`);
-  return { materials, research };
+  return { materials, research, examMap };
 }
 
 async function generate(exam) {
   if (hasProgress(exam) && !(await confirmDialog("Rigenerare il modulo azzera flashcard, quiz e argomenti già svolti per questo esame. Se hai solo aggiunto appunti nuovi, usa «Aggiungi al modulo». Continuare?", { ok: "Rigenera tutto", danger: true }))) return;
   await run(exam, "module", async (onProgress) => {
-    const mod = await api.runJob("/api/module", { exam: examInfo(exam), ...(await payload(exam.materials)) }, onProgress);
+    const { examMap, ...sent } = await payload(exam.materials);
+    const mod = remapExamRefs(await api.runJob("/api/module", { exam: examInfo(exam), ...sent }, onProgress), examMap);
     resetProgress(exam, mod);
+    applyExamBoost(exam);
     exam.materials.forEach(markSent);
     toast("Modulo pronto!", "ok");
   });
@@ -247,9 +291,10 @@ async function update(exam) {
   const pending = pendingMaterials(exam);
   if (!pending.length) return;
   await run(exam, "update", async (onProgress) => {
-    const sent = await payload(pending, { onlyNew: true });
+    const { examMap, ...sent } = await payload(pending, { onlyNew: true });
     const res = await api.runJob("/api/module-extend", { exam: examInfo(exam), ...sent, existing: compactModule(exam.module) }, onProgress);
-    toast(updateSummary(applyUpdate(exam, res, pending.map((m) => m.id), undefined, sentInfo(sent))), "ok");
+    toast(updateSummary(applyUpdate(exam, res, pending.map((m) => m.id), undefined, { ...sentInfo(sent), examRefs: examMap })), "ok");
+    applyExamBoost(exam);
     pending.forEach(markSent);
   });
 }
@@ -587,13 +632,13 @@ export function materialsTab(exam) {
         h("div", { class: "card flat" },
           h("div", { class: "row between" }, h("div", {}, h("b", {}, m.title), " ", badge(KIND[m.kind], m.kind === "web" ? "brand" : ""), " ", isPending.has(m.id) ? badge("non ancora nel modulo", "warn") : null, " ", h("span", { class: "muted small" }, kb(m.size)),
               m.kind !== "web" ? h("div", { class: "row", style: { gap: "6px", marginTop: "4px" } }, h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Tipo",
-                h("select", { class: "role-select", "aria-label": `Tipo di ${m.title}`, onchange: async (e) => { m.role = e.target.value; if (m.role === "sbobine") withLessons(m); if (m.role === "esami") { if (m.kind === "pdf") await findPdfPapers(m); else preparePapers(m); } store.save(); rerenderSoon(); } },
+                h("select", { class: "role-select", "aria-label": `Tipo di ${m.title}`, onchange: async (e) => { m.role = e.target.value; if (m.role === "sbobine") withLessons(m); if (m.role === "esami") { if (m.kind === "pdf") await findPdfPapers(m); else preparePapers(m); } if (m.role === "domande" && m.kind === "pdf") await pdfToQuestions(m); store.save(); rerenderSoon(); } },
                   Object.entries(ROLES).map(([k, t]) => h("option", { value: k, selected: roleOf(m) === k }, t)))),
                 roleOf(m) === "sbobine" ? h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Anno accademico",
                   h("input", { class: "sbobina-year", value: m.year ?? "", placeholder: "es. 2025-26", "aria-label": `Anno accademico di ${m.title}`, style: { width: "100px", padding: "4px 8px" }, onchange: (e) => { m.year = e.target.value.trim(); store.save(); } })) : null,
                 m.numPages > 1 ? pagePicker(m) : null) : null,
               roleOf(m) === "sbobine" ? h("div", { class: "small muted" }, "Sbobine: le frasi del docente sull'esame finiscono nel modulo (verificate sul testo). Possono contenere errori di trascrizione su termini e formule, e se sono di un altro anno docente e programma potrebbero essere cambiati.") : null,
-              papersRow(exam, m),
+              papersRow(exam, m), questionsRow(m),
               m.kind === "notes" ? (m.handwritten ? handwrittenRow(exam, m) : formulaRow(exam, m)) : null),
             h("button", { class: "btn small danger", onclick: () => removeMaterial(exam, m), "aria-label": `Rimuovi ${m.title}` }, "Rimuovi")),
           m.kind === "web" ? h("details", {}, h("summary", { class: "small" }, m.generated ? "Anteprima (bozza dalla conoscenza di Claude, senza fonti)" : `Anteprima e ${m.sources.length} fonti`),

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { FORMATS, KINDS, LEVELS } from "../shared/normalize.js";
 
-export { normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex } from "../shared/normalize.js";
+export { normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex, identityRefs } from "../shared/normalize.js";
 
 // Schema del "modulo di studio" generato dall'AI. Tutti i campi sono obbligatori
 // (gli output strutturati non gestiscono bene i campi opzionali): dove un campo
@@ -43,6 +43,8 @@ export const ModuleSchema = z.object({
       modelAnswer: z.string(),
       explanation: z.string(),
       rubric: z.array(z.string()),
+      examRefs: z.array(z.string()), // id «D12» delle domande d'esame che la domanda riproduce ([] se non viene da un elenco)
+      followUp: z.string(), // per le domande d'esame: come incalzerebbe il docente
     }),
   ),
   gaps: z.array(z.string()),

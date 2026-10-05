@@ -14,6 +14,7 @@ import { methodsTab, progressTab } from "./insights.js";
 import { dispensaTab } from "./dispensa.js";
 import { esamiTab } from "./esami.js";
 import { allPapers, analysisValid, topicFrequency } from "../past-exams.js";
+import { examQuestionStats } from "../exam-questions.js";
 
 const TABS = [
   ["today", "Oggi"],
@@ -136,6 +137,11 @@ function moduleTab(exam) {
   if (!mod) return emptyState("Nessun modulo", "Crealo dalla scheda Materiali.", h("a", { class: "btn primary", href: `#/exam/${exam.id}/materials` }, "Vai ai materiali"));
   const freq = topicFrequency(exam);
   const papers = allPapers(exam).length;
+  const asked = examQuestionStats(exam);
+  const askedBadge = (t) => {
+    const a = asked.perTopic.get(t.id);
+    return a ? badge(`${a.questions} ${a.questions === 1 ? "domanda d'esame" : "domande d'esame"}${a.weight > a.questions ? ` · chieste ${a.weight} volte` : ""}`, "warn") : null;
+  };
   return h("div", { class: "stack" },
     h("div", { class: "card" }, h("h2", {}, mod.title || "Modulo di studio"), richParas(mod.overview),
       h("div", { class: "row" }, badge(`${mod.topics.length} argomenti`, "brand"), badge(`${mod.flashcards.length} flashcard`), badge(`${mod.questions.length} domande`), mod.examHints?.length ? badge(`${mod.examHints.length} ${mod.examHints.length === 1 ? "indicazione" : "indicazioni"} sull'esame`, "bad") : null, mod.local ? badge("modalità base", "warn") : null),
@@ -145,11 +151,13 @@ function moduleTab(exam) {
       ? `Esami passati: ${freq.n} ${freq.n === 1 ? "prova analizzata" : "prove analizzate"}. Accanto a ogni argomento, in quante prove compare.`
       : `Hai ${papers} ${papers === 1 ? "prova" : "prove"} d'esame tra i materiali: analizzale per vedere quali argomenti escono di più.`),
       h("a", { class: "btn small", href: `#/exam/${exam.id}/esami` }, freq.n ? "Esami passati" : "Analizza")) : null,
+    asked.inQuiz.length ? h("div", { class: "callout row between" }, h("span", {}, `${asked.inQuiz.length} domande d'esame vere sono nel quiz, con la risposta modello.${asked.uncovered.length ? ` Altre ${asked.uncovered.length} dell'elenco non ancora.` : ""}`),
+      h("a", { class: "btn small", href: `#/exam/${exam.id}/quiz?mode=exam` }, "Allenati")) : null,
     mod.gaps?.length ? h("div", { class: "callout warn" }, h("b", {}, "Cose da verificare / lacune individuate"), h("ul", {}, mod.gaps.map((g) => h("li", {}, rich(g))))) : null,
     h("div", { class: "stack", style: { gap: "10px" } }, mod.topics.map((t) =>
       h("a", { class: "topic card flat", href: `#/exam/${exam.id}/topic/${t.id}`, style: { textDecoration: "none", color: "inherit" } },
         h("div", { class: "row between" }, h("h3", { style: { margin: 0 } }, rich(t.title)),
-          h("div", { class: "row" }, examBadge(t, freq), (mod.examHints ?? []).some((x) => x.topicId === t.id) ? badge("il docente ne parla per l'esame", "bad") : null, recent(t.addedAt) ? badge("nuovo", "brand") : recent(t.updatedAt) ? badge("approfondito", "brand") : null, badge(["", "marginale", "importante", "centrale"][t.importance], t.importance === 3 ? "bad" : t.importance === 2 ? "warn" : ""), exam.learned[t.id] ? badge("studiato", "good") : null)),
+          h("div", { class: "row" }, examBadge(t, freq), askedBadge(t), (mod.examHints ?? []).some((x) => x.topicId === t.id) ? badge("il docente ne parla per l'esame", "bad") : null, recent(t.addedAt) ? badge("nuovo", "brand") : recent(t.updatedAt) ? badge("approfondito", "brand") : null, badge(["", "marginale", "importante", "centrale"][t.importance], t.importance === 3 ? "bad" : t.importance === 2 ? "warn" : ""), exam.learned[t.id] ? badge("studiato", "good") : null)),
         h("p", { class: "muted small", style: { margin: "6px 0 0" } }, rich(clipRich(t.summary, 180)))))),
     mod.sources?.length ? h("details", {}, h("summary", {}, `Fonti online (${mod.sources.length})`), h("ul", { class: "source-list" }, mod.sources.map((s) => h("li", {}, h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer" }, s.title || s.url))))) : null,
     h("p", { class: "muted small" }, "Il modulo è una bozza generata da te + AI: confrontalo con il programma e con il docente. Le fonti web e le conoscenze generali vanno verificate."),
@@ -157,6 +165,17 @@ function moduleTab(exam) {
 }
 
 /* ---------------------------------- ARGOMENTO ---------------------------------- */
+
+/** Le domande d'esame vere su questo argomento (dagli elenchi), le più chieste prima. */
+function examQuestionsBox(exam, t) {
+  const { inQuiz, weight } = examQuestionStats(exam);
+  const qs = inQuiz.filter((q) => q.topicId === t.id).sort((a, b) => weight(b) - weight(a));
+  if (!qs.length) return null;
+  return h("div", { class: "callout" }, h("b", {}, `Domande d'esame su questo argomento (${qs.length})`),
+    h("ul", {}, qs.slice(0, 8).map((q) => h("li", {}, rich(q.prompt), weight(q) > 1 ? h("span", { class: "muted small" }, ` — chiesta ${weight(q)} volte`) : null))),
+    qs.length > 8 ? h("div", { class: "small muted" }, `… e altre ${qs.length - 8}.`) : null,
+    h("a", { class: "btn small", href: `#/exam/${exam.id}/quiz?mode=exam&topics=${t.id}` }, "Rispondi a queste domande"));
+}
 
 /** Che cosa hanno chiesto su questo argomento le prove d'esame passate (dall'analisi). */
 function askedBox(exam, t) {
@@ -195,6 +214,7 @@ export function topicView(exam, tid, query) {
     h("div", { class: "callout" }, h("b", {}, "Prima di leggere: "), "scrivi o pensa a 3 cose che già sai su questo argomento (anche sbagliate). Il tentativo di ricordare rende la lettura successiva più efficace."),
     hintsBox((mod.examHints ?? []).filter((x) => x.topicId === t.id), mod, "Il docente su questo argomento"),
     askedBox(exam, t),
+    examQuestionsBox(exam, t),
     h("div", { class: "card" }, h("h3", {}, "In breve"), richParas(t.summary)),
     t.keyConcepts.length ? h("div", { class: "card" }, h("h3", {}, "Concetti chiave"), t.keyConcepts.map((k) => h("div", { class: "concept" }, h("b", {}, rich(k.term)), rich(k.definition)))) : null,
     t.mustKnow.length ? h("div", { class: "card" }, h("h3", {}, "Da saper dire senza appunti"), h("ul", {}, t.mustKnow.map((m) => h("li", {}, rich(m))))) : null,

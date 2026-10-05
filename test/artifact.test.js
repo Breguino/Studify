@@ -290,3 +290,29 @@ test("pagina Claude: analisi delle prove passate e correzione di una simulazione
   assert.equal(g.items[0].feedback, "\\fcirc", "\\f riparato");
   await assert.rejects(analyzePastExams({ exam, topics, papers: [{ id: "P1", label: "x", text: "x".repeat(210_000) }] }, () => {}, sample), /troppo lunghe/);
 });
+
+test("pagina Claude: le domande d'esame diventano domande del quiz a gruppi di 8, con id controllati", async () => {
+  const prompts = [];
+  const lines = Array.from({ length: 11 }, (_, i) => `D${i + 1}. Domanda d'esame numero ${i + 1} sull'elasticità?`).join("\n");
+  const sample = async () => ({ text: "", truncated: false });
+  sample.json = async (prompt) => {
+    prompts.push(prompt);
+    if (prompt.includes("DOMANDE D'ESAME DA PREPARARE")) {
+      const ids = [...prompt.split("<domande_esame_argomento>")[1].matchAll(/^(D\d+)\. /gm)].map((m) => m[1]);
+      return { questions: ids.map((id) => ({ kind: "open", prompt: `Domanda ${id}`, options: [], correctIndex: -1, modelAnswer: "m", explanation: "", rubric: ["r"], followUp: "f", examRefs: [id, "D99"] })) };
+    }
+    if (prompt.includes("<argomento>")) return { flashcards: [{ front: "F?", back: "B", type: "definizione" }], questions: [] };
+    return { title: "T", overview: "O", gaps: [], topics: [
+      { id: "a", title: "Elasticità", importance: 2, difficulty: 2, summary: "s", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "e", examQuestionIds: Array.from({ length: 10 }, (_, i) => `D${i + 1}`) },
+      { id: "b", title: "Monopolio", importance: 2, difficulty: 2, summary: "s", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "e", examQuestionIds: ["D3"] }] };
+  };
+  const mod = await generateModule({ exam, materials: [{ kind: "notes", role: "domande", title: "Domande", text: lines }], research: null }, () => {}, sample);
+  const step3 = prompts.filter((p) => p.includes("DOMANDE D'ESAME DA PREPARARE"));
+  assert.equal(step3.length, 2, "10 domande dello stesso argomento: 8 + 2");
+  assert.match(prompts[0], /"examQuestionIds"/, "il passo 1 assegna le domande agli argomenti");
+  assert.ok(!step3.some((p) => /D3\. /.test(p) && p.includes('"title":"Monopolio"')), "una domanda va in un solo argomento");
+  const exq = mod.questions.filter((q) => q.examRefs);
+  assert.equal(exq.length, 10);
+  assert.ok(exq.every((q) => q.examRefs.length === 1 && q.followUp === "f" && q.topicId === "t1"), "id inventati scartati");
+  assert.match(mod.gaps.at(-1), /^1 domanda d'esame non è entrata nel quiz/, "D11 senza argomento: segnalata");
+});

@@ -70,6 +70,15 @@ export const MODULE_PRINCIPLES = `Principi inderogabili:
      che ricorrono e modella domande e esercizi sul loro stile (tipo di richiesta, livello, formulazione). NON copiarli nel quiz e
      non farne flashcard: lo studente li tiene per le simulazioni a tempo. Crea esercizi dello stesso tipo con dati e contesto diversi.
      Se l'attributo anno indica prove vecchie, docente e programma potrebbero essere cambiati.
+   - domande d'esame (elenchi di domande uscite agli esami, spesso raccolte dagli studenti; ogni voce ha un id come «D12»): sono le
+     domande vere e all'orale si ripetono, quindi vanno nel quiz. Per ogni domanda distinta crea una question kind="open" ("problem"
+     se è un esercizio): prompt = la domanda ripulita, senza cambiarne il senso (una voce che elenca più argomenti diventa una domanda
+     per argomento); examRefs = gli id delle voci che riproduce (più id se è la stessa domanda scritta in modi diversi); modelAnswer =
+     la risposta di uno studente preparato, presa dai materiali (se nei materiali non c'è, rispondi tu e scrivi in explanation
+     "Risposta non presente nei tuoi materiali: verificala"); rubric = i punti che il docente si aspetta; followUp = la domanda con cui
+     il docente incalzerebbe (un perché, un esempio, un grafico, un collegamento con un altro argomento). Non farne flashcard. Gli
+     argomenti più chiesti hanno importance 3. «(chiesta 3 volte)» dice quante volte compare nell'elenco.
+   Per le domande che non vengono da un elenco di domande d'esame: examRefs = [] e followUp = "".
    - sbobine (trascrizioni delle lezioni fatte da studenti, parlato): dicono come il docente spiega e su cosa insiste → importanza
      e mustKnow. Ignora battute, ripetizioni, avvisi organizzativi. Possono avere errori di trascrizione (termini tecnici, formule,
      numeri capiti male): se contrastano con libro o dispense vale il libro, e segnalalo in "gaps". Se l'attributo anno indica un anno
@@ -177,6 +186,8 @@ uno storico di ripasso. Dai MATERIALI NUOVI ricava SOLO ciò che manca, senza ri
   già presenti, nemmeno con parole diverse;
 - gaps = l'elenco AGGIORNATO delle lacune dell'intero modulo: togli quelle che i materiali nuovi colmano, aggiungi le nuove;
 - examHints = SOLO le indicazioni sull'esame che si trovano nei materiali nuovi;
+- domande d'esame (voci con id D…) nei materiali nuovi: creale tutte come domande nuove con i loro examRefs, anche se il modulo ne ha
+  di simili (il testo deve essere quello dell'esame), sotto l'argomento esistente a cui si riferiscono;
 - title e overview: ripeti quelli del modulo (non vengono cambiati);
 - se i materiali nuovi non aggiungono nulla, restituisci topics, flashcards e questions vuoti.`;
 
@@ -188,8 +199,8 @@ evidence = la frase sulla modalità d'esame COPIATA alla lettera dal testo (max 
 details = in breve durata, parti, prove intermedie, orale facoltativo. caveats: differenze tra docenti/canali, anno accademico vecchio, dubbi.`;
 
 /** Tag con cui ogni tipo di materiale testuale entra nel prompt. */
-export const MATERIAL_TAG = { appunti: "appunti_studente", libro: "libro", dispense: "dispense", esercizi: "esercizi", esami: "temi_esame", sbobine: "sbobina", altro: "materiale" };
-export const MATERIAL_LABEL = { appunti: "Appunti", libro: "Libro", dispense: "Dispense", esercizi: "Esercizi", esami: "Temi d'esame", sbobine: "Sbobine", altro: "Materiale" };
+export const MATERIAL_TAG = { appunti: "appunti_studente", libro: "libro", dispense: "dispense", esercizi: "esercizi", esami: "temi_esame", domande: "domande_esame", sbobine: "sbobina", altro: "materiale" };
+export const MATERIAL_LABEL = { appunti: "Appunti", libro: "Libro", dispense: "Dispense", esercizi: "Esercizi", esami: "Temi d'esame", domande: "Domande d'esame", sbobine: "Sbobine", altro: "Materiale" };
 
 /** Blocco di testo di un materiale per il prompt (pagine indicate se è un estratto). */
 export function materialText(m) {
@@ -208,8 +219,12 @@ export const EXERCISES_TASK = `- Ci sono materiali di tipo esercizi: almeno met�
 export const EXAMS_TASK = `- Ci sono temi d'esame passati: le domande imitino il loro stile (per gli esercizi kind="problem" con dati diversi, mai copiati), e gli
   argomenti che vi ricorrono abbiano importance 3. I temi d'esame restano intatti per le simulazioni.`;
 
+/** Istruzione aggiuntiva quando tra i materiali ci sono elenchi di domande d'esame. */
+export const EXAM_QUESTIONS_TASK = `- Ci sono domande d'esame (voci con id D…): crea una question per OGNI domanda distinta (al massimo 80, prima le più chieste), in
+  aggiunta alle altre domande degli argomenti; ogni id D… deve comparire negli examRefs di una question.`;
+
 /** Il compito aggiuntivo per i tipi di materiale presenti. */
-export const practiceTasks = (roles) => [roles.includes("esercizi") ? EXERCISES_TASK : "", roles.includes("esami") ? EXAMS_TASK : ""].filter(Boolean).join("\n");
+export const practiceTasks = (roles) => [roles.includes("esercizi") ? EXERCISES_TASK : "", roles.includes("esami") ? EXAMS_TASK : "", roles.includes("domande") ? EXAM_QUESTIONS_TASK : ""].filter(Boolean).join("\n");
 
 /** Per le risposte JSON scritte come testo (pagina Claude): i backslash del LaTeX vanno raddoppiati, altrimenti \frac diventa un carattere di controllo. */
 export const JSON_LATEX_RULE = String.raw`Nel JSON ogni backslash del LaTeX va scritto doppio: "$\\frac{a}{b}$", "$\\beta_1$" (un solo backslash, come in "\frac", nel JSON diventa un carattere di controllo).`;
@@ -275,7 +290,7 @@ Regole:
 - Scrivi in modo chiaro e compatto: è un testo da studiare, non un riassunto né un'enciclopedia.`;
 
 /** Istruzioni per un capitolo della dispensa. `hints` = frasi del docente sull'esame per questo argomento. */
-export function chapterPrompt({ exam, topic, outline, hints = [], length = "completa", solutions = true }) {
+export function chapterPrompt({ exam, topic, outline, hints = [], examQuestions = [], length = "completa", solutions = true }) {
   const words = length === "sintetica"
     ? (topic.importance === 3 ? "500-800" : topic.importance === 1 ? "200-350" : "350-550")
     : (topic.importance === 3 ? "1000-1600" : topic.importance === 1 ? "400-700" : "700-1100");
@@ -291,6 +306,7 @@ ${topic.summary ? `Nel modulo di studio (flashcard e quiz) questo argomento è r
 ### Esempio svolto — un esempio o un esercizio dei materiali risolto passo per passo (se ci sono esercizi su questo argomento usa quelli).
 ${hints.length ? `### Il docente ha detto — riporta queste frasi così come sono, come citazioni «> …», con la fonte:\n${hints.map((x) => `- «${x.quote}» (${x.source})`).join("\n")}\n` : ""}### Errori da evitare — 2-4 punti.
 ### Mettiti alla prova — 3-5 domande o esercizi di difficoltà crescente, numerati, nello stile dell'esame (${EXAM_TYPE_LABEL[exam.type] ?? "scritto + orale"}).
+${examQuestions.length ? `### Domande uscite all'esame — riporta queste domande così come sono, numerate di seguito alle precedenti (sono domande vere: nelle soluzioni la risposta che darebbe uno studente preparato):\n${examQuestions.map((q) => `- ${q}`).join("\n")}\n` : ""}
 ${solutions ? "Poi scrivi una riga «=== SOLUZIONI ===» e sotto le risposte numerate allo stesso modo (sintetiche ma complete, con i passaggi per gli esercizi): andranno in appendice, così chi studia prova prima a rispondere." : "Non scrivere le soluzioni."}
 Non scrivere il titolo del capitolo (lo aggiunge l'app) e niente prima della prima sezione.`;
 }

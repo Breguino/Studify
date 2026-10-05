@@ -236,3 +236,4 @@ mark.uncertain { background: #fde68a; color: #1b1f2a; border-radius: 3px; paddin
   .dispensa-toc ol { columns: 1; }
   a { color: inherit; text-decoration: none; }
 }
+.callout.follow-up { border-left: 4px solid var(--warn); }

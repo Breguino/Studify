@@ -64,11 +64,17 @@ const normTopic = (t, id, validSource) => ({
 
 const normCard = (c, id, topicId) => (topicId && str(c.front) && str(c.back) ? { id, topicId, front: tex(c.front), back: tex(c.back), type: c.type } : null);
 
-function normQuestion(q, id, topicId) {
+/**
+ * `refs` (Map «D12» → chiave della domanda d'esame): gli examRefs validi diventano chiavi, gli altri si scartano.
+ * examRefs e followUp ci sono solo nelle domande che vengono da un elenco di domande d'esame.
+ */
+function normQuestion(q, id, topicId, refs = null) {
   if (!topicId || !str(q.prompt)) return null;
   const options = (q.options ?? []).map(tex).filter(Boolean);
   const correctIndex = Math.round(q.correctIndex);
   if (q.kind === "mcq" && (options.length < 2 || !(correctIndex >= 0 && correctIndex < options.length))) return null;
+  const examRefs = refs ? [...new Set((Array.isArray(q.examRefs) ? q.examRefs : []).map((x) => refs.get(x)).filter(Boolean))] : [];
+  const followUp = examRefs.length ? tex(q.followUp).slice(0, 500) : "";
   return {
     id,
     topicId,
@@ -79,8 +85,23 @@ function normQuestion(q, id, topicId) {
     modelAnswer: tex(q.modelAnswer),
     explanation: tex(q.explanation),
     rubric: (q.rubric ?? []).map(tex).filter(Boolean),
+    ...(examRefs.length ? { examRefs } : {}),
+    ...(followUp ? { followUp } : {}),
   };
 }
+
+/** Gli id «D12» delle domande d'esame presenti nei materiali (righe «D12. …» dei materiali di tipo domande), id → riga. */
+export function examQuestionLines(materials) {
+  const out = new Map();
+  for (const m of materials ?? []) {
+    if (m.role !== "domande" || typeof m.text !== "string") continue;
+    for (const [, id, line] of m.text.matchAll(/^(D\d{1,4})\. (.+)$/gm)) out.set(id, line);
+  }
+  return out;
+}
+
+/** Id → se stesso: per tenere gli examRefs validi finché il browser non li traduce nelle sue chiavi. */
+export const identityRefs = (materials) => new Map([...examQuestionLines(materials).keys()].map((id) => [id, id]));
 
 const flatQ = (s) => String(s ?? "").toLowerCase().normalize("NFC").replace(/[’‘`´]/g, "'").replace(/[“”«»"]/g, "").replace(/\s+/g, " ").replace(/^[\s'.…,;:]+|[\s'.…,;:]+$/g, "").trim();
 
@@ -120,7 +141,7 @@ function normHints(list, idMap, check) {
  * `sources` è la lista [{id,title,url}] fornita al modello: gli id sconosciuti vengono scartati.
  * `checkQuote` (vedi quoteChecker) verifica le citazioni del docente in examHints.
  */
-export function normalizeModule(raw, sources = [], { checkQuote = null } = {}) {
+export function normalizeModule(raw, sources = [], { checkQuote = null, examRefs = null } = {}) {
   const validSource = new Set(sources.map((s) => s.id));
   const idMap = new Map();
   const topics = [];
@@ -137,7 +158,7 @@ export function normalizeModule(raw, sources = [], { checkQuote = null } = {}) {
   }
   const questions = [];
   for (const q of raw.questions ?? []) {
-    const qq = normQuestion(q, `q${questions.length + 1}`, idMap.get(q.topicId));
+    const qq = normQuestion(q, `q${questions.length + 1}`, idMap.get(q.topicId), examRefs);
     if (qq) questions.push(qq);
   }
   return {
@@ -164,7 +185,7 @@ const nextNum = (items, prefix) => items.reduce((n, x) => Math.max(n, Number(Str
  * attuali e restituisce l'elenco aggiornato) se `replaceGaps`, altrimenti si aggiungono.
  * @returns {{module: object, added: {topics: number, updated: number, flashcards: number, questions: number}}}
  */
-export function mergeModule(base, raw, sources = [], { now = new Date().toISOString(), replaceGaps = true, summary = "replace", checkQuote = null } = {}) {
+export function mergeModule(base, raw, sources = [], { now = new Date().toISOString(), replaceGaps = true, summary = "replace", checkQuote = null, examRefs = null } = {}) {
   const mod = structuredClone(base);
   mod.sources ??= [];
   // fonti nuove: id rinumerati se si sovrappongono a quelli già presenti
@@ -229,14 +250,28 @@ export function mergeModule(base, raw, sources = [], { now = new Date().toISOStr
     addedCards++;
     updated.add(card.topicId);
   }
-  const qKeys = new Set(mod.questions.map((q) => key(q.prompt)));
+  const qKeys = new Map(mod.questions.map((q) => [key(q.prompt), q]));
   let qNext = nextNum(mod.questions, "q");
   let addedQuestions = 0;
+  let examLinked = 0; // domande d'esame entrate nel quiz (nuove o già presenti)
+  let addedExam = 0;
   for (const q of raw.questions ?? []) {
-    const qq = normQuestion(q, `q${qNext}`, idMap.get(q.topicId));
-    if (!qq || qKeys.has(key(qq.prompt))) continue;
-    qKeys.add(key(qq.prompt));
-    mod.questions.push({ ...qq, addedAt: now });
+    const qq = normQuestion(q, `q${qNext}`, idMap.get(q.topicId), examRefs);
+    if (!qq) continue;
+    const same = qKeys.get(key(qq.prompt));
+    if (same) {
+      // la domanda c'è già: se ora risulta una domanda d'esame, lo diventa (con i suoi progressi)
+      if (qq.examRefs) {
+        same.examRefs = [...new Set([...(same.examRefs ?? []), ...qq.examRefs])];
+        if (qq.followUp && !same.followUp) same.followUp = qq.followUp;
+        examLinked++;
+      }
+      continue;
+    }
+    const added = { ...qq, addedAt: now };
+    qKeys.set(key(qq.prompt), added);
+    mod.questions.push(added);
+    if (qq.examRefs) { examLinked++; addedExam++; }
     qNext++;
     addedQuestions++;
     updated.add(qq.topicId);
@@ -252,7 +287,7 @@ export function mergeModule(base, raw, sources = [], { now = new Date().toISOStr
   const gaps = (raw.gaps ?? []).map(tex).filter(Boolean);
   if (replaceGaps && Array.isArray(raw.gaps)) mod.gaps = gaps;
   else mod.gaps = [...new Set([...(mod.gaps ?? []), ...gaps])];
-  return { module: mod, added: { topics: addedTopics, updated: updated.size, flashcards: addedCards, questions: addedQuestions, hints: newHints.length } };
+  return { module: mod, added: { topics: addedTopics, updated: updated.size, flashcards: addedCards, questions: addedQuestions - addedExam, hints: newHints.length, examQuestions: examLinked } };
 }
 
 /** Piano di studi: nomi unici, valori nei range, URL accettati solo se visti davvero nella ricerca. */

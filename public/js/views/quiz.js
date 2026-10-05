@@ -3,6 +3,7 @@ import * as api from "../api.js";
 import { core } from "../core.js";
 import { weakTopics, pickQuestions, recordScore } from "../progress.js";
 import { statsFor } from "../domain.js";
+import { examQuestionStats } from "../exam-questions.js";
 import * as store from "../store.js";
 import { badge, bar, emptyState, h, pct, shuffle, toast } from "../ui.js";
 
@@ -60,6 +61,10 @@ function pickSet(exam, query) {
   const kind = query.get("kind") || undefined;
   const q = exam.qstats;
   if (mode === "mock") return pickQuestions(mod.questions, q, exam.type === "test" ? 20 : 10, {});
+  if (mode === "exam") {
+    const { inQuiz, weight } = examQuestionStats(exam);
+    return pickQuestions(inQuiz, q, Number(query.get("n")) || 10, { topicIds, bonus: (x) => (weight(x) - 1) * 0.1 });
+  }
   if (mode === "weak") {
     let set = pickQuestions(mod.questions, q, 10, { weakOnly: true });
     if (!set.length) set = pickQuestions(mod.questions, q, 8, { topicIds: weakTopics(mod, statsFor(exam).stats, 3).map((t) => t.id) });
@@ -77,7 +82,9 @@ export function quizView(exam, query) {
   const mock = mode === "mock";
   const taskId = query.get("task");
   let set = pickSet(exam, query);
+  if (!set.length && mode === "exam") return emptyState("Nessuna domanda d'esame nel quiz", "Carica un elenco di domande d'esame nei materiali (tipo «Domande d'esame») e aggiungilo al modulo: ogni domanda diventa una domanda del quiz con la risposta modello.", h("a", { class: "btn", href: `#/exam/${exam.id}/materials` }, "Materiali"));
   if (!set.length) return emptyState("Niente da ripassare qui", "Nessuna domanda corrisponde ai filtri o non hai ancora errori da rivedere.", h("a", { class: "btn", href: `#/exam/${exam.id}/quiz?mode=mixed` }, "Quiz misto"));
+  const examStats = examQuestionStats(exam);
   if (mode !== "mock") set = [...set]; // già interleaved da pickQuestions
 
   const items = set.map((q) => ({ q, answer: q.kind === "mcq" ? null : "", score: null }));
@@ -137,7 +144,9 @@ export function quizView(exam, query) {
     const it = items[i];
     if (phase === "done") return summary();
     const q = it?.q;
-    const body = [head(), bar(i / items.length, { label: "avanzamento" }), h("div", { class: "card stack", style: { marginTop: "14px" } }, badge(KIND[q.kind]), h("div", { class: "q-prompt" }, richParas(q.prompt)))];
+    const w = examStats.weight(q);
+    const examBadge = w ? badge(`domanda d'esame vera${w > 1 ? ` · chiesta ${w} volte` : ""}`, "bad") : null;
+    const body = [head(), bar(i / items.length, { label: "avanzamento" }), h("div", { class: "card stack", style: { marginTop: "14px" } }, h("div", { class: "row" }, badge(KIND[q.kind]), examBadge), h("div", { class: "q-prompt" }, richParas(q.prompt)))];
     const card = body.at(-1);
 
     if (phase === "answer") {
@@ -161,6 +170,8 @@ export function quizView(exam, query) {
         card.append(h("div", { class: "callout", style: { background: "var(--surface-2)" } }, h("b", { class: "small" }, "La tua risposta"), h("p", { style: { margin: "4px 0 0", whiteSpace: "pre-wrap" } }, it.answer.trim() || "(vuota)")));
         const rv = openReview({ question: q.prompt, reference: q.modelAnswer, rubric: q.rubric, answer: it.answer, language: exam.language });
         card.append(rv.el, q.explanation ? h("div", { class: "muted small" }, richParas(q.explanation)) : null,
+          q.followUp && w ? h("div", { class: "callout follow-up" }, h("b", {}, "Il docente potrebbe incalzare: "), rich(q.followUp),
+            h("div", { class: "small muted" }, "Rispondi a voce, senza guardare: all'orale conta saper andare oltre la prima risposta.")) : null,
           h("div", {}, h("button", { class: "btn primary", onclick: () => advanceReview(rv.score()) }, i < items.length - 1 ? "Conferma e avanti" : "Conferma e vedi il risultato")));
       }
     }
@@ -176,7 +187,7 @@ export function quizView(exam, query) {
     const mins = Math.max(1, Math.round((Date.now() - started) / 60000));
     root.replaceChildren(h("div", { class: "stack" },
       h("div", { class: "card stack" },
-        h("div", { class: "row between" }, h("div", {}, h("div", { class: "muted small" }, mock ? `Simulazione · ${mins} min` : "Risultato"), h("div", { class: "score-big" }, pct(total))), h("div", { class: "muted" }, `${items.length - missed.length}/${items.length} solide`)),
+        h("div", { class: "row between" }, h("div", {}, h("div", { class: "muted small" }, mock ? `Simulazione · ${mins} min` : mode === "exam" ? "Domande d'esame vere" : "Risultato"), h("div", { class: "score-big" }, pct(total))), h("div", { class: "muted" }, `${items.length - missed.length}/${items.length} solide`)),
         bar(total, { tone: total >= 0.75 ? "good" : total >= 0.5 ? "warn" : "bad", label: "punteggio" }),
         h("div", { class: "stack", style: { gap: "6px" } }, [...byTopic].map(([tid, sc]) => h("div", { class: "progress-line" }, h("span", { class: "small", style: { minWidth: "40%" } }, mod.topics.find((t) => t.id === tid)?.title), bar(sc.reduce((a, b) => a + b, 0) / sc.length), h("span", { class: "small" }, pct(sc.reduce((a, b) => a + b, 0) / sc.length))))),
         h("p", { class: "muted small", style: { margin: 0 } }, total >= 0.8 ? "Buon livello. Rifallo tra qualche giorno: ricordare a distanza è ciò che fissa." : "Gli errori sono utili: tornano nei prossimi quiz finché non li superi.")),
