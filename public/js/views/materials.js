@@ -355,7 +355,7 @@ async function payload(list, { onlyNew = false } = {}) {
       if (r && extractPdfPages && (r.from > 1 || r.to < (m.numPages ?? Infinity))) data = await extractPdfPages(data, r.from, r.to);
       pages += r ? r.to - r.from + 1 : m.numPages ?? 0;
       bytes += data.length;
-      materials.push({ kind: "pdf", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", data });
+      materials.push({ kind: "pdf", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", year: m.year ?? "", data });
     } else materials.push({ kind: "notes", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", unit: m.unit ?? "pagine", year: m.year ?? "", handwritten: !!m.handwritten, text: sliceText(m.text, range) });
   }
   if (pages > MAX_SEND_PAGES || bytes > MAX_SEND_BYTES)
@@ -767,13 +767,14 @@ export function materialsTab(exam) {
         h("div", { class: "card flat" },
           h("div", { class: "row between" }, h("div", {}, h("b", {}, m.title), " ", badge(KIND[m.kind], m.kind === "web" ? "brand" : ""), " ", isPending.has(m.id) ? badge("non ancora nel modulo", "warn") : null, " ", h("span", { class: "muted small" }, kb(m.size)),
               m.kind !== "web" ? h("div", { class: "row", style: { gap: "6px", marginTop: "4px" } }, h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Tipo",
-                h("select", { class: "role-select", "aria-label": `Tipo di ${m.title}`, onchange: async (e) => { m.role = e.target.value; if (m.role === "sbobine") withLessons(m); if (m.role === "esami") { if (m.kind === "pdf") await findPdfPapers(m); else preparePapers(m); } if (m.role === "domande" && m.kind === "pdf") await pdfToQuestions(m); await syncDispense(exam); store.save(); rerenderSoon(); } },
+                h("select", { class: "role-select", "aria-label": `Tipo di ${m.title}`, onchange: async (e) => { m.role = e.target.value; if (m.role === "sbobine" || m.role === "colleghi") withLessons(m); if (m.role === "esami") { if (m.kind === "pdf") await findPdfPapers(m); else preparePapers(m); } if (m.role === "domande" && m.kind === "pdf") await pdfToQuestions(m); await syncDispense(exam); store.save(); rerenderSoon(); } },
                   Object.entries(ROLES).map(([k, t]) => h("option", { value: k, selected: roleOf(m) === k }, t)))),
-                roleOf(m) === "sbobine" ? h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Anno accademico",
+                ["sbobine", "colleghi"].includes(roleOf(m)) ? h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Anno accademico",
                   h("input", { class: "sbobina-year", value: m.year ?? "", placeholder: "es. 2025-26", "aria-label": `Anno accademico di ${m.title}`, style: { width: "100px", padding: "4px 8px" }, onchange: (e) => { m.year = e.target.value.trim(); store.save(); } })) : null,
                 m.numPages > 1 ? pagePicker(m) : null) : null,
               roleOf(m) === "sbobine" ? h("div", { class: "small muted" }, "Sbobine: le frasi del docente sull'esame finiscono nel modulo (verificate sul testo). Possono contenere errori di trascrizione su termini e formule, e se sono di un altro anno docente e programma potrebbero essere cambiati.") : null,
               papersRow(exam, m), questionsRow(m), exercisesRow(exam, m), slidesRow(m), dispenseRow(exam, m),
+              roleOf(m) === "colleghi" ? h("div", { class: "small muted" }, "Appunti di colleghi: dicono che cosa ha spiegato e sottolineato il docente, ma sono di seconda mano. L'AI controlla definizioni e formule su dispense, libro e i tuoi appunti, e ti segnala gli argomenti che sono solo qui. Se sono di un altro anno, scrivilo: programma e docente potrebbero essere cambiati.") : null,
               roleOf(m) === "svolti" ? h("div", { class: "small muted" }, "Esercizi svolti dal docente: l'AI ne ricava il metodo in passi (come li risolve lui, con la sua notazione) e crea esercizi dello stesso tipo. Li ritrovi negli argomenti come «Esercizi guidati». Se sono scansioni o appunti a mano, controlla le formule nell'anteprima.") : null,
               m.kind === "notes" ? (m.handwritten ? handwrittenRow(exam, m) : formulaRow(exam, m)) : null),
             h("button", { class: "btn small danger", onclick: () => removeMaterial(exam, m), "aria-label": `Rimuovi ${m.title}` }, "Rimuovi")),

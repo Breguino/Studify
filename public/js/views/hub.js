@@ -109,7 +109,7 @@ function todayTab(exam) {
 
 /* --------------------------------- MODULO -------------------------------- */
 
-const ORIGIN = { notes: "dai tuoi appunti", online: "dal web", model: "conoscenza generale dell'AI (verifica)" };
+const ORIGIN = { notes: "dai tuoi materiali", online: "dal web", model: "conoscenza generale dell'AI (verifica)" };
 
 /** Frasi del docente sull'esame (dalle sbobine o dagli appunti), con la fonte. */
 function hintsBox(hints, mod, title = "Cosa ha detto il docente sull'esame") {
@@ -121,7 +121,7 @@ function hintsBox(hints, mod, title = "Cosa ha detto il docente sull'esame") {
       h("span", { class: "muted small" }, ` — ${[x.source, title === "Cosa ha detto il docente sull'esame" ? topicTitle(x.topicId) : null].filter(Boolean).join(" · ")}`),
       x.note ? h("div", { class: "small" }, rich(x.note)) : null,
       x.verified === false ? h("div", { class: "small muted" }, "Citazione da un PDF: non verificata sul testo, controllala.") : null))),
-    h("div", { class: "small muted" }, "Frasi copiate dai materiali: se vengono da sbobine di un anno precedente, il docente potrebbe aver cambiato idea."));
+    h("div", { class: "small muted" }, "Frasi copiate dai materiali: quelle da sbobine o appunti di colleghi sono di seconda mano, e se sono di un anno precedente il docente potrebbe aver cambiato idea."));
 }
 
 /** Capitoli del programma (dai libri consigliati) che nessun argomento del modulo copre; capitoli delle dispense senza argomento. */

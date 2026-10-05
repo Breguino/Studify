@@ -224,7 +224,13 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
    - un PDF chiamato «Lezione 4» con poche parole per pagina (almeno 8 pagine) è un pacco di **slide**: l'app lo segna come tale e lo
      dice; «riassunti» e «schemi» sono appunti di studenti, non del docente.
    Nella scheda «Dispensa» l'app ricorda che, se ci sono le dispense del docente, il testo di riferimento restano quelle.
-11. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
+11. **Appunti di colleghi** (tipo «Appunti di colleghi», riconosciuto da «colleghi», «compagno/a», «amico/a» nel nome): dicono anche
+   loro che cosa ha spiegato e sottolineato il docente, ma sono di seconda mano. L'AI controlla definizioni, formule e risultati su
+   dispense del docente, libro e i tuoi appunti (se contrastano valgono quelli, e lo segnala), e indica tra le lacune gli argomenti
+   che sono **solo** negli appunti di un collega; nella dispensa li cita [Appunti di un collega]. Come per le sbobine si indica l'**anno
+   accademico** (arriva a Claude anche per i PDF) e un documento lungo si divide per lezione. Le frasi del docente sull'esame trovate lì
+   entrano nel modulo con la loro fonte: sono riportate, non sentite da te.
+12. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
 
 | Sessione | Cosa fa |
 |---|---|
@@ -246,7 +252,7 @@ una prima lettura guidata e da esempi svolti (expertise reversal); con pochi gio
 ## Limiti da conoscere
 
 - **Il modulo è una bozza, non una verità.** L'AI può sbagliare. Ogni argomento indica l'origine
-  (*tuoi appunti* / *web* / *conoscenza generale dell'AI — da verificare*); le lacune sono esplicitate. Confronta con il programma del corso.
+  (*tuoi materiali* / *web* / *conoscenza generale dell'AI — da verificare*); le lacune sono esplicitate. Confronta con il programma del corso.
 - **La «preparazione» è una stima**, non una previsione del voto: non misura quanto il tuo esame sarà simile ai quiz generati.
 - **Non c'è un archivio nazionale incorporato** dei corsi e dei piani di studio (l'open data del MUR non era raggiungibile dall'ambiente
   di sviluppo): elenco corsi e piano arrivano dalla ricerca web dell'AI, dal testo che incolli o da ciò che scrivi.
@@ -268,6 +274,9 @@ una prima lettura guidata e da esempi svolti (expertise reversal); con pochi gio
   guarda solo quante parole ci sono per pagina: slide molto fitte restano «dispense» (cambia il tipo a mano). Che le dispense
   prevalgano sul libro vale per definizioni e notazione; su un fatto o un calcolo un refuso del docente resta un refuso, per questo
   le differenze vengono segnalate e non risolte in silenzio.
+- **Appunti di colleghi**: servono a recuperare le lezioni perse e a confrontare i tuoi; leggerli non sostituisce lo studio (chi li ha
+  scritti ha fatto il lavoro di capire e riassumere, tu no). Il controllo dell'AI trova i contrasti con dispense e libro, non gli
+  errori di un collega su ciò che c'è solo nei suoi appunti: per questo quegli argomenti vengono segnalati.
 - **Esercitazioni**: rifare più volte gli stessi esercizi fa ricordare i numeri, non il metodo: dopo i primi giri passa agli esercizi
   nuovi dello stesso tipo (quelli creati dall'AI) e agli esercizi misti. Le soluzioni ufficiali possono essere sintetiche («Q = 20»):
   in quel caso la correzione di Claude confronta anche il procedimento.

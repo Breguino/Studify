@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { ASSIGN_RULES, assignPrompt, BOOKS_RULES, CHAPTERS_RULES, chaptersPrompt, CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_GRADE_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, PAST_EXAMS_RULES, examGradePrompt, pastExamsPrompt, practiceTasks, MATERIAL_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, where, DISPENSA_SYSTEM, chapterPrompt, splitChapter } from "../shared/prompts.js";
+import { ASSIGN_RULES, assignPrompt, BOOKS_RULES, CHAPTERS_RULES, chaptersPrompt, CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_GRADE_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, PAST_EXAMS_RULES, examGradePrompt, pastExamsPrompt, practiceTasks, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, where, DISPENSA_SYSTEM, chapterPrompt, splitChapter, pdfTitle } from "../shared/prompts.js";
 import { AssignSchema, BooksSchema, ChapterLinksSchema, CurriculumSchema, DegreesSchema, ExamFormatSchema, ExamGradeSchema, GradeSchema, ImportRowsSchema, ModuleSchema, PastExamsSchema, normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex, identityRefs, exampleChecker, normalizeAssignments, normalizeBooks, normalizeChapterLinks } from "./schema.js";
 
 export const MODEL = process.env.STUDIFY_MODEL || "claude-opus-5-5";
@@ -324,7 +324,7 @@ function buildUserContent({ exam, materials, research: res, existing }, task = f
   const docs = [];
   for (const m of materials) {
     if (m.kind === "pdf" && m.data) {
-      const title = `${MATERIAL_LABEL[m.role] ?? "Materiale"} — ${m.title}${m.pages ? ` (pagine ${m.pages})` : ""}`;
+      const title = pdfTitle(m);
       docs.push(title);
       content.push({ type: "document", title, source: { type: "base64", media_type: "application/pdf", data: m.data } });
     }
@@ -526,7 +526,7 @@ function materialsPrefix({ materials, research }) {
   const blocks = [];
   for (const m of materials) {
     if (m.kind === "pdf" && m.data)
-      blocks.push({ type: "document", title: `${MATERIAL_LABEL[m.role] ?? "Materiale"} — ${m.title}${m.pages ? ` (pagine ${m.pages})` : ""}`, source: { type: "base64", media_type: "application/pdf", data: m.data } });
+      blocks.push({ type: "document", title: pdfTitle(m), source: { type: "base64", media_type: "application/pdf", data: m.data } });
   }
   const parts = materials.filter((m) => m.kind !== "pdf" && m.text).map(materialText);
   if (research?.notes) parts.push(`<ricerca_online>\n${research.notes}\n</ricerca_online>`);

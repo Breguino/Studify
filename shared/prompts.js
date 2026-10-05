@@ -60,7 +60,14 @@ export const MODULE_PRINCIPLES = `Principi inderogabili:
    importance 3 = quasi certamente chiesto all'esame, 1 = marginale. difficulty 3 = concetti difficili.
 6. Gli id che usi (t1, c1, q1...) servono solo come riferimenti incrociati. sourceIds: usa solo gli id delle fonti elencate.
 7. TIPI DI MATERIALE (indicati dal tag o dal titolo del documento):
-   - appunti: ciò che il docente ha spiegato e sottolineato a lezione → usali soprattutto per decidere l'importanza degli argomenti;
+   - appunti (dello studente): ciò che il docente ha spiegato e sottolineato a lezione → usali soprattutto per decidere l'importanza
+     degli argomenti;
+   - appunti di colleghi (tag appunti_colleghi): appunti presi a lezione da un altro studente. Dicono anche loro che cosa ha spiegato e
+     sottolineato il docente (importanza), ma di seconda mano: chi li ha scritti può aver capito male, saltato passaggi o copiato male
+     una formula. Definizioni, formule e risultati controllali su dispense del docente, libro e appunti dello studente: se contrastano
+     valgono quelli, e segnalalo in "gaps". Se un argomento c'è solo negli appunti di colleghi puoi usarlo, ma scrivilo una volta in
+     "gaps" («X è solo negli appunti di un collega: confrontalo con dispense o libro»). Se l'attributo anno indica un anno accademico
+     precedente, docente e programma potrebbero essere cambiati.
    - libro: la fonte per definizioni, dimostrazioni e approfondimenti;
    - dispense del docente (tag dispense): il corso scritto per esteso da chi fa l'esame, quindi la fonte principale. Usa le sue
      definizioni, i suoi simboli e la sua impostazione nelle carte, nelle risposte modello e nei summary; segui l'ordine dei suoi
@@ -222,8 +229,8 @@ evidence = la frase sulla modalità d'esame COPIATA alla lettera dal testo (max 
 details = in breve durata, parti, prove intermedie, orale facoltativo. caveats: differenze tra docenti/canali, anno accademico vecchio, dubbi.`;
 
 /** Tag con cui ogni tipo di materiale testuale entra nel prompt. */
-export const MATERIAL_TAG = { appunti: "appunti_studente", libro: "libro", slide: "slide", dispense: "dispense", esercizi: "esercizi", svolti: "esercizi_svolti", esami: "temi_esame", domande: "domande_esame", sbobine: "sbobina", altro: "materiale" };
-export const MATERIAL_LABEL = { appunti: "Appunti", libro: "Libro", slide: "Slide", dispense: "Dispense del docente", esercizi: "Esercizi", svolti: "Esercizi svolti dal docente", esami: "Temi d'esame", domande: "Domande d'esame", sbobine: "Sbobine", altro: "Materiale" };
+export const MATERIAL_TAG = { appunti: "appunti_studente", colleghi: "appunti_colleghi", libro: "libro", slide: "slide", dispense: "dispense", esercizi: "esercizi", svolti: "esercizi_svolti", esami: "temi_esame", domande: "domande_esame", sbobine: "sbobina", altro: "materiale" };
+export const MATERIAL_LABEL = { appunti: "Appunti", colleghi: "Appunti di colleghi", libro: "Libro", slide: "Slide", dispense: "Dispense del docente", esercizi: "Esercizi", svolti: "Esercizi svolti dal docente", esami: "Temi d'esame", domande: "Domande d'esame", sbobine: "Sbobine", altro: "Materiale" };
 
 /** Blocco di testo di un materiale per il prompt (pagine indicate se è un estratto). */
 export function materialText(m) {
@@ -233,6 +240,9 @@ export function materialText(m) {
   const year = m.year ? ` anno="${String(m.year).replace(/"/g, "")}"` : "";
   return `<${tag} titolo="${String(m.title ?? "").replace(/"/g, "'")}"${pages}${year}${hand}>\n${m.text}\n</${tag}>`;
 }
+
+/** Titolo di un PDF allegato: tipo, nome, pagine scelte e anno accademico (per sbobine e appunti di colleghi di altri anni). */
+export const pdfTitle = (m) => `${MATERIAL_LABEL[m.role] ?? "Materiale"} — ${m.title}${m.pages ? ` (pagine ${m.pages})` : ""}${m.year ? ` (anno ${m.year})` : ""}`;
 
 /** Istruzione aggiuntiva quando tra i materiali ci sono esercizi. */
 export const EXERCISES_TASK = `- Ci sono materiali di tipo esercizi: almeno metà delle domande siano kind="problem" modellate su quegli esercizi (stesso tipo, dati diversi
@@ -317,6 +327,8 @@ Regole:
   dei passaggi scrivi il metodo in passi generici («Per trovare l'equilibrio del monopolista: 1. … 2. …»).
 - TEMI D'ESAME passati: non risolverli e non copiarli nella dispensa (lo studente li usa per le simulazioni a tempo); puoi dire che tipo
   di esercizio chiedono sull'argomento («Negli appelli: calcolo dell'elasticità da una funzione di domanda»).
+- APPUNTI DI COLLEGHI: sono di seconda mano. Usali per ciò che il docente ha spiegato, ma definizioni e formule prendile da dispense
+  e libro quando ci sono; ciò che è solo lì citalo [Appunti di un collega] perché lo studente sappia che va verificato.
 - SBOBINE: togli il parlato (ripetizioni, battute, avvisi) e tieni la spiegazione; i termini o le formule sospette vanno controllati
   sulle altre fonti. Le parole segnate «[?]» negli appunti a mano sono letture incerte: non basarci la spiegazione.
 - FORMULE in LaTeX compatibile con KaTeX: $...$ nel testo, $$...$$ su una riga a sé (con una riga vuota prima e dopo). Mai formule in testo

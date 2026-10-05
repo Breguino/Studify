@@ -1,5 +1,5 @@
 // Tipi di materiale: cambiano il modo in cui l'AI li usa (vedi shared/prompts.js, principio 7).
-export const ROLES = { appunti: "Appunti", sbobine: "Sbobine (lezioni trascritte)", libro: "Libro", slide: "Slide del docente", dispense: "Dispense del docente", esercizi: "Esercizi", svolti: "Esercizi svolti dal docente", esami: "Esami passati (temi d'esame)", domande: "Domande d'esame (elenchi)", altro: "Altro" };
+export const ROLES = { appunti: "Appunti", colleghi: "Appunti di colleghi", sbobine: "Sbobine (lezioni trascritte)", libro: "Libro", slide: "Slide del docente", dispense: "Dispense del docente", esercizi: "Esercizi", svolti: "Esercizi svolti dal docente", esami: "Esami passati (temi d'esame)", domande: "Domande d'esame (elenchi)", altro: "Altro" };
 
 /** Tipo probabile dal nome del file (modificabile dallo studente). */
 export function guessRole(fileName, isPdf = false) {
@@ -13,6 +13,8 @@ export function guessRole(fileName, isPdf = false) {
   if (/\bsvolt[aeio]\b|\brisolt[aeio]\b|worked|svolgiment/.test(n)) return "svolti";
   // «Esercizi per l'esame» è un eserciziario, non una prova
   if (/eserciz|esercitaz|soluzion|exercis|problem set/.test(n)) return "esercizi";
+  // appunti presi da un altro studente (dopo domande ed esercizi: «Domande d'esame dei colleghi» resta un elenco di domande)
+  if (/collegh|compagn[oaie]\b|\bamic[oaie]\b/.test(n)) return "colleghi";
   if (/\besam[ei]\b|\bexams?\b/.test(n)) return "esami";
   // riassunti e schemi fatti da studenti: non sono il testo del docente
   if (/riassunt|\bschemi\b|mapp[ae] concettual/.test(n)) return "appunti"; // «Schema di Bernoulli» resta un argomento
