@@ -4,6 +4,7 @@ import demo from "../public/demo/module.json";
 import { demoAnalysis, demoGrade } from "../public/js/past-exams.js";
 import { demoExamQuestions } from "../public/js/exam-questions.js";
 import { demoMethods } from "../public/js/worked.js";
+import { demoAssign } from "../public/js/exercises.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const calls = (window.__sampleCalls = []);
@@ -49,6 +50,12 @@ const methodNamesByTopic = (prompt) => {
 };
 
 const answer = (prompt) => {
+  if (prompt.includes("ESERCIZI DA ASSEGNARE")) {
+    const ex = [...prompt.matchAll(/<esercizio id="(E\d+)"[^>]*>\n([\s\S]*?)\n<soluzione_ufficiale>\n([\s\S]*?)\n<\/soluzione_ufficiale>/g)].map((m) => ({ id: m[1], text: m[2], solution: m[3] }));
+    const topics = topicsIn(prompt);
+    // più un id inesistente e un argomento inesistente: l'app li deve scartare
+    return { assign: [...demoAssign(ex, topics).map((a) => ({ ...a, rubric: ["Imposta la condizione giusta", "Risultato: $Q^*=20$"], note: "" })), { id: "E99", topicId: "t1", rubric: [], note: "" }, { id: ex[0]?.id ?? "E1", topicId: "t42", rubric: [], note: "" }] };
+  }
   if (prompt.includes("METODI DEL DOCENTE DA RICAVARE")) {
     const names = [...prompt.matchAll(/«([^»]+)»/g)].map((m) => m[1]);
     const real = demoMethods(workedIn(prompt), demo.topics).map((w) => w.method).filter((m) => names.includes(m.name));

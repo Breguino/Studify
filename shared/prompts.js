@@ -252,9 +252,10 @@ export const JSON_LATEX_RULE = String.raw`Nel JSON ogni backslash del LaTeX va s
  * Prompt per trascrivere pagine fotografate o scansionate (PDF senza testo utile, appunti scritti a mano).
  * String.raw: i backslash del LaTeX («\begin{cases}») arrivano al modello come sono scritti.
  */
-export function transcribePrompt({ from, count, title = "", handwritten = false }) {
+export function transcribePrompt({ from, count, title = "", handwritten = false, pdf = false }) {
   const to = from + count - 1;
   const which = count === 1 ? `la pagina ${from}` : `le pagine da ${from} a ${to}`;
+  const order = pdf ? "(sono le pagine del PDF allegato, in ordine)" : "(le immagini sono in ordine, una per pagina)";
   const hand = handwritten
     ? String.raw`
 Sono appunti SCRITTI A MANO da uno studente durante le lezioni.
@@ -264,7 +265,7 @@ Sono appunti SCRITTI A MANO da uno studente durante le lezioni.
 - Frecce tra concetti: «→». Parole sottolineate o cerchiate: «**parola**». Riquadri: una riga «> …».
 - Schemi e mappe concettuali: elenco con «-» che ne segue la struttura. Disegni e grafici: «[Figura: …]» con assi, curve, etichette.`
     : "";
-  return String.raw`Trascrivi fedelmente ${which} di «${title}» (le immagini sono in ordine, una per pagina).
+  return String.raw`Trascrivi fedelmente ${which} di «${title}» ${order}.
 ${SAFETY_RULES}${hand}
 - Testo: parola per parola, senza riassumere né aggiungere. Titoli con «#», elenchi con «-».
 - Formule: tutte in LaTeX compatibile con KaTeX, $...$ nel testo e $$...$$ se sono su una riga a sé; stessi simboli e notazione della pagina
@@ -394,4 +395,24 @@ ${paper.text != null ? `<prova titolo="${String(paper.label).replace(/"/g, "'")}
 <svolgimento>
 ${answer}
 </svolgimento>`;
+}
+
+
+/* --------------------------- esercitazioni con le soluzioni --------------------------- */
+
+/** Assegnare gli esercizi delle esercitazioni agli argomenti del modulo (testo e soluzione restano quelli ufficiali). */
+export const ASSIGN_RULES = `Hai gli ESERCIZI DA ASSEGNARE di un'esercitazione (ognuno in <esercizio id="E1" …>, con la soluzione ufficiale) e gli argomenti del
+modulo di studio. Per ogni esercizio: topicId = l'argomento principale che serve per svolgerlo (tra gli id elencati, "" se nessuno);
+rubric = 3-6 punti brevi e verificabili che una soluzione corretta deve contenere, presi dalla soluzione ufficiale (procedimento e
+risultato; formule in LaTeX tra $...$). Non riscrivere né correggere testo e soluzione: se la soluzione ufficiale ti sembra sbagliata,
+dillo in note (una frase), altrimenti note = "".
+${SAFETY_RULES}`;
+
+export function assignPrompt({ exam, topics, exercises }) {
+  return `${examContext(exam)}
+
+Argomenti del modulo (id: titolo):
+${topics.map((t) => `${t.id}: ${t.title}`).join("\n")}
+
+${exercises.map((e) => `<esercizio id="${e.id}" titolo="${String(e.label).replace(/"/g, "'")}">\n${String(e.text).slice(0, 2500)}\n<soluzione_ufficiale>\n${String(e.solution).slice(0, 4000)}\n</soluzione_ufficiale>\n</esercizio>`).join("\n\n")}`;
 }

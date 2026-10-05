@@ -516,3 +516,15 @@ export function normalizeExamGrade(raw, { topicIds = [] } = {}) {
     readingIssues: (Array.isArray(raw?.readingIssues) ? raw.readingIssues : []).map(tex).filter(Boolean).slice(0, 6),
   };
 }
+
+/** Esercizi assegnati agli argomenti: solo id e argomenti esistenti, rubrica pulita. @returns {Map<string, {topicId, rubric, note}>} per id */
+export function normalizeAssignments(raw, { ids = [], topicIds = [] } = {}) {
+  const validE = new Set(ids);
+  const validT = new Set(topicIds);
+  const out = new Map();
+  for (const a of Array.isArray(raw?.assign) ? raw.assign : []) {
+    if (!validE.has(a?.id) || out.has(a.id) || !validT.has(a?.topicId)) continue;
+    out.set(a.id, { topicId: a.topicId, rubric: (Array.isArray(a.rubric) ? a.rubric : []).map(tex).filter(Boolean).slice(0, 8).map((r) => r.slice(0, 300)), note: tex(a?.note).slice(0, 400) });
+  }
+  return out;
+}

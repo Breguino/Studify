@@ -1,8 +1,8 @@
 // Generazione con Claude dentro la pagina pubblicata (capability `sample`): nessuna chiave API,
 // usa l'account Claude di chi apre la pagina. Limiti: nessuna navigazione web, nessun PDF,
 // prompt ≤ 256 KiB e risposte brevi → il modulo si costruisce a passi (schema → carte/domande per argomento).
-import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_GRADE_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, GRADE_RULES, PAST_EXAMS_RULES, examGradePrompt, pastExamsPrompt, IMPORT_HEADERS, IMPORT_RULES, JSON_LATEX_RULE, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, DISPENSA_SYSTEM, chapterPrompt, splitChapter } from "../shared/prompts.js";
-import { exampleChecker, examQuestionLines, identityRefs, normalizeCurriculum, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex } from "../shared/normalize.js";
+import { ASSIGN_RULES, assignPrompt, CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_GRADE_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, GRADE_RULES, PAST_EXAMS_RULES, examGradePrompt, pastExamsPrompt, IMPORT_HEADERS, IMPORT_RULES, JSON_LATEX_RULE, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, DISPENSA_SYSTEM, chapterPrompt, splitChapter } from "../shared/prompts.js";
+import { exampleChecker, examQuestionLines, identityRefs, normalizeAssignments, normalizeCurriculum, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex } from "../shared/normalize.js";
 
 const MAX_MATERIAL_CHARS = 200_000;
 const CONCURRENCY = 2; // `sample` ne esegue un paio alla volta, le altre aspettano: oltre si rischia rate_limited
@@ -461,6 +461,29 @@ ${body}`;
   const out = normalizeExamGrade(raw, { topicIds: topics.map((t) => t.id) });
   if (!out.items.length) throw new Error("Claude non è riuscito a correggere la prova. Riprova.");
   return out;
+}
+
+/** Esercizi delle esercitazioni → argomento e rubrica (testo e soluzione ufficiali restano quelli). */
+export async function assignExercises({ exam, topics, exercises }, onProgress = () => {}, sampleFn) {
+  const sample = sampleFn ?? (await getSample());
+  if (!sample) throw new Error("Claude non è disponibile in questa pagina.");
+  const out = [];
+  for (let k = 0; k < exercises.length; k += 15) { // gruppi piccoli: la risposta resta breve
+    const group = exercises.slice(k, k + 15);
+    onProgress(0, `Claude assegna gli esercizi agli argomenti… ${Math.min(k + 15, exercises.length)}/${exercises.length}`);
+    const prompt = `${ASSIGN_RULES}
+${JSON_LATEX_RULE}
+Rispondi SOLO con un oggetto JSON: {"assign": [{"id": string, "topicId": string, "rubric": [string], "note": string}]}
+
+${assignPrompt({ exam, topics, exercises: group })}`;
+    try {
+      const m = normalizeAssignments(await sample.json(prompt, { modelTier: "default" }), { ids: group.map((e) => e.id), topicIds: topics.map((t) => t.id) });
+      out.push(...[...m].map(([id, a]) => ({ id, ...a })));
+    } catch (e) {
+      throw explain(e);
+    }
+  }
+  return { assign: out };
 }
 
 /** Correzione di una risposta libera. */

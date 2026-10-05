@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_GRADE_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, PAST_EXAMS_RULES, examGradePrompt, pastExamsPrompt, practiceTasks, MATERIAL_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, where, DISPENSA_SYSTEM, chapterPrompt, splitChapter } from "../shared/prompts.js";
-import { CurriculumSchema, DegreesSchema, ExamFormatSchema, ExamGradeSchema, GradeSchema, ImportRowsSchema, ModuleSchema, PastExamsSchema, normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex, identityRefs, exampleChecker } from "./schema.js";
+import { ASSIGN_RULES, assignPrompt, CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_GRADE_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, PAST_EXAMS_RULES, examGradePrompt, pastExamsPrompt, practiceTasks, MATERIAL_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, where, DISPENSA_SYSTEM, chapterPrompt, splitChapter } from "../shared/prompts.js";
+import { AssignSchema, CurriculumSchema, DegreesSchema, ExamFormatSchema, ExamGradeSchema, GradeSchema, ImportRowsSchema, ModuleSchema, PastExamsSchema, normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex, identityRefs, exampleChecker, normalizeAssignments } from "./schema.js";
 
 export const MODEL = process.env.STUDIFY_MODEL || "claude-opus-5-5";
 
@@ -432,6 +432,54 @@ export async function transcribe({ images, firstPage = 1, title = "", handwritte
   }
   if (pages.every((p) => p == null)) throw new Error("Claude non ha restituito la trascrizione delle pagine. Riprova con meno foto.");
   return { pages };
+}
+
+/**
+ * Pagine di un PDF (le sole pagine scelte, estratte nel browser) → testo di ciascuna pagina, formule in LaTeX: Claude legge il PDF
+ * direttamente. Serve per le esercitazioni in PDF, i cui esercizi e soluzioni l'app usa così come sono.
+ */
+export async function transcribePdf({ data, firstPage = 1, count, title = "" }, onProgress = () => {}) {
+  const stream = client().messages.stream({
+    model: MODEL,
+    max_tokens: 32000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "medium" },
+    messages: [{ role: "user", content: [
+      { type: "document", title, source: { type: "base64", media_type: "application/pdf", data } },
+      { type: "text", text: transcribePrompt({ from: firstPage, count, title, pdf: true }) },
+    ] }],
+  });
+  stream.on("text", (d) => onProgress(d.length));
+  const msg = await stream.finalMessage();
+  assertUsable(msg);
+  const pages = parseTranscription(textOf(msg.content), firstPage, count);
+  if (pages.every((p) => p == null)) throw new Error("Claude non ha restituito la trascrizione del PDF. Riprova con meno pagine.");
+  return { pages };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Esercitazioni: esercizi con soluzione ufficiale assegnati agli argomenti   */
+/* -------------------------------------------------------------------------- */
+
+/** @returns {Promise<{assign: {id, topicId, rubric, note}[]}>} */
+export async function assignExercises({ exam, topics, exercises }) {
+  const msg = await client().messages.create({
+    model: MODEL,
+    max_tokens: 16000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "low", format: zodOutputFormat(AssignSchema) },
+    system: ASSIGN_RULES,
+    messages: [{ role: "user", content: assignPrompt({ exam, topics, exercises }) }],
+  });
+  assertUsable(msg);
+  let raw;
+  try {
+    raw = AssignSchema.parse(JSON.parse(textOf(msg.content)));
+  } catch {
+    throw new Error("L'assegnazione degli esercizi è arrivata in un formato non valido. Riprova.");
+  }
+  const m = normalizeAssignments(raw, { ids: exercises.map((e) => e.id), topicIds: topics.map((t) => t.id) });
+  return { assign: [...m].map(([id, a]) => ({ id, ...a })) };
 }
 
 /* -------------------------------------------------------------------------- */

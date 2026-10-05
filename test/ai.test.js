@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { analyzePastExams, gradeExam, buildModule, curriculum, examFormat, examFormatFromText, extendModule, transcribe, writeDispensa, degrees, gradeAnswer, importRows, parseCurriculum, research, setClient } from "../server/ai.js";
+import { analyzePastExams, assignExercises, transcribePdf, gradeExam, buildModule, curriculum, examFormat, examFormatFromText, extendModule, transcribe, writeDispensa, degrees, gradeAnswer, importRows, parseCurriculum, research, setClient } from "../server/ai.js";
 import { CurriculumSchema, GradeSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees } from "../server/schema.js";
 
 const stream = (msg) => ({ on() {}, finalMessage: async () => msg });
@@ -473,4 +473,24 @@ test("buildModule: esercizi svolti dal docente → metodi verificati sul testo, 
   assert.deepEqual(mod.topics[0].methods.map((m) => [m.name, m.verified]), [["Equilibrio del monopolista", true]], "esercizio con dati inventati scartato");
   assert.match(mod.gaps.at(-1), /«Inventato» non corrisponde/);
   assert.equal(mod.questions[0].method, "Equilibrio del monopolista");
+});
+
+test("assignExercises e transcribePdf: esercitazioni con soluzione, argomenti verificati, PDF letto da Claude", async () => {
+  const calls = [];
+  setClient(fake([{ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ assign: [
+    { id: "E1", topicId: "t5", rubric: ["$MR=MC$", "Prezzo sulla domanda"], note: "" },
+    { id: "E2", topicId: "t77", rubric: [], note: "" },
+    { id: "E3", topicId: "t5", rubric: [], note: "La soluzione ufficiale sbaglia il segno." }] }) }] }], calls));
+  const r = await assignExercises({ exam: { name: "Micro", type: "problemi", level: 2, daysLeft: 9 }, topics: [{ id: "t5", title: "Monopolio" }],
+    exercises: [{ id: "E1", label: "Es. 4 · es. 1", text: "Trovare Q", solution: "Q = 20" }, { id: "E2", label: "x", text: "y", solution: "z" }, { id: "E3", label: "x", text: "y", solution: "z" }] });
+  assert.match(calls[0].system, /ESERCIZI DA ASSEGNARE[\s\S]*Non riscrivere né correggere testo e soluzione/);
+  assert.deepEqual(r.assign.map((a) => [a.id, a.topicId, a.note]), [["E1", "t5", ""], ["E3", "t5", "La soluzione ufficiale sbaglia il segno."]]);
+
+  const calls2 = [];
+  setClient(fake([{ stop_reason: "end_turn", content: [{ type: "text", text: "=== PAGINA 6 ===\nEsercizio 3\n$Q=20$\n=== PAGINA 7 ===\nSoluzioni" }] }], calls2));
+  const t = await transcribePdf({ data: "QUJD", firstPage: 6, count: 2, title: "Esercitazione 5" });
+  const c = calls2[0].messages[0].content;
+  assert.deepEqual(c.map((b) => b.type), ["document", "text"]);
+  assert.match(c[1].text, /le pagine da 6 a 7 di «Esercitazione 5» \(sono le pagine del PDF allegato/);
+  assert.deepEqual(t.pages, ["Esercizio 3\n$Q=20$", "Soluzioni"]);
 });

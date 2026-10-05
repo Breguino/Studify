@@ -18,7 +18,9 @@ export function ensurePlan(exam, force = false) {
   const tt = store.state.profile?.timetable ?? null;
   const papers = allPapers(exam);
   const asked = examQuestionStats(exam).inQuiz.length;
-  const stamp = `${exam.moduleBuiltAt}|${exam.moduleUpdatedAt ?? ""}|${tt?.importedAt ?? ""}|${tt?.until ?? ""}|${exam.date}|${exam.studyDays ?? 0}|${papers.length}|${exam.pastExams?.analyzedAt ?? ""}|${asked}`;
+  const official = new Map();
+  for (const q of exam.module.questions) if (q.official) official.set(q.topicId, (official.get(q.topicId) ?? 0) + 1);
+  const stamp = `${exam.moduleBuiltAt}|${exam.moduleUpdatedAt ?? ""}|${tt?.importedAt ?? ""}|${tt?.until ?? ""}|${exam.date}|${exam.studyDays ?? 0}|${papers.length}|${exam.pastExams?.analyzedAt ?? ""}|${asked}|${[...official.values()].reduce((a, b) => a + b, 0)}`;
   if (force || !exam.plan || exam.plan.builtOn !== today() || exam.plan.stamp !== stamp) {
     exam.plan = {
       ...buildPlan({
@@ -26,7 +28,7 @@ export function ensurePlan(exam, force = false) {
         examType: exam.type,
         level: exam.level,
         hoursPerDay: exam.hoursPerDay,
-        topics: exam.module.topics,
+        topics: exam.module.topics.map((t) => (official.get(t.id) ? { ...t, officialCount: official.get(t.id) } : t)),
         learned: exam.learned,
         today: today(),
         start: studyStart(exam, today()),

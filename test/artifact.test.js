@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { analyzePastExams, gradeExam, examFormatFromText, explain, extendModule, generateModule, transcribePages, writeDispensa, generateNotes, gradeAnswer, parseCurriculum } from "../artifact/generate.js";
+import { analyzePastExams, assignExercises, gradeExam, examFormatFromText, explain, extendModule, generateModule, transcribePages, writeDispensa, generateNotes, gradeAnswer, parseCurriculum } from "../artifact/generate.js";
 import { decodeState, encodeState, split } from "../artifact/backend.js";
 
 const demo = JSON.parse(readFileSync(new URL("../public/demo/module.json", import.meta.url), "utf8"));
@@ -342,4 +342,19 @@ test("pagina Claude: metodi del docente ricavati per argomento, poi gli esercizi
   assert.deepEqual(mod.topics[0].methods.map((m) => m.verified), [true]);
   assert.equal(mod.questions.find((q) => q.topicId === "t1").method, "Equilibrio del monopolista");
   assert.ok(!mod.questions.some((q) => q.topicId === "t2" && q.method), "un argomento senza metodi non ne ha");
+});
+
+test("pagina Claude: esercizi delle esercitazioni assegnati agli argomenti, 15 per richiesta", async () => {
+  const prompts = [];
+  const sample = async () => ({ text: "", truncated: false });
+  sample.json = async (prompt) => {
+    prompts.push(prompt);
+    const ids = [...prompt.matchAll(/<esercizio id="(E\d+)"/g)].map((m) => m[1]);
+    return { assign: [...ids.map((id) => ({ id, topicId: "t1", rubric: ["r"], note: "" })), { id: "E99", topicId: "t1", rubric: [], note: "" }] };
+  };
+  const exercises = Array.from({ length: 20 }, (_, i) => ({ id: `E${i + 1}`, label: `es. ${i + 1}`, text: `Esercizio ${i + 1}`, solution: "x" }));
+  const r = await assignExercises({ exam, topics: [{ id: "t1", title: "Monopolio" }], exercises }, () => {}, sample);
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[0], /ESERCIZI DA ASSEGNARE[\s\S]*Rispondi SOLO con un oggetto JSON/);
+  assert.equal(r.assign.length, 20, "id inventati scartati");
 });

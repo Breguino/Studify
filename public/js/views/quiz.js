@@ -24,7 +24,7 @@ function checklist(items, label) {
  * Valutazione di una risposta libera: spunta autonoma dei punti + correzione AI facoltativa.
  * Restituisce { el, score() }.
  */
-export function openReview({ question, reference, rubric, answer, language }) {
+export function openReview({ question, reference, rubric, answer, language, referenceLabel = "Risposta di riferimento" }) {
   const points = rubric.length ? rubric : ["La mia risposta era corretta e completa"];
   const list = checklist(points, "Spunta i punti che la tua risposta copriva:");
   let ai = null;
@@ -47,7 +47,7 @@ export function openReview({ question, reference, rubric, answer, language }) {
       aiBtn.textContent = "Correggi con l'AI";
     }
   });
-  out.append(h("div", { class: "callout" }, h("b", {}, "Risposta di riferimento"), ...richParas(reference)), list.el,
+  out.append(h("div", { class: "callout" }, h("b", {}, referenceLabel), ...richParas(reference)), list.el,
     h("div", { class: "row" }, aiBtn, !core.ai.ai ? h("span", { class: "muted small" }, "Correzione AI non disponibile: valuta tu stesso, con onestà.") : !answer.trim() ? h("span", { class: "muted small" }, "Scrivi una risposta per ottenere la correzione AI.") : null), aiBox);
   return { el: out, score: () => (ai ? ai.score : list.ratio()) };
 }
@@ -61,6 +61,13 @@ function pickSet(exam, query) {
   const kind = query.get("kind") || undefined;
   const q = exam.qstats;
   if (mode === "mock") return pickQuestions(mod.questions, q, exam.type === "test" ? 20 : 10, {});
+  if (mode === "official") {
+    // esercizi delle esercitazioni con la soluzione ufficiale; di un'esercitazione sola, tutti e nell'ordine
+    const set = query.get("set");
+    const num = (x) => Number.parseInt(x.official.key.split("#")[1], 10) || 0;
+    const pool = mod.questions.filter((x) => x.official && (!set || x.official.key.startsWith(`${set}#`)) && (!topicIds || topicIds.includes(x.topicId)));
+    return set ? pool.sort((a, b) => num(a) - num(b)).slice(0, 40) : pickQuestions(pool, q, 8, { kind });
+  }
   if (mode === "exam") {
     const { inQuiz, weight } = examQuestionStats(exam);
     return pickQuestions(inQuiz, q, Number(query.get("n")) || 10, { topicIds, bonus: (x) => (weight(x) - 1) * 0.1 });
@@ -70,7 +77,7 @@ function pickSet(exam, query) {
     if (!set.length) set = pickQuestions(mod.questions, q, 8, { topicIds: weakTopics(mod, statsFor(exam).stats, 3).map((t) => t.id) });
     return set;
   }
-  if (mode === "topics") return pickQuestions(mod.questions, q, 8, { topicIds });
+  if (mode === "topics") return pickQuestions(mod.questions, q, 8, { topicIds, kind });
   return pickQuestions(mod.questions, q, 10, { kind });
 }
 
@@ -82,6 +89,7 @@ export function quizView(exam, query) {
   const mock = mode === "mock";
   const taskId = query.get("task");
   let set = pickSet(exam, query);
+  if (!set.length && mode === "official") return emptyState("Nessun esercizio delle esercitazioni nel quiz", "Carica le esercitazioni con le soluzioni nei materiali (tipo «Esercizi») e mettile nel quiz: testo e soluzione restano quelli ufficiali.", h("a", { class: "btn", href: `#/exam/${exam.id}/materials` }, "Materiali"));
   if (!set.length && mode === "exam") return emptyState("Nessuna domanda d'esame nel quiz", "Carica un elenco di domande d'esame nei materiali (tipo «Domande d'esame») e aggiungilo al modulo: ogni domanda diventa una domanda del quiz con la risposta modello.", h("a", { class: "btn", href: `#/exam/${exam.id}/materials` }, "Materiali"));
   if (!set.length) return emptyState("Niente da ripassare qui", "Nessuna domanda corrisponde ai filtri o non hai ancora errori da rivedere.", h("a", { class: "btn", href: `#/exam/${exam.id}/quiz?mode=mixed` }, "Quiz misto"));
   const examStats = examQuestionStats(exam);
@@ -145,7 +153,7 @@ export function quizView(exam, query) {
     if (phase === "done") return summary();
     const q = it?.q;
     const w = examStats.weight(q);
-    const examBadge = w ? badge(`domanda d'esame vera${w > 1 ? ` · chiesta ${w} volte` : ""}`, "bad") : null;
+    const examBadge = w ? badge(`domanda d'esame vera${w > 1 ? ` · chiesta ${w} volte` : ""}`, "bad") : q.official ? badge(`${q.official.source} · soluzione ufficiale`, "good") : null;
     const body = [head(), bar(i / items.length, { label: "avanzamento" }), h("div", { class: "card stack", style: { marginTop: "14px" } }, h("div", { class: "row" }, badge(KIND[q.kind]), examBadge), h("div", { class: "q-prompt" }, richParas(q.prompt)))];
     const card = body.at(-1);
 
@@ -168,11 +176,13 @@ export function quizView(exam, query) {
           h("div", {}, h("button", { class: "btn primary", onclick: () => advanceReview(ok ? 1 : 0) }, i < items.length - 1 ? "Avanti" : "Vedi il risultato")));
       } else {
         card.append(h("div", { class: "callout", style: { background: "var(--surface-2)" } }, h("b", { class: "small" }, "La tua risposta"), h("p", { style: { margin: "4px 0 0", whiteSpace: "pre-wrap" } }, it.answer.trim() || "(vuota)")));
-        const rv = openReview({ question: q.prompt, reference: q.modelAnswer, rubric: q.rubric, answer: it.answer, language: exam.language });
-        card.append(rv.el, q.explanation ? h("div", { class: "muted small" }, richParas(q.explanation)) : null,
+        const rv = openReview({ question: q.prompt, reference: q.modelAnswer, rubric: q.rubric, answer: it.answer, language: exam.language, referenceLabel: q.official ? "Soluzione ufficiale" : undefined });
+        // append() del DOM scrive «null» come testo: i pezzi facoltativi si filtrano
+        card.append(...[rv.el, q.explanation && !q.official ? h("div", { class: "muted small" }, richParas(q.explanation)) : null,
+          q.official ? h("p", { class: "muted small", style: { margin: 0 } }, "Se la tua strada è diversa ma arriva allo stesso risultato, non è per forza sbagliata; e anche le soluzioni ufficiali a volte hanno errori: nel dubbio chiedi la correzione a Claude.") : null,
           q.followUp && w ? h("div", { class: "callout follow-up" }, h("b", {}, "Il docente potrebbe incalzare: "), rich(q.followUp),
             h("div", { class: "small muted" }, "Rispondi a voce, senza guardare: all'orale conta saper andare oltre la prima risposta.")) : null,
-          h("div", {}, h("button", { class: "btn primary", onclick: () => advanceReview(rv.score()) }, i < items.length - 1 ? "Conferma e avanti" : "Conferma e vedi il risultato")));
+          h("div", {}, h("button", { class: "btn primary", onclick: () => advanceReview(rv.score()) }, i < items.length - 1 ? "Conferma e avanti" : "Conferma e vedi il risultato"))].filter(Boolean));
       }
     }
     root.replaceChildren(...body);
@@ -187,7 +197,7 @@ export function quizView(exam, query) {
     const mins = Math.max(1, Math.round((Date.now() - started) / 60000));
     root.replaceChildren(h("div", { class: "stack" },
       h("div", { class: "card stack" },
-        h("div", { class: "row between" }, h("div", {}, h("div", { class: "muted small" }, mock ? `Simulazione · ${mins} min` : mode === "exam" ? "Domande d'esame vere" : "Risultato"), h("div", { class: "score-big" }, pct(total))), h("div", { class: "muted" }, `${items.length - missed.length}/${items.length} solide`)),
+        h("div", { class: "row between" }, h("div", {}, h("div", { class: "muted small" }, mock ? `Simulazione · ${mins} min` : mode === "exam" ? "Domande d'esame vere" : mode === "official" ? "Esercitazione" : "Risultato"), h("div", { class: "score-big" }, pct(total))), h("div", { class: "muted" }, `${items.length - missed.length}/${items.length} solide`)),
         bar(total, { tone: total >= 0.75 ? "good" : total >= 0.5 ? "warn" : "bad", label: "punteggio" }),
         h("div", { class: "stack", style: { gap: "6px" } }, [...byTopic].map(([tid, sc]) => h("div", { class: "progress-line" }, h("span", { class: "small", style: { minWidth: "40%" } }, mod.topics.find((t) => t.id === tid)?.title), bar(sc.reduce((a, b) => a + b, 0) / sc.length), h("span", { class: "small" }, pct(sc.reduce((a, b) => a + b, 0) / sc.length))))),
         h("p", { class: "muted small", style: { margin: 0 } }, total >= 0.8 ? "Buon livello. Rifallo tra qualche giorno: ricordare a distanza è ciò che fissa." : "Gli errori sono utili: tornano nei prossimi quiz finché non li superi.")),

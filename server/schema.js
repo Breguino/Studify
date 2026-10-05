@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { FORMATS, KINDS, LEVELS } from "../shared/normalize.js";
 
-export { normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex, identityRefs, exampleChecker } from "../shared/normalize.js";
+export { normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex, identityRefs, exampleChecker, normalizeAssignments } from "../shared/normalize.js";
 
 // Schema del "modulo di studio" generato dall'AI. Tutti i campi sono obbligatori
 // (gli output strutturati non gestiscono bene i campi opzionali): dove un campo
@@ -138,4 +138,9 @@ export const ExamGradeSchema = z.object({
   overall: z.string(),
   priorities: z.array(z.string()),
   readingIssues: z.array(z.string()),
+});
+
+// Esercizi delle esercitazioni assegnati agli argomenti (testo e soluzione ufficiali li tiene l'app).
+export const AssignSchema = z.object({
+  assign: z.array(z.object({ id: z.string(), topicId: z.string(), rubric: z.array(z.string()), note: z.string() })),
 });

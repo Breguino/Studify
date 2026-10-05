@@ -13,10 +13,11 @@ import { readPdf } from "../pdf-text.js";
 import { guessRole, isPractice, roleOf, ROLES } from "../material-roles.js";
 import { applyExamBoost, papersOf, parseStarts, preparePapers } from "../past-exams.js";
 import { countLabel, numberedQuestions, questionsOf, remapExamRefs } from "../exam-questions.js";
+import { applyOfficial, isSolutionsFile, officialExercises, officialQuestions, orphanSolutions, pendingOfficial, stemOf } from "../exercises.js";
 import { paperStartsOf } from "../lessons.js";
 import * as store from "../store.js";
 import { fmtDate, today } from "../dates.js";
-import { richParas } from "../math.js";
+import { clipRich, rich, richParas } from "../math.js";
 import { blobToBase64, byName, isImage, prepareImage } from "../images.js";
 import { badge, confirmDialog, h, readFileAs, toast, uid } from "../ui.js";
 
@@ -184,6 +185,65 @@ async function pdfToQuestions(m) {
   }
 }
 
+/** Versione con server: Claude legge il PDF dell'esercitazione (formule comprese) e il PDF diventa testo, diviso in esercizi. */
+function readPdfExercises(exam, m) {
+  return run(exam, "transcribe", async (onProgress) => {
+    const n = m.numPages ?? 1;
+    if (n > 60) throw new Error("Al massimo 60 pagine per un'esercitazione: dividi il PDF.");
+    const data = await store.getFile(m.fileId);
+    const pages = [];
+    for (let from = 1; from <= n; from += 5) {
+      const to = Math.min(n, from + 4);
+      const chunk = n === 1 || !extractPdfPages ? data : await extractPdfPages(data, from, to);
+      const r = await api.runJob("/api/transcribe-pdf", { data: chunk, firstPage: from, count: to - from + 1, title: m.title }, (c, l) => onProgress(c, l ?? `Claude legge il PDF… pagine ${from}–${to} di ${n}`));
+      pages.push(...r.pages);
+    }
+    const text = pages.map((p) => p ?? "").join("\f");
+    if (!text.replace(/\f/g, "").trim()) throw new Error("Claude non ha restituito il testo del PDF. Riprova.");
+    await store.delFile(m.fileId);
+    Object.assign(m, { kind: "notes", text, size: text.length, numPages: n, fromPdf: true, mathPages: `1-${n}`, fileId: undefined });
+    const ex = officialExercises(exam).filter((e) => e.materialId === m.id);
+    const off = await syncOfficial(exam, onProgress);
+    toast(`PDF letto: ${ex.length} esercizi, ${ex.filter((e) => e.solution).length} con soluzione.${off ? ` ${off}` : ""}`, "ok");
+  }, { mid: m.id });
+}
+
+/** Esercitazioni: esercizi riconosciuti, soluzioni abbinate (anche da un file a parte), e se sono già nel quiz. */
+function exercisesRow(exam, m) {
+  if (roleOf(m) !== "esercizi") return null;
+  const job = jobs.get(exam.id);
+  if (job?.kind === "transcribe" && job.mid === m.id) return jobLine(exam, "transcribe", "Claude legge il PDF dell'esercitazione");
+  if (m.kind === "pdf")
+    return core.ai.ai ? h("div", { class: "row small", style: { gap: "8px" } },
+      h("button", { class: "btn small", disabled: jobs.has(exam.id), onclick: () => readPdfExercises(exam, m) }, `Leggi esercizi e soluzioni con Claude (${m.numPages ?? "?"} ${m.numPages === 1 ? "pagina" : "pagine"})`),
+      h("span", { class: "muted" }, "Per fare gli esercizi dell'esercitazione e confrontarti con la soluzione ufficiale, Claude legge il PDF (formule comprese) e lo divide in esercizi.")) : null;
+  if (isSolutionsFile(m)) {
+    const ex = officialExercises(exam).find((e) => e.solutionFrom === m.id);
+    const partner = ex && exam.materials.find((x) => x.id === ex.materialId);
+    return partner ? h("div", { class: "small" }, badge("soluzioni", "good"), h("span", { class: "muted" }, ` abbinate agli esercizi di «${partner.title}»`))
+      : orphanSolutions(exam).includes(m) ? h("div", { class: "small callout warn" }, `File di soluzioni: non trovo il file degli esercizi con lo stesso nome («${stemOf(m.title)}»). Rinominali in modo che coincidano, per esempio «Esercitazione 3» e «Esercitazione 3 - soluzioni».`) : null;
+  }
+  const items = officialExercises(exam).filter((e) => e.materialId === m.id);
+  if (!items.length) return h("div", { class: "small muted" }, "Non riconosco gli esercizi uno per uno: servono titoli come «Esercizio 1» (o una numerazione «1.», «2.») e, per le soluzioni, «Soluzione» sotto ciascuno o una sezione «Soluzioni» in fondo.");
+  const solved = items.filter((e) => e.solution);
+  const inQuiz = new Set(officialQuestions(exam.module).map((q) => q.official.key));
+  const missing = solved.filter((e) => !inQuiz.has(e.key));
+  const fromOther = solved.some((e) => e.solutionFrom && e.solutionFrom !== m.id);
+  const mangled = m.fromPdf && !rangesCover(m.mathPages, 1, m.numPages ?? 1) && mathyPages(m.text);
+  return h("div", { class: "stack small", style: { gap: "4px" } },
+    h("div", { class: "row", style: { gap: "8px", alignItems: "center" } },
+      badge(`${items.length} ${items.length === 1 ? "esercizio" : "esercizi"}`, "brand"),
+      badge(`${solved.length} con soluzione${fromOther ? " (dal file delle soluzioni)" : ""}`, solved.length ? "good" : "warn"),
+      exam.module && solved.length && !missing.length ? h("a", { href: `#/exam/${exam.id}/quiz?mode=official&set=${encodeURIComponent(m.id)}` }, "Fai l'esercitazione →") : null),
+    h("details", {}, h("summary", {}, "Esercizi e soluzioni riconosciuti"),
+      h("ol", { class: "paper-items" }, items.map((e) => h("li", { value: Number.parseInt(e.n, 10) || null }, rich(clipRich(e.text.split("\n")[0], 110)), " ", e.solution ? badge("soluzione", "good") : badge("senza soluzione", "warn"))))),
+    mangled ? h("div", { class: "muted" }, "Le formule prese dal testo del PDF escono storpiate: prima «Leggi formule e figure con Claude», poi metti gli esercizi nel quiz.") : null,
+    exam.module && missing.length ? h("div", { class: "row", style: { gap: "8px" } },
+      h("button", { class: "btn small primary", disabled: jobs.has(exam.id) || !core.ai.ai, onclick: () => run(exam, "update", async (p) => { toast(`Esercitazioni: ${(await syncOfficial(exam, p)) ?? "niente da aggiungere."}`, "ok"); }) }, `Metti nel quiz ${missing.length === 1 ? "l'esercizio" : `i ${missing.length} esercizi`} con soluzione`),
+      h("span", { class: "muted" }, "Testo e soluzione restano quelli ufficiali: Claude sceglie solo l'argomento.")) : null,
+    !exam.module && solved.length ? h("div", { class: "muted" }, "Quando generi il modulo, gli esercizi con soluzione entrano nel quiz così come sono.") : null);
+}
+
 /** Elenco di domande d'esame: quante, quante ripetute, a cosa servono. */
 function questionsRow(m) {
   if (roleOf(m) !== "domande") return null;
@@ -269,6 +329,37 @@ async function payload(list, { onlyNew = false } = {}) {
   return { materials, research, examMap };
 }
 
+/**
+ * Esercitazioni: gli esercizi con la soluzione ufficiale entrano nel quiz così come sono. Prima si collegano quelli che l'AI ha già
+ * copiato nel quiz (prendono la soluzione ufficiale), poi Claude sceglie l'argomento e una rubrica per gli altri.
+ * @returns {Promise<string|null>} frase di riepilogo, null se non c'era niente da fare
+ */
+async function syncOfficial(exam, onProgress = () => {}) {
+  if (!exam.module) return null;
+  const all = officialExercises(exam);
+  const local = applyOfficial(exam.module, all);
+  let rest = pendingOfficial(exam);
+  let added = 0;
+  if (rest.length && core.ai.ai) {
+    const ids = rest.map((e, i) => ({ ...e, id: `E${i + 1}` }));
+    const res = await api.runJob("/api/assign-exercises", {
+      exam: examInfo(exam), topics: exam.module.topics.map(({ id, title }) => ({ id, title })),
+      exercises: ids.map(({ id, label, text, solution }) => ({ id, label, text, solution })),
+    }, (c, l) => onProgress(c, l ?? "Claude assegna gli esercizi delle esercitazioni agli argomenti…"));
+    const byKey = new Map(res.assign.map((a) => [ids.find((e) => e.id === a.id)?.key, a]).filter(([k]) => k));
+    added = applyOfficial(exam.module, rest, byKey).added;
+    // se Claude pensa che una soluzione ufficiale sia sbagliata, va detto (non la corregge: decide lo studente)
+    const doubts = res.assign.filter((a) => a.note).map((a) => `${ids.find((e) => e.id === a.id)?.label}: ${a.note}`);
+    if (doubts.length) exam.module.gaps = [...new Set([...(exam.module.gaps ?? []), ...doubts.map((d) => `Soluzione ufficiale da controllare — ${d}`)])];
+    rest = pendingOfficial(exam);
+  }
+  const n = local.linked + added;
+  if (!n && !local.refreshed && !rest.length) return null;
+  exam.plan = null;
+  return [n ? `${n} ${n === 1 ? "esercizio dell'esercitazione" : "esercizi delle esercitazioni"} nel quiz con la soluzione ufficiale` : "",
+    local.refreshed ? `${local.refreshed} aggiornati` : "", rest.length ? `${rest.length} senza argomento (${core.ai.ai ? "riprova" : "serve Claude"})` : ""].filter(Boolean).join(", ") + ".";
+}
+
 async function generate(exam) {
   if (hasProgress(exam) && !(await confirmDialog("Rigenerare il modulo azzera flashcard, quiz e argomenti già svolti per questo esame. Se hai solo aggiunto appunti nuovi, usa «Aggiungi al modulo». Continuare?", { ok: "Rigenera tutto", danger: true }))) return;
   await run(exam, "module", async (onProgress) => {
@@ -276,6 +367,8 @@ async function generate(exam) {
     const mod = remapExamRefs(await api.runJob("/api/module", { exam: examInfo(exam), ...sent }, onProgress), examMap);
     resetProgress(exam, mod);
     applyExamBoost(exam);
+    const off = await syncOfficial(exam, onProgress);
+    if (off) toast(`Esercitazioni: ${off}`, "ok");
     exam.materials.forEach(markSent);
     toast("Modulo pronto!", "ok");
   });
@@ -296,6 +389,8 @@ async function update(exam) {
     toast(updateSummary(applyUpdate(exam, res, pending.map((m) => m.id), undefined, { ...sentInfo(sent), examRefs: examMap })), "ok");
     applyExamBoost(exam);
     pending.forEach(markSent);
+    const off = await syncOfficial(exam, onProgress);
+    if (off) toast(`Esercitazioni: ${off}`, "ok");
   });
 }
 
@@ -638,7 +733,7 @@ export function materialsTab(exam) {
                   h("input", { class: "sbobina-year", value: m.year ?? "", placeholder: "es. 2025-26", "aria-label": `Anno accademico di ${m.title}`, style: { width: "100px", padding: "4px 8px" }, onchange: (e) => { m.year = e.target.value.trim(); store.save(); } })) : null,
                 m.numPages > 1 ? pagePicker(m) : null) : null,
               roleOf(m) === "sbobine" ? h("div", { class: "small muted" }, "Sbobine: le frasi del docente sull'esame finiscono nel modulo (verificate sul testo). Possono contenere errori di trascrizione su termini e formule, e se sono di un altro anno docente e programma potrebbero essere cambiati.") : null,
-              papersRow(exam, m), questionsRow(m),
+              papersRow(exam, m), questionsRow(m), exercisesRow(exam, m),
               roleOf(m) === "svolti" ? h("div", { class: "small muted" }, "Esercizi svolti dal docente: l'AI ne ricava il metodo in passi (come li risolve lui, con la sua notazione) e crea esercizi dello stesso tipo. Li ritrovi negli argomenti come «Esercizi guidati». Se sono scansioni o appunti a mano, controlla le formule nell'anteprima.") : null,
               m.kind === "notes" ? (m.handwritten ? handwrittenRow(exam, m) : formulaRow(exam, m)) : null),
             h("button", { class: "btn small danger", onclick: () => removeMaterial(exam, m), "aria-label": `Rimuovi ${m.title}` }, "Rimuovi")),

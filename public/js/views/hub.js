@@ -158,7 +158,7 @@ function moduleTab(exam) {
     h("div", { class: "stack", style: { gap: "10px" } }, mod.topics.map((t) =>
       h("a", { class: "topic card flat", href: `#/exam/${exam.id}/topic/${t.id}`, style: { textDecoration: "none", color: "inherit" } },
         h("div", { class: "row between" }, h("h3", { style: { margin: 0 } }, rich(t.title)),
-          h("div", { class: "row" }, examBadge(t, freq), askedBadge(t), t.methods?.length ? badge(t.methods.length === 1 ? "metodo del docente" : `${t.methods.length} metodi del docente`, "brand") : null, (mod.examHints ?? []).some((x) => x.topicId === t.id) ? badge("il docente ne parla per l'esame", "bad") : null, recent(t.addedAt) ? badge("nuovo", "brand") : recent(t.updatedAt) ? badge("approfondito", "brand") : null, badge(["", "marginale", "importante", "centrale"][t.importance], t.importance === 3 ? "bad" : t.importance === 2 ? "warn" : ""), exam.learned[t.id] ? badge("studiato", "good") : null)),
+          h("div", { class: "row" }, examBadge(t, freq), askedBadge(t), officialBadge(mod, t), t.methods?.length ? badge(t.methods.length === 1 ? "metodo del docente" : `${t.methods.length} metodi del docente`, "brand") : null, (mod.examHints ?? []).some((x) => x.topicId === t.id) ? badge("il docente ne parla per l'esame", "bad") : null, recent(t.addedAt) ? badge("nuovo", "brand") : recent(t.updatedAt) ? badge("approfondito", "brand") : null, badge(["", "marginale", "importante", "centrale"][t.importance], t.importance === 3 ? "bad" : t.importance === 2 ? "warn" : ""), exam.learned[t.id] ? badge("studiato", "good") : null)),
         h("p", { class: "muted small", style: { margin: "6px 0 0" } }, rich(clipRich(t.summary, 180)))))),
     mod.sources?.length ? h("details", {}, h("summary", {}, `Fonti online (${mod.sources.length})`), h("ul", { class: "source-list" }, mod.sources.map((s) => h("li", {}, h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer" }, s.title || s.url))))) : null,
     h("p", { class: "muted small" }, "Il modulo è una bozza generata da te + AI: confrontalo con il programma e con il docente. Le fonti web e le conoscenze generali vanno verificate."),
@@ -166,6 +166,22 @@ function moduleTab(exam) {
 }
 
 /* ---------------------------------- ARGOMENTO ---------------------------------- */
+
+/** «3 esercizi con soluzione»: esercizi delle esercitazioni su questo argomento. */
+const officialBadge = (mod, t) => {
+  const n = mod.questions.filter((q) => q.official && q.topicId === t.id).length;
+  return n ? badge(`${n} ${n === 1 ? "esercizio con soluzione" : "esercizi con soluzione"}`, "good") : null;
+};
+
+/** Gli esercizi delle esercitazioni su questo argomento, con la soluzione ufficiale. */
+function officialBox(exam, t) {
+  const qs = exam.module.questions.filter((q) => q.official && q.topicId === t.id);
+  if (!qs.length) return null;
+  return h("div", { class: "callout" }, h("b", {}, `Esercizi delle esercitazioni (${qs.length})`),
+    h("ul", {}, qs.slice(0, 8).map((q) => h("li", {}, h("span", { class: "muted small" }, `${q.official.source}: `), rich(clipRich(q.prompt, 120))))),
+    h("div", { class: "small muted" }, "Prova a farli da solo prima di guardare la soluzione ufficiale: è il tentativo, anche sbagliato, che fa imparare."),
+    h("a", { class: "btn small", href: `#/exam/${exam.id}/quiz?mode=official&topics=${t.id}` }, "Fai questi esercizi"));
+}
 
 /** Come risolve il docente gli esercizi di questo argomento: i passaggi, il suo esercizio svolto, gli esercizi guidati. */
 function methodsBox(exam, t) {
@@ -230,6 +246,7 @@ export function topicView(exam, tid, query) {
     askedBox(exam, t),
     examQuestionsBox(exam, t),
     methodsBox(exam, t),
+    officialBox(exam, t),
     h("div", { class: "card" }, h("h3", {}, "In breve"), richParas(t.summary)),
     t.keyConcepts.length ? h("div", { class: "card" }, h("h3", {}, "Concetti chiave"), t.keyConcepts.map((k) => h("div", { class: "concept" }, h("b", {}, rich(k.term)), rich(k.definition)))) : null,
     t.mustKnow.length ? h("div", { class: "card" }, h("h3", {}, "Da saper dire senza appunti"), h("ul", {}, t.mustKnow.map((m) => h("li", {}, rich(m))))) : null,

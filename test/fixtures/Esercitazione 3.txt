@@ -1,0 +1,10 @@
+Esercitazione 3 — Elasticità
+
+Esercizio 1
+Con Q = 100 - 2P calcolare l'elasticità al prezzo nel punto P = 20.
+
+Esercizio 2
+Con Q = 90 - 3P calcolare l'elasticità al prezzo nel punto P = 10 e dire se è elastica.
+
+Esercizio 3
+Spiegare perché i beni di lusso hanno un'elasticità alta.

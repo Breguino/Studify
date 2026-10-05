@@ -184,7 +184,15 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
    Chi è già bravo (livello 4-5, o esercizi dell'argomento già riusciti) parte direttamente dall'esercizio da solo: a chi sa impostare
    gli esercizi gli esempi svolti servono poco (effetto di inversione dell'esperienza). Nel piano gli esercizi guidati seguono lo
    studio dell'argomento; la dispensa usa gli esercizi del docente come esempi svolti.
-7. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
+7. **Esercitazioni con le soluzioni** (tipo «Esercizi»): l'app divide il testo in esercizi («Esercizio 3», o «1.», «2.» consecutivi)
+   e trova la soluzione di ciascuno: sotto l'esercizio («Soluzione»), in una sezione «Soluzioni» in fondo, o in un file a parte con lo
+   stesso nome («Esercitazione 3» ↔ «Esercitazione 3 - soluzioni»; «Esercitazione 4 con soluzioni» è un file unico). Gli esercizi con
+   soluzione entrano nel quiz **così come sono**, testo e soluzione ufficiali: a Claude si chiede solo l'argomento e una rubrica, e se
+   una soluzione ufficiale gli sembra sbagliata lo segnala tra le lacune invece di correggerla. Un esercizio che l'AI aveva già copiato
+   nel quiz viene riconosciuto (stessi numeri e parole) e prende testo e soluzione ufficiali, senza doppioni e senza perdere i progressi.
+   «Fai l'esercitazione» propone gli esercizi nell'ordine; la soluzione ufficiale compare dopo il tuo tentativo. Nel piano l'esercitazione
+   sull'argomento segue lo studio. Versione con server: un PDF di esercitazione lo legge Claude (formule comprese) e diventa testo.
+8. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
 
 | Sessione | Cosa fa |
 |---|---|
@@ -221,6 +229,9 @@ una prima lettura guidata e da esempi svolti (expertise reversal); con pochi gio
   La frequenza degli argomenti su poche prove è rumorosa, e prove di un altro docente o di un programma vecchio possono ingannare.
   Gli elenchi di domande raccolti dagli studenti riflettono ciò che chi li ha scritti ricorda: i conteggi sono indicativi. E sapere
   a memoria le risposte dell'elenco non basta all'orale, dove il docente incalza.
+- **Esercitazioni**: rifare più volte gli stessi esercizi fa ricordare i numeri, non il metodo: dopo i primi giri passa agli esercizi
+  nuovi dello stesso tipo (quelli creati dall'AI) e agli esercizi misti. Le soluzioni ufficiali possono essere sintetiche («Q = 20»):
+  in quel caso la correzione di Claude confronta anche il procedimento.
 - **Esercizi svolti**: leggere uno svolgimento dà l'impressione di saperlo rifare. Per questo gli esercizi guidati finiscono sempre
   con un esercizio da solo. Da scansioni o appunti a mano le formule possono essere trascritte male: controllale.
 - **Modalità base** (senza chiave API): argomenti e flashcard ricavati euristicamente dalle definizioni nei tuoi appunti testuali; niente quiz, PDF, né ricerca.
@@ -247,7 +258,7 @@ artifact/         versione pagina Claude: generate.js (sample), backend.js (db),
 scripts/          build-artifact.mjs (esbuild)
 public/js/        logica pura (testata): dates, methods, srs, planner, progress, local-builder, tabular (CSV/xlsx), importers, timetable,
                   lessons (lezioni e prove), past-exams (prove, frequenze, voto), exam-questions (elenchi di domande d'esame),
-                  worked (metodi del docente ed esercizi guidati)
+                  worked (metodi del docente ed esercizi guidati), exercises (esercitazioni con le soluzioni)
                   stato/UI: store (IndexedDB), domain, api, ui, views/*
 public/demo/      modulo demo (Microeconomia)
 test/             node --test: logica pura + client AI con SDK simulato

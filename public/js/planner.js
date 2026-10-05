@@ -57,7 +57,7 @@ export function buildPlan({ examDate, examType, level, hoursPerDay, topics, lear
 
   // --- argomenti da studiare, con selezione per importanza se il tempo non basta
   // load = studio + esercizi guidati sui metodi del docente (25 min ciascuno, al massimo 2): conta per capacità e distribuzione
-  const pending = topics.filter((t) => !learned[t.id]).map((t) => ({ ...t, minutes: topicMinutes(t, level), load: topicMinutes(t, level) + 25 * Math.min(2, t.methods?.length ?? 0) }));
+  const pending = topics.filter((t) => !learned[t.id]).map((t) => ({ ...t, minutes: topicMinutes(t, level), load: topicMinutes(t, level) + 25 * Math.min(2, t.methods?.length ?? 0) + (t.officialCount ? 25 : 0) }));
   // Nei giorni quasi pieni di lezioni (meno del 30% del tempo libero) non si introducono argomenti nuovi.
   const learnIdx = days.slice(0, ph.learn).map((_, i) => i);
   let eligible = learnIdx.filter((i) => days[i].avail >= budget * 0.3);
@@ -104,6 +104,9 @@ export function buildPlan({ examDate, examType, level, hoursPerDay, topics, lear
         // esercizi svolti dal docente: subito dopo averlo studiato, il suo metodo (esempio → completamento → da solo)
         (t.methods ?? []).slice(0, 2).forEach((m, k) =>
           add(day, { kind: "guided", key: `${t.id}-${k}`, topicId: t.id, methodIndex: k, title: `Esercizi guidati: ${m.name} (metodo del docente)`, minutes: 25, method: "practice" }));
+        // esercitazioni con la soluzione: gli esercizi ufficiali sull'argomento appena studiato
+        if (t.officialCount)
+          add(day, { kind: "quiz", key: `off-${t.id}`, mode: "official", topicIds: [t.id], title: `Esercitazione su ${t.title}: prova da solo, poi la soluzione ufficiale`, minutes: 25, method: "practice" });
       }
       const prev = i > 0 ? learnByDay[i - 1] : [];
       if (prev.length)

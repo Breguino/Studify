@@ -3,14 +3,16 @@ import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODEL, aiConfigured, analyzePastExams, buildModule, curriculum, degrees, examFormat, examFormatFromText, extendModule, gradeExam, transcribe, writeDispensa, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
+import { MODEL, aiConfigured, analyzePastExams, assignExercises, transcribePdf, buildModule, curriculum, degrees, examFormat, examFormatFromText, extendModule, gradeExam, transcribe, writeDispensa, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
 import { demoAnalysis, demoGrade } from "../public/js/past-exams.js";
 import { demoExamQuestions } from "../public/js/exam-questions.js";
 import { demoMethods } from "../public/js/worked.js";
+import { demoAssign } from "../public/js/exercises.js";
+import { extractPages } from "../public/js/pdf-extract.js";
 import { findExamHints, localDelta } from "../public/js/local-builder.js";
 import { formatFromSyllabus } from "../public/js/exam-type.js";
 import { IMPORT_HEADERS } from "../shared/prompts.js";
-import { normalizeExamGrade, normalizeModule, normalizePastExams } from "./schema.js";
+import { normalizeAssignments, normalizeExamGrade, normalizeModule, normalizePastExams } from "./schema.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
 const PORT = Number(process.env.PORT || 3000);
@@ -84,6 +86,20 @@ function mockTranscription({ images, firstPage, handwritten }) {
         ? `# Lezione ${n} — Elasticità\nL'elasticità della domanda al prezzo misura quanto varia $Q$ quando varia $P$ (in %).\n\n$$\\varepsilon_P=\\left|\\frac{\\Delta\\%Q}{\\Delta\\%P}\\right|$$\n\n- se $\\varepsilon_P>1$ → domanda **elastica**\n- beni di lusso[?] più elastici\n(nota: chiesto all'esame l'anno scorso)`
         : `# Pagina ${n}\nTesto della pagina ${n} (trascrizione simulata).`;
     }),
+  };
+}
+
+/** Demo: il testo del PDF letto con pdf.js (riga per riga), come se l'avesse trascritto Claude. */
+async function mockPdfTranscription({ data, firstPage, count }) {
+  const lib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const { pages } = await extractPages(lib, Buffer.from(data, "base64"), { maxPages: count });
+  return {
+    pages: pages.map((p) => {
+      const lines = new Map();
+      for (const it of p.items) { const y = Math.round(it.y / 3); lines.set(y, [...(lines.get(y) ?? []), it]); }
+      return [...lines.entries()].sort((a, b) => b[0] - a[0]).map(([, its]) => its.sort((a, b) => a.x - b.x).map((i) => i.str).join(" ")).join("\n");
+    }).concat(Array(Math.max(0, count - pages.length)).fill(null)).slice(0, count),
+    firstPage,
   };
 }
 
@@ -372,6 +388,27 @@ async function api(req, res, url) {
       return { ...d, topics: [...d.topics, ...mt], questions: [...d.questions, ...examQs, ...mq], examHints: [...findExamHints(notes, "sbobine"), { quote: "Questa frase non è nei materiali: il docente non l'ha mai detta.", source: "inventata", note: "", topicId: "" }] };
     };
     const id = startJob("module", (p) => (MOCK ? mockRun(p, { delta: mockDelta(), sources: [], mode: "local" }) : extendModule(input, p)));
+    return send(res, 202, { jobId: id });
+  }
+
+  if (url.pathname === "/api/transcribe-pdf") {
+    const data = typeof body.data === "string" ? body.data : "";
+    const count = Math.round(Number(body.count));
+    if (!data || data.length > 30 * 1024 * 1024 || !(count >= 1 && count <= 20)) return send(res, 400, { error: "Da 1 a 20 pagine di PDF per volta." });
+    const input = { data, firstPage: Math.max(1, Math.round(Number(body.firstPage)) || 1), count, title: str(body.title, 200) };
+    const id = startJob("transcribe-pdf", (p) => (MOCK ? mockRun(p, mockPdfTranscription(input)) : transcribePdf(input, p)));
+    return send(res, 202, { jobId: id });
+  }
+
+  if (url.pathname === "/api/assign-exercises") {
+    const topics = parseTopics(body.topics);
+    const exercises = (Array.isArray(body.exercises) ? body.exercises : []).slice(0, 60).map((e) => ({ id: str(e?.id, 8), label: str(e?.label, 200), text: str(e?.text, 6000), solution: str(e?.solution, 8000) }))
+      .filter((e) => /^E\d{1,3}$/.test(e.id) && e.text.trim());
+    if (!exercises.length || !topics.length) return send(res, 400, { error: "Servono gli esercizi e gli argomenti del modulo." });
+    const input = { exam: parseExam(body.exam), topics, exercises };
+    const id = startJob("assign-exercises", (p) => (MOCK
+      ? mockRun(p, { assign: [...normalizeAssignments({ assign: demoAssign(exercises, topics).map((a) => ({ ...a, note: "" })) }, { ids: exercises.map((e) => e.id), topicIds: topics.map((t) => t.id) })].map(([id, a]) => ({ id, ...a })) })
+      : assignExercises(input)));
     return send(res, 202, { jobId: id });
   }
 

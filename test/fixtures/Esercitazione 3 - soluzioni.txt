@@ -1,0 +1,15 @@
+Esercitazione 3 - soluzioni
+
+Esercizio 1
+Q(20) = 100 - 40 = 60.
+
+$$\varepsilon_P = 2\cdot\frac{20}{60} \approx 0{,}67$$
+
+Minore di 1: anelastica.
+
+Esercizio 2
+Q(10) = 60.
+
+$$\varepsilon_P = 3\cdot\frac{10}{60} = 0{,}5$$
+
+Anelastica.
