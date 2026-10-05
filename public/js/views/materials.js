@@ -17,7 +17,8 @@ import { countLabel, numberedQuestions, questionsOf, remapExamRefs } from "../ex
 import { booksCard, syncChapterLinks, syncDispense } from "./books.js";
 import { looksLikeSlides } from "../dispense.js";
 import { clock, parseTranscript } from "../transcripts.js";
-import { applyOfficial, isSolutionsFile, officialExercises, officialQuestions, orphanSolutions, pendingOfficial, stemOf } from "../exercises.js";
+import { applyOfficial, isSolutionsFile, officialExercises, officialQuestions, orphanSolutions, pendingOfficial, quizItems, stemOf } from "../exercises.js";
+import { moodleHtmlToText, parseMoodleQuiz } from "../moodle.js";
 import { paperStartsOf } from "../lessons.js";
 import * as store from "../store.js";
 import { fmtDate, today } from "../dates.js";
@@ -87,7 +88,7 @@ async function addFiles(exam, files) {
         const scanned = text.replace(/\f/g, "").trim().length < 80;
         if (scanned && !core.pdfPageImages) toast(`«${file.name}»: PDF senza testo selezionabile (scansione): incolla il testo a mano.`, "error");
         else {
-          const role = !scanned ? slidesOrDispense(file.name, guessRole(file.name, true), text.split("\f")) : guessRole(file.name, true);
+          const role = scanned ? guessRole(file.name, true) : quizOrRole(file.name, slidesOrDispense(file.name, guessRole(file.name, true), text.split("\f")), text);
           exam.materials.push(structure({ id: uid(), kind: "notes", role, title: `${name} (da PDF)`, text: scanned ? Array(pages).fill("").join("\f") : text, size: text.length, numPages: pages, fromPdf: true, pdfFileId, fileName: file.name, addedAt: now() }));
           if (scanned) toast(`«${file.name}» è una scansione: scegli le pagine e usa «Leggi formule e testo con Claude».`);
         }
@@ -109,11 +110,18 @@ async function addFiles(exam, files) {
         /* il conteggio serve solo a scegliere le pagine */
       }
       const m = { id: uid(), kind: "pdf", role: guessRole(file.name, true), title: name, fileId, size: file.size, numPages, addedAt: now() };
-      if (m.role === "dispense" && numPages >= 4) m.role = slidesOrDispense(file.name, m.role, await pdfPageTexts(m, 60).catch(() => []));
+      const first = await pdfPageTexts(m, 60).catch(() => []);
+      if (m.role !== "quiz" && !isPractice(m) && (parseMoodleQuiz(first.join("\n"))?.length ?? 0) >= 2) m.role = quizNote(file.name);
+      if (m.role === "dispense" && numPages >= 4) m.role = slidesOrDispense(file.name, m.role, first);
       exam.materials.push(m);
       if (m.role === "esami") await findPdfPapers(m);
-      if (m.role === "domande") await pdfToQuestions(m);
+      if (m.role === "domande" || m.role === "quiz") await pdfToQuestions(m);
       pdfTotal += file.size;
+    } else if (/\.html?$/i.test(file.name) || file.type === "text/html") {
+      // pagina di revisione di un quiz Moodle salvata dal browser («Salva pagina con nome»)
+      const text = moodleHtmlToText(await readFileAs(file, "text"));
+      if (!text || !parseMoodleQuiz(text)?.length) toast(`«${file.name}»: non è la revisione di un quiz Moodle. Delle pagine web si usa solo quella; per il resto copia il testo e incollalo.`, "error");
+      else exam.materials.push({ id: uid(), kind: "notes", role: "quiz", title: name, text, size: text.length, addedAt: now() });
     } else if (/\.(docx|pptx)$/i.test(file.name)) {
       try {
         const { text, pages, ...extra } = await officeText(await file.arrayBuffer(), file.name);
@@ -131,7 +139,7 @@ async function addFiles(exam, files) {
       const tr = parseTranscript(text);
       if (tr) exam.materials.push({ id: uid(), kind: "notes", role: "sbobine", auto: true, duration: tr.duration, title: name, text: tr.text, size: tr.text.length, addedAt: now() });
       else if (/\.(srt|vtt)$/i.test(file.name)) toast(`«${file.name}»: non trovo i tempi dei sottotitoli. È un file .srt o .vtt valido?`, "error");
-      else exam.materials.push(structure({ id: uid(), kind: "notes", role: guessRole(file.name), title: name, text, size: text.length, addedAt: now() }));
+      else exam.materials.push(structure({ id: uid(), kind: "notes", role: quizOrRole(file.name, guessRole(file.name), text), title: name, text, size: text.length, addedAt: now() }));
     } else toast(`«${file.name}»: formato non supportato (usa .pdf, .docx, .pptx, .txt, .md, o .srt/.vtt per le trascrizioni).`, "error");
   }
   for (const d of await syncDispense(exam)) {
@@ -140,6 +148,17 @@ async function addFiles(exam, files) {
   store.save();
   core.rerender();
 }
+
+/** Un testo che è la revisione di un quiz Moodle («Domanda 1 … La risposta corretta è: …») è un quiz del docente, qualunque nome abbia. */
+function quizOrRole(fileName, role, text) {
+  if (role === "quiz" || ["esercizi", "svolti", "esami", "domande"].includes(role) || (parseMoodleQuiz(text)?.length ?? 0) < 2) return role;
+  return quizNote(fileName);
+}
+
+const quizNote = (fileName) => {
+  toast(`«${fileName}»: è la revisione di un quiz Moodle: l'ho segnato come «Quiz del docente». Se non lo è, cambia il tipo.`);
+  return "quiz";
+};
 
 /** Un PDF «Lezione 3» senza la parola «dispense» nel nome, con poche parole per pagina, sono slide esportate in PDF. */
 function slidesOrDispense(fileName, role, pages) {
@@ -253,7 +272,7 @@ function exercisesRow(exam, m) {
       h("ol", { class: "paper-items" }, items.map((e) => h("li", { value: Number.parseInt(e.n, 10) || null }, rich(clipRich(e.text.split("\n")[0], 110)), " ", e.solution ? badge("soluzione", "good") : badge("senza soluzione", "warn"))))),
     mangled ? h("div", { class: "muted" }, "Le formule prese dal testo del PDF escono storpiate: prima «Leggi formule e figure con Claude», poi metti gli esercizi nel quiz.") : null,
     exam.module && missing.length ? h("div", { class: "row", style: { gap: "8px" } },
-      h("button", { class: "btn small primary", disabled: jobs.has(exam.id) || !core.ai.ai, onclick: () => run(exam, "update", async (p) => { toast(`Esercitazioni: ${(await syncOfficial(exam, p)) ?? "niente da aggiungere."}`, "ok"); }) }, `Metti nel quiz ${missing.length === 1 ? "l'esercizio" : `i ${missing.length} esercizi`} con soluzione`),
+      h("button", { class: "btn small primary", disabled: jobs.has(exam.id) || !core.ai.ai, onclick: () => run(exam, "update", async (p) => { toast(officialToast(await syncOfficial(exam, p)), "ok"); }) }, `Metti nel quiz ${missing.length === 1 ? "l'esercizio" : `i ${missing.length} esercizi`} con soluzione`),
       h("span", { class: "muted" }, "Testo e soluzione restano quelli ufficiali: Claude sceglie solo l'argomento.")) : null,
     !exam.module && solved.length ? h("div", { class: "muted" }, "Quando generi il modulo, gli esercizi con soluzione entrano nel quiz così come sono.") : null);
 }
@@ -270,6 +289,31 @@ function slidesRow(m) {
     fig.length ? h("div", { class: "callout warn" }, `${fig.length === 1 ? "La slide" : "Le slide"} ${list} ${fig.length === 1 ? "ha" : "hanno"} grafici o immagini che dal file PowerPoint non si leggono (i grafici disegnati con linee e frecce, le immagini senza descrizione). `,
       `Per farli vedere a Claude esporta la presentazione in PDF (File → Esporta → PDF) e carica quello${core.ai.pdf === false ? ", poi usa «Leggi formule e figure con Claude»" : ": Claude legge anche i grafici"}.`) : null,
     h("div", { class: "muted" }, "Slide del docente: l'app le usa come traccia del corso (quali argomenti e in che ordine) e per capire su cosa insiste. Sono schematiche: le spiegazioni le prende da libro, dispense, sbobine e appunti, e ti segnala gli argomenti che sono solo sulle slide."));
+}
+
+/** Quiz del docente (Moodle): domande riconosciute, quante con la risposta, se sono già nel quiz. */
+function quizRow(exam, m) {
+  if (roleOf(m) !== "quiz") return null;
+  if (m.kind === "pdf") return h("div", { class: "small muted" }, "Quiz del docente in PDF senza testo: incolla la pagina di revisione del tentativo o salvala come pagina web (.html).");
+  const qs = parseMoodleQuiz(m.text) ?? [];
+  const items = quizItems(exam).filter((e) => e.materialId === m.id);
+  const ok = items.filter((e) => e.solution);
+  const inQuiz = new Set(officialQuestions(exam.module).map((q) => q.official.key));
+  const missing = ok.filter((e) => !inQuiz.has(e.key));
+  if (!qs.length) return h("div", { class: "small callout warn" }, "Non riconosco le domande del quiz. Apri su Moodle la revisione del tentativo («Revisione» dopo averlo finito) e copiala tutta (Ctrl+A, Ctrl+C), oppure salvala come pagina web (.html) e caricala.");
+  const noAnswer = items.length - ok.length;
+  return h("div", { class: "stack small", style: { gap: "4px" } },
+    h("div", { class: "row", style: { gap: "8px", alignItems: "center" } },
+      badge(`${qs.length} ${qs.length === 1 ? "domanda" : "domande"}`, "brand"),
+      badge(`${ok.length} con la risposta del docente`, ok.length ? "good" : "warn"),
+      exam.module && ok.length && !missing.length ? h("a", { href: `#/exam/${exam.id}/quiz?mode=official&set=${encodeURIComponent(m.id)}` }, "Fai il quiz del docente →") : null),
+    noAnswer ? h("div", { class: "muted" }, `${noAnswer} senza la risposta corretta: il docente non la mostra nella revisione. Restano fuori dal quiz (l'AI le usa come modello); se la conosci, aggiungi sotto la domanda una riga «La risposta corretta è: …».`) : null,
+    h("details", {}, h("summary", {}, "Domande riconosciute"),
+      h("ol", { class: "paper-items" }, qs.map((q) => { const e = items.find((x) => x.n === q.n); return h("li", { value: Number.parseInt(q.n, 10) || null }, rich(clipRich(q.text.split("\n")[0], 110)), " ",
+        e?.solution ? badge(q.kind === "mcq" ? "scelta multipla" : q.kind === "multi" ? "più risposte" : "risposta breve", "good") : badge("senza risposta", "warn")); }))),
+    exam.module && missing.length ? h("div", { class: "row", style: { gap: "8px" } },
+      h("button", { class: "btn small primary", disabled: jobs.has(exam.id) || !core.ai.ai, onclick: () => run(exam, "update", async (p) => { toast(officialToast(await syncOfficial(exam, p)), "ok"); }) }, `Metti nel quiz ${missing.length === 1 ? "la domanda" : `le ${missing.length} domande`} del docente`)) : null,
+    h("div", { class: "muted" }, "Le domande del docente entrano nel quiz così come sono, con la sua risposta, e le alternative cambiano ordine ogni volta: ricordare la lettera giusta non serve. L'AI ne crea altre sugli stessi concetti, formulate in un altro modo."));
 }
 
 /** Dispense del docente: come le usa l'AI, e l'indice per sapere quali pagine leggere. */
@@ -368,6 +412,9 @@ async function payload(list, { onlyNew = false } = {}) {
   return { materials, research, examMap };
 }
 
+/** «Esercitazioni: …», «Quiz del docente: …» o tutti e due, secondo che cosa è entrato nel quiz. */
+const officialToast = (off) => `${!off ? "Esercitazioni" : /esercitazion/.test(off) && /quiz del docente/.test(off) ? "Esercitazioni e quiz del docente" : /quiz del docente/.test(off) ? "Quiz del docente" : "Esercitazioni"}: ${off ?? "niente da aggiungere."}`;
+
 /**
  * Esercitazioni: gli esercizi con la soluzione ufficiale entrano nel quiz così come sono. Prima si collegano quelli che l'AI ha già
  * copiato nel quiz (prendono la soluzione ufficiale), poi Claude sceglie l'argomento e una rubrica per gli altri.
@@ -375,6 +422,7 @@ async function payload(list, { onlyNew = false } = {}) {
  */
 async function syncOfficial(exam, onProgress = () => {}) {
   if (!exam.module) return null;
+  const quizBefore = officialQuestions(exam.module).filter((q) => q.official.quiz).length;
   const all = officialExercises(exam);
   const local = applyOfficial(exam.module, all);
   let rest = pendingOfficial(exam);
@@ -395,7 +443,10 @@ async function syncOfficial(exam, onProgress = () => {}) {
   const n = local.linked + added;
   if (!n && !local.refreshed && !rest.length) return null;
   exam.plan = null;
-  return [n ? `${n} ${n === 1 ? "esercizio dell'esercitazione" : "esercizi delle esercitazioni"} nel quiz con la soluzione ufficiale` : "",
+  const nq = officialQuestions(exam.module).filter((q) => q.official.quiz).length - quizBefore;
+  const ne = n - nq;
+  return [ne ? `${ne} ${ne === 1 ? "esercizio dell'esercitazione" : "esercizi delle esercitazioni"} nel quiz con la soluzione ufficiale` : "",
+    nq ? `${nq} ${nq === 1 ? "domanda del quiz del docente" : "domande dei quiz del docente"} nel quiz con la sua risposta` : "",
     local.refreshed ? `${local.refreshed} aggiornati` : "", rest.length ? `${rest.length} senza argomento (${core.ai.ai ? "riprova" : "serve Claude"})` : ""].filter(Boolean).join(", ") + ".";
 }
 
@@ -407,7 +458,7 @@ async function generate(exam) {
     resetProgress(exam, mod);
     applyExamBoost(exam);
     const off = await syncOfficial(exam, onProgress);
-    if (off) toast(`Esercitazioni: ${off}`, "ok");
+    if (off) toast(officialToast(off), "ok");
     await syncDispense(exam);
     const books = await syncChapterLinks(exam, onProgress);
     if (books) toast(`Libri: ${books}`, "ok");
@@ -432,7 +483,7 @@ async function update(exam) {
     applyExamBoost(exam);
     pending.forEach(markSent);
     const off = await syncOfficial(exam, onProgress);
-    if (off) toast(`Esercitazioni: ${off}`, "ok");
+    if (off) toast(officialToast(off), "ok");
     await syncDispense(exam);
     const books = await syncChapterLinks(exam, onProgress);
     if (books) toast(`Libri: ${books}`, "ok");
@@ -706,13 +757,13 @@ export function materialsTab(exam) {
   const paste = h("form", { class: "stack", onsubmit: (e) => {
     e.preventDefault();
     if (!text.value.trim()) return toast("Incolla del testo.", "error");
-    exam.materials.push(structure({ id: uid(), kind: "notes", role: pasteRole.value, title: title.value.trim() || `${ROLES[pasteRole.value].replace(/ \(.*\)$/, "")} ${exam.materials.length + 1}`, text: text.value, size: text.value.length, addedAt: now() }));
+    exam.materials.push(structure({ id: uid(), kind: "notes", role: quizOrRole(title.value || "Testo incollato", pasteRole.value, text.value), title: title.value.trim() || `${ROLES[pasteRole.value].replace(/ \(.*\)$/, "")} ${exam.materials.length + 1}`, text: text.value, size: text.value.length, addedAt: now() }));
     store.save();
     core.rerender();
   } }, h("h3", {}, "Incolla appunti, esercizi, temi d'esame o parti di libro"), h("div", { class: "row", style: { gap: "8px", flexWrap: "nowrap" } }, title, pasteRole), text, h("div", {}, h("button", { class: "btn", type: "submit" }, "Aggiungi")));
 
   /* --- carica file --- */
-  const input = h("input", { type: "file", multiple: true, accept: `${core.ai.pdf === false && !core.pdfText ? "" : ".pdf,application/pdf,"}.docx,.pptx,.txt,.md,.markdown,.srt,.vtt,text/plain,image/*,.heic`, hidden: true });
+  const input = h("input", { type: "file", multiple: true, accept: `${core.ai.pdf === false && !core.pdfText ? "" : ".pdf,application/pdf,"}.docx,.pptx,.txt,.md,.markdown,.srt,.vtt,.html,.htm,text/plain,image/*,.heic`, hidden: true });
   const camera = h("input", { type: "file", accept: "image/*", capture: "environment", multiple: true, hidden: true, id: "camera-input" });
   camera.addEventListener("change", () => addFiles(exam, [...camera.files]));
   const handBox = h("div", { class: "card stack" },
@@ -772,7 +823,7 @@ export function materialsTab(exam) {
         h("div", { class: "card flat" },
           h("div", { class: "row between" }, h("div", {}, h("b", {}, m.title), " ", badge(KIND[m.kind], m.kind === "web" ? "brand" : ""), " ", isPending.has(m.id) ? badge("non ancora nel modulo", "warn") : null, " ", h("span", { class: "muted small" }, kb(m.size)),
               m.kind !== "web" ? h("div", { class: "row", style: { gap: "6px", marginTop: "4px" } }, h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Tipo",
-                h("select", { class: "role-select", "aria-label": `Tipo di ${m.title}`, onchange: async (e) => { m.role = e.target.value; if (m.role === "sbobine" || m.role === "colleghi") withLessons(m); if (m.role === "esami") { if (m.kind === "pdf") await findPdfPapers(m); else preparePapers(m); } if (m.role === "domande" && m.kind === "pdf") await pdfToQuestions(m); await syncDispense(exam); store.save(); rerenderSoon(); } },
+                h("select", { class: "role-select", "aria-label": `Tipo di ${m.title}`, onchange: async (e) => { m.role = e.target.value; if (m.role === "sbobine" || m.role === "colleghi") withLessons(m); if (m.role === "esami") { if (m.kind === "pdf") await findPdfPapers(m); else preparePapers(m); } if ((m.role === "domande" || m.role === "quiz") && m.kind === "pdf") await pdfToQuestions(m); await syncDispense(exam); store.save(); rerenderSoon(); } },
                   Object.entries(ROLES).map(([k, t]) => h("option", { value: k, selected: roleOf(m) === k }, t)))),
                 ["sbobine", "colleghi"].includes(roleOf(m)) ? h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Anno accademico",
                   h("input", { class: "sbobina-year", value: m.year ?? "", placeholder: "es. 2025-26", "aria-label": `Anno accademico di ${m.title}`, style: { width: "100px", padding: "4px 8px" }, onchange: (e) => { m.year = e.target.value.trim(); store.save(); } })) : null,
@@ -780,7 +831,7 @@ export function materialsTab(exam) {
               roleOf(m) === "sbobine" ? h("div", { class: "small muted" }, m.auto
                 ? `Trascrizione automatica di una registrazione${m.duration ? ` (${clock(m.duration)})` : ""}: sono le parole del docente, ma il programma di trascrizione sbaglia termini tecnici, numeri e formule (dette a parole). L'AI le controlla su dispense e libro. I segni come [12:30] sono i minuti della registrazione: le frasi del docente sull'esame te li indicano, così puoi riascoltarle.`
                 : "Sbobine: le frasi del docente sull'esame finiscono nel modulo (verificate sul testo). Possono contenere errori di trascrizione su termini e formule, e se sono di un altro anno docente e programma potrebbero essere cambiati.") : null,
-              papersRow(exam, m), questionsRow(m), exercisesRow(exam, m), slidesRow(m), dispenseRow(exam, m),
+              papersRow(exam, m), questionsRow(m), exercisesRow(exam, m), quizRow(exam, m), slidesRow(m), dispenseRow(exam, m),
               roleOf(m) === "colleghi" ? h("div", { class: "small muted" }, "Appunti di colleghi: dicono che cosa ha spiegato e sottolineato il docente, ma sono di seconda mano. L'AI controlla definizioni e formule su dispense, libro e i tuoi appunti, e ti segnala gli argomenti che sono solo qui. Se sono di un altro anno, scrivilo: programma e docente potrebbero essere cambiati.") : null,
               roleOf(m) === "svolti" ? h("div", { class: "small muted" }, "Esercizi svolti dal docente: l'AI ne ricava il metodo in passi (come li risolve lui, con la sua notazione) e crea esercizi dello stesso tipo. Li ritrovi negli argomenti come «Esercizi guidati». Se sono scansioni o appunti a mano, controlla le formule nell'anteprima.") : null,
               m.kind === "notes" ? (m.handwritten ? handwrittenRow(exam, m) : formulaRow(exam, m)) : null),

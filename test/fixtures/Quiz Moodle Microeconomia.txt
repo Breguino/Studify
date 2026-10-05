@@ -1,0 +1,67 @@
+Iniziato lunedì, 29 settembre 2025, 10:02
+Stato Completato
+Terminato lunedì, 29 settembre 2025, 10:20
+Tempo impiegato 18 min. 3 secondi
+Valutazione 2,00 su 5,00 (40%)
+Domanda 1
+Risposta corretta
+Punteggio ottenuto 1,00 su 1,00
+Contrassegna domanda
+Testo della domanda
+Se l'elasticità della domanda al prezzo è pari a -2, un aumento del prezzo dell'1% fa:
+Scegli un'alternativa:
+a.
+diminuire la quantità domandata del 2%
+b.
+aumentare la quantità domandata del 2%
+c.
+diminuire la quantità domandata dello 0,5%
+d.
+restare invariata la quantità domandata
+Risposta corretta.
+La risposta corretta è:
+diminuire la quantità domandata del 2%
+Domanda 2
+Risposta errata
+Punteggio ottenuto 0,00 su 1,00
+Contrassegna domanda
+Testo della domanda
+Il monopolista sceglie la quantità in cui il ricavo marginale è uguale al costo marginale.
+Scegli un'alternativa:
+Vero
+Falso
+Risposta errata.
+Feedback: è la condizione del primo ordine per il massimo profitto, come in concorrenza, ma con MR al posto del prezzo.
+La risposta corretta è 'Vero'.
+Domanda 3
+Risposta errata
+Punteggio ottenuto 0,00 su 1,00
+Contrassegna domanda
+Testo della domanda
+Con la funzione di domanda Q = 100 - 2P, quanto vale la quantità domandata quando P = 20?
+Risposta: 50
+La risposta corretta è: 60
+Domanda 4
+Risposta parzialmente corretta
+Punteggio ottenuto 0,50 su 1,00
+Contrassegna domanda
+Testo della domanda
+Quali di queste affermazioni sulla domanda di mercato sono corrette?
+Scegli una o più alternative:
+a. è la somma orizzontale delle domande individuali
+b. è sempre perfettamente elastica
+c. si sposta se cambia il reddito dei consumatori
+Risposta parzialmente corretta.
+Le risposte corrette sono: è la somma orizzontale delle domande individuali, si sposta se cambia il reddito dei consumatori
+Domanda 5
+Risposta corretta
+Punteggio ottenuto 1,00 su 1,00
+Contrassegna domanda
+Testo della domanda
+In concorrenza perfetta, nel lungo periodo il prezzo è uguale:
+Scegli un'alternativa:
+a. al minimo del costo medio
+b. al massimo del ricavo medio
+c. al costo fisso
+Risposta corretta.
+Termina revisione

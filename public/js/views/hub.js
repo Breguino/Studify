@@ -211,18 +211,21 @@ function readingBox(exam, t) {
 
 /** «3 esercizi con soluzione»: esercizi delle esercitazioni su questo argomento. */
 const officialBadge = (mod, t) => {
-  const n = mod.questions.filter((q) => q.official && q.topicId === t.id).length;
-  return n ? badge(`${n} ${n === 1 ? "esercizio con soluzione" : "esercizi con soluzione"}`, "good") : null;
+  const qs = mod.questions.filter((q) => q.official && q.topicId === t.id);
+  const n = qs.length;
+  if (!n) return null;
+  return qs.every((q) => q.official.quiz) ? badge(`${n} ${n === 1 ? "domanda del docente" : "domande del docente"}`, "good") : badge(`${n} ${n === 1 ? "esercizio con soluzione" : "esercizi con soluzione"}`, "good");
 };
 
 /** Gli esercizi delle esercitazioni su questo argomento, con la soluzione ufficiale. */
 function officialBox(exam, t) {
   const qs = exam.module.questions.filter((q) => q.official && q.topicId === t.id);
   if (!qs.length) return null;
-  return h("div", { class: "callout" }, h("b", {}, `Esercizi delle esercitazioni (${qs.length})`),
+  const quiz = qs.every((q) => q.official.quiz);
+  return h("div", { class: "callout" }, h("b", {}, `${quiz ? "Domande dei quiz del docente" : qs.some((q) => q.official.quiz) ? "Esercitazioni e quiz del docente" : "Esercizi delle esercitazioni"} (${qs.length})`),
     h("ul", {}, qs.slice(0, 8).map((q) => h("li", {}, h("span", { class: "muted small" }, `${q.official.source}: `), rich(clipRich(q.prompt, 120))))),
     h("div", { class: "small muted" }, "Prova a farli da solo prima di guardare la soluzione ufficiale: è il tentativo, anche sbagliato, che fa imparare."),
-    h("a", { class: "btn small", href: `#/exam/${exam.id}/quiz?mode=official&topics=${t.id}` }, "Fai questi esercizi"));
+    h("a", { class: "btn small", href: `#/exam/${exam.id}/quiz?mode=official&topics=${t.id}` }, quiz ? "Rispondi a queste domande" : "Fai questi esercizi"));
 }
 
 /** Come risolve il docente gli esercizi di questo argomento: i passaggi, il suo esercizio svolto, gli esercizi guidati. */

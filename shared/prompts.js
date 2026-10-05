@@ -105,6 +105,12 @@ export const MODULE_PRINCIPLES = `Principi inderogabili:
      il docente incalzerebbe (un perché, un esempio, un grafico, un collegamento con un altro argomento). Non farne flashcard. Gli
      argomenti più chiesti hanno importance 3. «(chiesta 3 volte)» dice quante volte compare nell'elenco.
    Per le domande che non vengono da un elenco di domande d'esame: examRefs = [] e followUp = "".
+   - quiz del docente (tag quiz_docente: pagine di revisione dei quiz su Moodle, con «La risposta corretta è: …»): domande chiuse scritte
+     dal docente, spesso dallo stesso archivio da cui pesca l'esame. Sono il modello delle domande kind="mcq": stesso livello, stessa
+     formulazione, distrattori dello stesso tipo, sugli stessi concetti. NON copiarle e non farne flashcard: l'app le mette nel quiz così
+     come sono, con la risposta del docente. Crea domande nuove che verifichino gli stessi concetti in un altro modo (un altro esempio,
+     la domanda rovesciata, un caso limite), così lo studente non impara la risposta a memoria. Alza l'importanza degli argomenti su cui
+     vertono. Se una risposta indicata come corretta ti sembra sbagliata, scrivilo in "gaps".
    - sbobine (trascrizioni delle lezioni fatte da studenti, parlato): dicono come il docente spiega e su cosa insiste → importanza
      e mustKnow. Ignora battute, ripetizioni, avvisi organizzativi. Possono avere errori di trascrizione (termini tecnici, formule,
      numeri capiti male): se contrastano con dispense del docente o libro valgono quelli, e segnalalo in "gaps". Se l'attributo anno indica un anno
@@ -233,8 +239,8 @@ evidence = la frase sulla modalità d'esame COPIATA alla lettera dal testo (max 
 details = in breve durata, parti, prove intermedie, orale facoltativo. caveats: differenze tra docenti/canali, anno accademico vecchio, dubbi.`;
 
 /** Tag con cui ogni tipo di materiale testuale entra nel prompt. */
-export const MATERIAL_TAG = { appunti: "appunti_studente", colleghi: "appunti_colleghi", libro: "libro", slide: "slide", dispense: "dispense", esercizi: "esercizi", svolti: "esercizi_svolti", esami: "temi_esame", domande: "domande_esame", sbobine: "sbobina", altro: "materiale" };
-export const MATERIAL_LABEL = { appunti: "Appunti", colleghi: "Appunti di colleghi", libro: "Libro", slide: "Slide", dispense: "Dispense del docente", esercizi: "Esercizi", svolti: "Esercizi svolti dal docente", esami: "Temi d'esame", domande: "Domande d'esame", sbobine: "Sbobine", altro: "Materiale" };
+export const MATERIAL_TAG = { appunti: "appunti_studente", colleghi: "appunti_colleghi", quiz: "quiz_docente", libro: "libro", slide: "slide", dispense: "dispense", esercizi: "esercizi", svolti: "esercizi_svolti", esami: "temi_esame", domande: "domande_esame", sbobine: "sbobina", altro: "materiale" };
+export const MATERIAL_LABEL = { appunti: "Appunti", colleghi: "Appunti di colleghi", quiz: "Quiz del docente", libro: "Libro", slide: "Slide", dispense: "Dispense del docente", esercizi: "Esercizi", svolti: "Esercizi svolti dal docente", esami: "Temi d'esame", domande: "Domande d'esame", sbobine: "Sbobine", altro: "Materiale" };
 
 /** Blocco di testo di un materiale per il prompt (pagine indicate se è un estratto). */
 export function materialText(m) {
@@ -266,7 +272,11 @@ export const EXAM_QUESTIONS_TASK = `- Ci sono domande d'esame (voci con id D…)
   aggiunta alle altre domande degli argomenti; ogni id D… deve comparire negli examRefs di una question.`;
 
 /** Il compito aggiuntivo per i tipi di materiale presenti. */
-export const practiceTasks = (roles) => [roles.includes("esercizi") ? EXERCISES_TASK : "", roles.includes("svolti") ? WORKED_TASK : "", roles.includes("esami") ? EXAMS_TASK : "", roles.includes("domande") ? EXAM_QUESTIONS_TASK : ""].filter(Boolean).join("\n");
+/** Istruzione aggiuntiva quando tra i materiali ci sono quiz del docente. */
+export const QUIZ_TASK = `- Ci sono quiz del docente: le domande mcq imitino il loro stile e i loro distrattori, sugli stessi concetti ma con domande diverse
+  (le domande del docente entrano nel quiz da sole, non copiarle).`;
+
+export const practiceTasks = (roles) => [roles.includes("quiz") ? QUIZ_TASK : "", roles.includes("esercizi") ? EXERCISES_TASK : "", roles.includes("svolti") ? WORKED_TASK : "", roles.includes("esami") ? EXAMS_TASK : "", roles.includes("domande") ? EXAM_QUESTIONS_TASK : ""].filter(Boolean).join("\n");
 
 /** Per le risposte JSON scritte come testo (pagina Claude): i backslash del LaTeX vanno raddoppiati, altrimenti \frac diventa un carattere di controllo. */
 export const JSON_LATEX_RULE = String.raw`Nel JSON ogni backslash del LaTeX va scritto doppio: "$\\frac{a}{b}$", "$\\beta_1$" (un solo backslash, come in "\frac", nel JSON diventa un carattere di controllo).`;
@@ -433,7 +443,8 @@ ${answer}
 /* --------------------------- esercitazioni con le soluzioni --------------------------- */
 
 /** Assegnare gli esercizi delle esercitazioni agli argomenti del modulo (testo e soluzione restano quelli ufficiali). */
-export const ASSIGN_RULES = `Hai gli ESERCIZI DA ASSEGNARE di un'esercitazione (ognuno in <esercizio id="E1" …>, con la soluzione ufficiale) e gli argomenti del
+export const ASSIGN_RULES = `Hai gli ESERCIZI DA ASSEGNARE di un'esercitazione o di un quiz del docente (ognuno in <esercizio id="E1" …>, con la soluzione ufficiale: per una
+domanda a scelta multipla, l'alternativa giusta) e gli argomenti del
 modulo di studio. Per ogni esercizio: topicId = l'argomento principale che serve per svolgerlo (tra gli id elencati, "" se nessuno);
 rubric = 3-6 punti brevi e verificabili che una soluzione corretta deve contenere, presi dalla soluzione ufficiale (procedimento e
 risultato; formule in LaTeX tra $...$). Non riscrivere né correggere testo e soluzione: se la soluzione ufficiale ti sembra sbagliata,

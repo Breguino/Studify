@@ -153,7 +153,7 @@ const str = (v, max = 500) => (typeof v === "string" ? v.slice(0, max) : "");
 function parseMaterials(body) {
   const materials = (Array.isArray(body.materials) ? body.materials : []).slice(0, 40).map((m) => ({
     kind: ["pdf", "notes", "web"].includes(m.kind) ? m.kind : "notes",
-    role: ["appunti", "colleghi", "libro", "slide", "dispense", "esercizi", "svolti", "esami", "domande", "sbobine", "altro"].includes(m.role) ? m.role : "appunti",
+    role: ["appunti", "colleghi", "libro", "slide", "dispense", "esercizi", "svolti", "esami", "domande", "quiz", "sbobine", "altro"].includes(m.role) ? m.role : "appunti",
     unit: ["lezioni", "prove"].includes(m.unit) ? m.unit : "pagine",
     year: str(m.year, 20),
     pages: /^\d{1,4}-\d{1,4}$/.test(m.pages ?? "") ? m.pages : "",
@@ -378,7 +378,7 @@ async function api(req, res, url) {
     }
     input.existing = parseExisting(body.existing);
     if (!input.existing.topics.length) return send(res, 400, { error: "Il modulo da aggiornare è vuoto: generalo prima." });
-    const notes = materials.filter((m) => !["esercizi", "svolti", "esami", "domande"].includes(m.role)).map((m) => m.text).filter(Boolean).join("\n\n"); // come la modalità base: le prove non diventano argomenti
+    const notes = materials.filter((m) => !["esercizi", "svolti", "esami", "domande", "quiz"].includes(m.role)).map((m) => m.text).filter(Boolean).join("\n\n"); // come la modalità base: le prove non diventano argomenti
     const examQs = demoExamQuestions(materials.filter((m) => m.role === "domande").map((m) => m.text).join("\n"), input.existing.topics);
     const worked = demoMethods(materials.filter((m) => m.role === "svolti").map((m) => m.text).join("\n\n"), input.existing.topics);
     const mockDelta = () => {

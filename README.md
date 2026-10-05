@@ -235,7 +235,16 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
    che sono **solo** negli appunti di un collega; nella dispensa li cita [Appunti di un collega]. Come per le sbobine si indica l'**anno
    accademico** (arriva a Claude anche per i PDF) e un documento lungo si divide per lezione. Le frasi del docente sull'esame trovate lì
    entrano nel modulo con la loro fonte: sono riportate, non sentite da te.
-12. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
+12. **Quiz del docente su Moodle** (tipo «Quiz del docente (Moodle)»): la **revisione di un tentativo** (su Moodle, dopo aver finito il
+   quiz) copiata tutta (Ctrl+A, Ctrl+C) e incollata, salvata come pagina web (.html) o stampata in PDF. L'app la riconosce anche dal
+   contenuto, qualunque nome abbia il file, e ne legge domande, alternative, risposta corretta e feedback del docente, togliendo
+   punteggi, stato e navigazione. Le domande entrano nel quiz **così come sono**, con la risposta del docente (a Claude si chiede solo
+   l'argomento): a scelta singola e Vero/Falso restano a scelta multipla, a risposta breve diventano esercizi, con più risposte giuste
+   una domanda «quali?». Le alternative cambiano ordine a ogni tentativo (non Vero/Falso, né quando un'alternativa rimanda alle altre,
+   come «tutte le precedenti»), così non si impara la lettera. L'AI le usa come modello per domande nuove sugli stessi concetti,
+   formulate in un altro modo, e nel piano arriva «Quiz del docente su …» dopo lo studio dell'argomento. Le domande senza la risposta
+   corretta (il docente può non mostrarla nella revisione) restano fuori dal quiz, e l'app lo dice.
+13. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
 
 | Sessione | Cosa fa |
 |---|---|
@@ -282,6 +291,11 @@ una prima lettura guidata e da esempi svolti (expertise reversal); con pochi gio
 - **Registrazioni**: la trascrizione la fa un altro programma, e i suoi errori (un termine storpiato, «quindici» al posto di «cinquanta»)
   arrivano all'AI; per questo le frasi del docente portano il minuto, per riascoltarle. Una lezione di 90 minuti trascritta sono
   circa 12.000 parole: nella pagina Claude ne entrano un paio per volta, il resto si aggiunge con «Aggiungi al modulo».
+- **Quiz del docente**: se l'esame pesca dallo stesso archivio, saper rispondere a quelle domande aiuta; ma averle viste molte volte fa
+  riconoscere la risposta senza saperla spiegare, per questo l'ordine delle alternative cambia e l'AI aggiunge domande diverse sugli
+  stessi concetti. Le formule scritte con MathJax possono perdersi nella copia: controllale nell'elenco delle domande riconosciute.
+  Il riconoscimento si basa sulle diciture di Moodle in italiano e in inglese («Domanda 1», «Scegli un'alternativa», «La risposta
+  corretta è»): un tema di Moodle molto diverso può non essere letto.
 - **Appunti di colleghi**: servono a recuperare le lezioni perse e a confrontare i tuoi; leggerli non sostituisce lo studio (chi li ha
   scritti ha fatto il lavoro di capire e riassumere, tu no). Il controllo dell'AI trova i contrasti con dispense e libro, non gli
   errori di un collega su ciò che c'è solo nei suoi appunti: per questo quegli argomenti vengono segnalati.
@@ -315,7 +329,8 @@ scripts/          build-artifact.mjs (esbuild)
 public/js/        logica pura (testata): dates, methods, srs, planner, progress, local-builder, tabular (CSV/xlsx), importers, timetable,
                   lessons (lezioni e prove), past-exams (prove, frequenze, voto), exam-questions (elenchi di domande d'esame),
                   worked (metodi del docente ed esercizi guidati), exercises (esercitazioni con le soluzioni), books (libri consigliati),
-                  dispense (indice delle dispense del docente, slide o dispense), transcripts (sottotitoli e trascrizioni con i tempi)
+                  dispense (indice delle dispense del docente, slide o dispense), transcripts (sottotitoli e trascrizioni con i tempi),
+                  moodle (revisione dei quiz del docente)
                   stato/UI: store (IndexedDB), domain, api, ui, views/*
 public/demo/      modulo demo (Microeconomia)
 test/             node --test: logica pura + client AI con SDK simulato

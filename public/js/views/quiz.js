@@ -4,6 +4,7 @@ import { core } from "../core.js";
 import { weakTopics, pickQuestions, recordScore } from "../progress.js";
 import { statsFor } from "../domain.js";
 import { examQuestionStats } from "../exam-questions.js";
+import { keepOrder } from "../moodle.js";
 import * as store from "../store.js";
 import { badge, bar, emptyState, h, pct, shuffle, toast } from "../ui.js";
 
@@ -138,12 +139,16 @@ export function quizView(exam, query) {
 
   function mcqScreen(it, reveal) {
     const q = it.q;
-    const opts = h("div", { class: "options" }, q.options.map((o, k) => {
+    // le domande del docente si ripetono: alternative in ordine diverso ogni volta, per ricordare il concetto e non la lettera
+    // (non se una alternativa dipende dalla posizione, come «tutte le precedenti»)
+    it.order ??= q.official && !keepOrder(q.options) ? shuffle(q.options.map((_, k) => k)) : q.options.map((_, k) => k);
+    const opts = h("div", { class: "options" }, it.order.map((k, pos) => {
+      const o = q.options[k];
       const cls = reveal ? (k === q.correctIndex ? "correct" : k === it.answer ? "wrong" : "") : it.answer === k ? "correct" : "";
       return h("button", { class: `btn option ${cls}`, disabled: reveal, "aria-pressed": !reveal && it.answer === k ? "true" : null, onclick: () => {
         it.answer = k;
         if (!mock) { phase = "review"; render(); } else render();
-      } }, `${String.fromCharCode(65 + k)}. `, rich(o));
+      } }, `${String.fromCharCode(65 + pos)}. `, rich(o));
     }));
     return opts;
   }
@@ -153,7 +158,7 @@ export function quizView(exam, query) {
     if (phase === "done") return summary();
     const q = it?.q;
     const w = examStats.weight(q);
-    const examBadge = w ? badge(`domanda d'esame vera${w > 1 ? ` · chiesta ${w} volte` : ""}`, "bad") : q.official ? badge(`${q.official.source} · soluzione ufficiale`, "good") : null;
+    const examBadge = w ? badge(`domanda d'esame vera${w > 1 ? ` · chiesta ${w} volte` : ""}`, "bad") : q.official ? badge(`${q.official.source} · ${q.official.quiz ? "risposta del docente" : "soluzione ufficiale"}`, "good") : null;
     const body = [head(), bar(i / items.length, { label: "avanzamento" }), h("div", { class: "card stack", style: { marginTop: "14px" } }, h("div", { class: "row" }, badge(KIND[q.kind]), examBadge), h("div", { class: "q-prompt" }, richParas(q.prompt)))];
     const card = body.at(-1);
 
@@ -197,7 +202,7 @@ export function quizView(exam, query) {
     const mins = Math.max(1, Math.round((Date.now() - started) / 60000));
     root.replaceChildren(h("div", { class: "stack" },
       h("div", { class: "card stack" },
-        h("div", { class: "row between" }, h("div", {}, h("div", { class: "muted small" }, mock ? `Simulazione · ${mins} min` : mode === "exam" ? "Domande d'esame vere" : mode === "official" ? "Esercitazione" : "Risultato"), h("div", { class: "score-big" }, pct(total))), h("div", { class: "muted" }, `${items.length - missed.length}/${items.length} solide`)),
+        h("div", { class: "row between" }, h("div", {}, h("div", { class: "muted small" }, mock ? `Simulazione · ${mins} min` : mode === "exam" ? "Domande d'esame vere" : mode === "official" ? (items.every((x) => x.q.official?.quiz) ? "Quiz del docente" : "Esercitazione") : "Risultato"), h("div", { class: "score-big" }, pct(total))), h("div", { class: "muted" }, `${items.length - missed.length}/${items.length} solide`)),
         bar(total, { tone: total >= 0.75 ? "good" : total >= 0.5 ? "warn" : "bad", label: "punteggio" }),
         h("div", { class: "stack", style: { gap: "6px" } }, [...byTopic].map(([tid, sc]) => h("div", { class: "progress-line" }, h("span", { class: "small", style: { minWidth: "40%" } }, mod.topics.find((t) => t.id === tid)?.title), bar(sc.reduce((a, b) => a + b, 0) / sc.length), h("span", { class: "small" }, pct(sc.reduce((a, b) => a + b, 0) / sc.length))))),
         h("p", { class: "muted small", style: { margin: 0 } }, total >= 0.8 ? "Buon livello. Rifallo tra qualche giorno: ricordare a distanza è ciò che fissa." : "Gli errori sono utili: tornano nei prossimi quiz finché non li superi.")),

@@ -1,5 +1,5 @@
 // Tipi di materiale: cambiano il modo in cui l'AI li usa (vedi shared/prompts.js, principio 7).
-export const ROLES = { appunti: "Appunti", colleghi: "Appunti di colleghi", sbobine: "Sbobine (lezioni trascritte)", libro: "Libro", slide: "Slide del docente", dispense: "Dispense del docente", esercizi: "Esercizi", svolti: "Esercizi svolti dal docente", esami: "Esami passati (temi d'esame)", domande: "Domande d'esame (elenchi)", altro: "Altro" };
+export const ROLES = { appunti: "Appunti", colleghi: "Appunti di colleghi", sbobine: "Sbobine (lezioni trascritte)", libro: "Libro", slide: "Slide del docente", dispense: "Dispense del docente", esercizi: "Esercizi", svolti: "Esercizi svolti dal docente", esami: "Esami passati (temi d'esame)", domande: "Domande d'esame (elenchi)", quiz: "Quiz del docente (Moodle)", altro: "Altro" };
 
 /** Tipo probabile dal nome del file (modificabile dallo studente). */
 export function guessRole(fileName, isPdf = false) {
@@ -7,6 +7,8 @@ export function guessRole(fileName, isPdf = false) {
   if (/sbobin|trascrizion|registrazion/.test(n)) return "sbobine";
   // elenchi di domande uscite (spesso raccolte dagli studenti, tipiche dell'orale)
   if (/domand[ae] (d )?esam[ei]|domand[ae] (dell )?oral[ei]|domand[ae] (uscit|frequent|chiest|raccolt)|domande (di )?teoria|faq|exam questions/.test(n)) return "domande";
+  // quiz del docente (Moodle, autovalutazione): domande chiuse con la risposta corretta
+  if (/\bquiz\b|moodle|autovalutazion|questionari[oi]|self assessment/.test(n)) return "quiz";
   // prove d'esame vere: «Temi d'esame 2024», «Appello 12 01 2024», «Compito A», «Prove scritte»
   if (/\btemi\b|\btema d esame|prov[ae] d esame|prov[ae] scritt[ae]|prov[ae] intermedi[ae]|\bcompit[io]\b|appell[oi]|esoner[oi]|esami (passati|vecchi|anni)|past (exams?|papers?)/.test(n)) return "esami";
   // esercizi risolti dal docente (a lezione, in esercitazione): il procedimento da imparare
@@ -29,5 +31,5 @@ export function guessRole(fileName, isPdf = false) {
 /** Tipo di un materiale salvato prima che esistessero i tipi. */
 export const roleOf = (m) => m.role ?? (m.kind === "pdf" ? "dispense" : "appunti");
 
-/** Materiali da cui la modalità base non ricava argomenti e carte (eserciziari, esercizi svolti, prove d'esame, elenchi di domande). */
-export const isPractice = (m) => ["esercizi", "svolti", "esami", "domande"].includes(roleOf(m));
+/** Materiali da cui la modalità base non ricava argomenti e carte (eserciziari, esercizi svolti, prove d'esame, elenchi di domande, quiz). */
+export const isPractice = (m) => ["esercizi", "svolti", "esami", "domande", "quiz"].includes(roleOf(m));

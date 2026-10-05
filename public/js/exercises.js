@@ -2,6 +2,7 @@
 // «Soluzioni» in fondo o in un file a parte) e li mette nel quiz così come sono. A Claude si chiede solo a quale argomento
 // appartengono: testo e soluzione ufficiali non vengono riscritti.
 import { roleOf } from "./material-roles.js";
+import { parseMoodleQuiz } from "./moodle.js";
 
 const EX = /^\s*(?:#{1,4}\s*)?(?:esercizio|es\.|problema|quesito|exercise)\s*(?:n\.?\s*|nr\.?\s*|n°\s*)?(\d{1,3}[a-z]?)\b\s*[.):—–-]?\s*(.*)$/i;
 const SOL_N = /^\s*(?:#{1,4}\s*)?(?:soluzione|svolgimento|risoluzione|solution)\s*(?:dell['’]\s*|del\s+)?(?:esercizio|es\.)?\s*(?:n\.?\s*)?(\d{1,3}[a-z]?)\b\s*[.):—–-]?\s*(.*)$/i;
@@ -81,6 +82,26 @@ export function officialExercises(exam) {
       out.push({ key: `${m.id}#${it.n}`, materialId: m.id, n: it.n, text: it.text, solution: sol, solutionFrom: it.solution ? m.id : sol ? partner.id : null, label: `${clean(m.title)} · es. ${it.n}` });
     }
   }
+  return [...out, ...quizItems(exam)];
+}
+
+const LETTERS = "abcdefghijklmnopqrstuvwxyz";
+
+/**
+ * Le domande dei quiz del docente (Moodle) come esercizi con la soluzione ufficiale: a scelta singola e Vero/Falso restano a scelta
+ * multipla; a risposta breve diventano esercizi; con più risposte giuste, domande aperte («quali?»). Senza la risposta corretta
+ * (il docente non la mostra nella revisione) restano fuori: solution = "".
+ */
+export function quizItems(exam) {
+  const out = [];
+  for (const m of exam.materials.filter((x) => roleOf(x) === "quiz" && x.kind === "notes" && x.text)) {
+    for (const q of parseMoodleQuiz(m.text) ?? []) {
+      const base = { key: `${m.id}#${q.n}`, materialId: m.id, n: q.n, solutionFrom: m.id, label: `${clean(m.title)} · domanda ${q.n}`, quiz: true, feedback: q.feedback };
+      if (q.kind === "mcq") out.push({ ...base, kind: "mcq", text: q.text, options: q.options, correctIndex: q.correct.length === 1 ? q.correct[0] : -1, solution: q.correct.length === 1 ? q.options[q.correct[0]] : "" });
+      else if (q.kind === "multi") out.push({ ...base, kind: "open", text: `${q.text}\n\n${q.options.map((o, i) => `${LETTERS[i]}. ${o}`).join("\n")}\n\n(Più alternative possono essere giuste: quali?)`, solution: q.correct.length ? q.correct.map((i) => `${LETTERS[i]}. ${q.options[i]}`).join("\n") : "" });
+      else out.push({ ...base, kind: "problem", text: q.text, solution: q.answer });
+    }
+  }
   return out;
 }
 
@@ -105,6 +126,9 @@ export function sameExercise(a, b) {
   return Math.max(...sw) >= 0.7 && Math.min(...sw) >= 0.4 && (na.size < 2 || Math.min(share(na, nb), share(nb, na)) >= 0.75);
 }
 
+/** Nel modulo una domanda a scelta multipla non ha risposta modello: la risposta è l'alternativa giusta. */
+const mcqAnswer = (e) => (e.kind === "mcq" ? "" : e.solution);
+
 /** Domande del modulo che sono esercizi delle esercitazioni (con la soluzione ufficiale). */
 export const officialQuestions = (mod) => (mod?.questions ?? []).filter((q) => q.official);
 
@@ -126,22 +150,25 @@ export function applyOfficial(mod, exercises, assign = new Map(), now = new Date
     const old = byKey.get(e.key);
     if (old) {
       // il materiale è cambiato (per esempio le formule rilette con Claude): testo e soluzione si aggiornano, i progressi restano
-      if (old.prompt !== e.text || old.modelAnswer !== e.solution) { Object.assign(old, { prompt: e.text, modelAnswer: e.solution }); refreshed++; }
+      const changed = old.prompt !== e.text || old.modelAnswer !== mcqAnswer(e) || (e.kind === "mcq" && (old.correctIndex !== e.correctIndex || String(old.options) !== String(e.options)));
+      if (changed) { Object.assign(old, { prompt: e.text, modelAnswer: mcqAnswer(e), ...(e.kind === "mcq" ? { options: e.options, correctIndex: e.correctIndex } : {}) }); refreshed++; }
       continue;
     }
     if (have.has(e.key)) continue;
-    const copy = mod.questions.find((q) => !q.official && q.kind !== "mcq" && sameExercise(q.prompt, e.text));
-    const official = { key: e.key, source: e.label };
+    const mcq = e.kind === "mcq";
+    const copy = mod.questions.find((q) => !q.official && (q.kind === "mcq") === mcq && sameExercise(q.prompt, e.text));
+    const official = { key: e.key, source: e.label, ...(e.quiz ? { quiz: true } : {}) };
+    const explanation = e.quiz ? `${e.feedback ? `${e.feedback} ` : ""}(Risposta del docente: ${e.label}.)` : `Soluzione ufficiale (${e.label}).`;
     if (copy) {
       // testo e soluzione ufficiali insieme: anche se la somiglianza ingannasse, domanda e soluzione restano della stessa coppia
-      Object.assign(copy, { official, prompt: e.text, modelAnswer: e.solution, explanation: `Soluzione ufficiale (${e.label}).` });
+      Object.assign(copy, { official, prompt: e.text, modelAnswer: mcqAnswer(e), explanation, ...(mcq ? { options: e.options, correctIndex: e.correctIndex } : {}) });
       linked++;
       continue;
     }
     const a = assign.get(e.key);
     if (!a || !topics.has(a.topicId)) continue;
-    mod.questions.push({ id: `q${next++}`, topicId: a.topicId, kind: "problem", prompt: e.text, options: [], correctIndex: -1, modelAnswer: e.solution,
-      explanation: `Soluzione ufficiale (${e.label}).`, rubric: a.rubric?.length ? a.rubric : [], official, addedAt: now });
+    mod.questions.push({ id: `q${next++}`, topicId: a.topicId, kind: e.kind ?? "problem", prompt: e.text, options: mcq ? e.options : [], correctIndex: mcq ? e.correctIndex : -1, modelAnswer: mcqAnswer(e),
+      explanation, rubric: !mcq && a.rubric?.length ? a.rubric : [], official, addedAt: now });
     added++;
   }
   return { linked, added, refreshed };
