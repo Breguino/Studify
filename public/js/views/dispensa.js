@@ -145,6 +145,8 @@ export function dispensaTab(exam) {
     h("h2", { style: { margin: 0 } }, "Dispensa"),
     h("p", { style: { margin: 0 } }, "Un unico documento da studiare: per ogni argomento del modulo integra appunti, sbobine, slide, libro ed esercizi, con le fonti tra parentesi, le formule e le frasi del docente sull'esame. Si stampa o si salva in PDF."),
     h("div", { class: "callout" }, h("b", {}, "Leggerla non basta. "), "Rileggere dà l'impressione di sapere senza farti ricordare: ogni capitolo finisce con «Mettiti alla prova». Rispondi senza guardare, poi controlla le soluzioni in fondo. Usala per capire la prima volta e per consultare; per ricordare ci sono flashcard e quiz."),
+    exam.materials.some((m) => roleOf(m) === "dispense") ? h("div", { class: "callout" }, h("b", {}, "Hai le dispense del docente. "),
+      "Il testo di riferimento restano quelle: questa dispensa, scritta dall'AI, le integra con gli altri materiali e può sbagliare. Per la teoria parti dalle sue pagine (in ogni argomento trovi quali leggere); usa questa per collegare le fonti e per metterti alla prova.") : null,
     h("div", { class: "row", style: { gap: "14px", alignItems: "end" } },
       h("label", {}, "Lunghezza", length),
       h("label", { style: { display: "flex", gap: "8px", alignItems: "center", fontWeight: 400 } }, sol, "Soluzioni in appendice")),

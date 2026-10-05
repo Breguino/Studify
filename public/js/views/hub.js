@@ -16,7 +16,7 @@ import { esamiTab } from "./esami.js";
 import { allPapers, analysisValid, topicFrequency } from "../past-exams.js";
 import { examQuestionStats } from "../exam-questions.js";
 import { renderMarkdown } from "../markdown.js";
-import { readingMinutes, topicReading, uncoveredChapters } from "../books.js";
+import { pagesLabel, readingMinutes, shortName, topicReading, uncoveredChapters } from "../books.js";
 
 const TABS = [
   ["today", "Oggi"],
@@ -124,13 +124,20 @@ function hintsBox(hints, mod, title = "Cosa ha detto il docente sull'esame") {
     h("div", { class: "small muted" }, "Frasi copiate dai materiali: se vengono da sbobine di un anno precedente, il docente potrebbe aver cambiato idea."));
 }
 
-/** Capitoli del programma (dai libri consigliati) che nessun argomento del modulo copre. */
+/** Capitoli del programma (dai libri consigliati) che nessun argomento del modulo copre; capitoli delle dispense senza argomento. */
 function uncoveredBox(exam) {
-  const u = uncoveredChapters(exam);
-  if (!u.length) return null;
-  return h("div", { class: "callout warn" }, h("b", {}, `Nel programma ma non nei tuoi materiali (${u.length} ${u.length === 1 ? "capitolo" : "capitoli"})`),
-    h("ul", {}, u.map((x) => h("li", {}, h("i", {}, x.book.title), ` — cap. ${x.chapter.n} «`, rich(x.chapter.title), "»"))),
-    h("div", { class: "small" }, "Il programma li comprende: studiali sul libro o aggiungi gli appunti e le slide di quelle lezioni, poi «Aggiungi al modulo»."));
+  const all = uncoveredChapters(exam);
+  const u = all.filter((x) => x.book.kind !== "dispense");
+  const d = all.filter((x) => x.book.kind === "dispense");
+  const n = (k) => `${k} ${k === 1 ? "capitolo" : "capitoli"}`;
+  return [
+    u.length ? h("div", { class: "callout warn" }, h("b", {}, `Nel programma ma non nei tuoi materiali (${n(u.length)})`),
+      h("ul", {}, u.map((x) => h("li", {}, h("i", {}, x.book.title), ` — cap. ${x.chapter.n} «`, rich(x.chapter.title), "»"))),
+      h("div", { class: "small" }, "Il programma li comprende: studiali sul libro o aggiungi gli appunti e le slide di quelle lezioni, poi «Aggiungi al modulo».")) : null,
+    d.length ? h("div", { class: "callout warn" }, h("b", {}, `Nelle dispense del docente ma senza un argomento nel modulo (${n(d.length)})`),
+      h("ul", {}, d.map((x) => h("li", {}, h("i", {}, shortName(x.book)), ` — cap. ${x.chapter.n} «`, rich(x.chapter.title), "»", h("span", { class: "muted small" }, ` · p. ${x.chapter.page}${x.book.pdfPages ? " del PDF" : ""}`)))),
+      h("div", { class: "small" }, "L'AI ha ricevuto queste pagine ma non ne ha fatto un argomento: forse le ha accorpate a un altro (controlla qui sotto), o le ha saltate. In quel caso studiale direttamente sulle dispense.")) : null,
+  ].filter(Boolean);
 }
 
 /** Aggiunto o approfondito con gli appunti nelle ultime due settimane. */
@@ -183,11 +190,12 @@ function readingBox(exam, t) {
   const r = topicReading(exam, t.id);
   if (!r.length) return null;
   const mins = (n) => { const m = readingMinutes(n, exam.level); return m >= 60 ? `~${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}` : `~${m} min`; };
-  return h("div", { class: "callout" }, h("b", {}, "Da leggere sul libro"),
-    h("ul", {}, r.map((x) => h("li", {}, h("i", {}, x.book.title), ` — cap. ${x.chapter.n} «`, rich(x.chapter.title), "»",
-      x.pages ? h("span", { class: "muted small" }, ` · pp. ${x.pages.from}${x.pages.to ? `–${x.pages.to}` : ""}${x.count ? ` (${x.count} pagine, ${mins(x.count)})` : ""}`) : null,
+  const disp = r.some((x) => x.book.kind === "dispense");
+  return h("div", { class: "callout" }, h("b", {}, disp ? (r.every((x) => x.book.kind === "dispense") ? "Da leggere sulle dispense del docente" : "Da leggere: prima le dispense del docente") : "Da leggere sul libro"),
+    h("ul", {}, r.map((x) => h("li", {}, h("i", {}, x.book.title), x.book.kind === "dispense" && !/dispens/i.test(x.book.title) ? " (dispense)" : "", ` — cap. ${x.chapter.n} «`, rich(x.chapter.title), "»",
+      x.pages ? h("span", { class: "muted small" }, ` · ${pagesLabel(x.book, x.pages)}${x.count ? ` (${x.count} pagine, ${mins(x.count)})` : ""}`) : null,
       x.book.own === "no" ? h("span", { class: "muted small" }, " · non ce l'hai: in biblioteca?") : null))),
-    h("div", { class: "small muted" }, "Leggi dopo aver provato a ricordare (vedi sopra) e chiudi il libro per rispondere alle domande: rileggere da solo non fissa."));
+    h("div", { class: "small muted" }, `Leggi dopo aver provato a ricordare (vedi sopra) e chiudi ${r.every((x) => x.book.kind === "dispense") ? "le dispense" : "il libro"} per rispondere alle domande: rileggere da solo non fissa.`));
 }
 
 /** «3 esercizi con soluzione»: esercizi delle esercitazioni su questo argomento. */

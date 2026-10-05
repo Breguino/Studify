@@ -14,7 +14,8 @@ import { pdfPageTexts as pageTexts } from "../pdf-page-texts.js";
 import { guessRole, isPractice, roleOf, ROLES } from "../material-roles.js";
 import { applyExamBoost, papersOf, parseStarts, preparePapers } from "../past-exams.js";
 import { countLabel, numberedQuestions, questionsOf, remapExamRefs } from "../exam-questions.js";
-import { booksCard, syncChapterLinks } from "./books.js";
+import { booksCard, syncChapterLinks, syncDispense } from "./books.js";
+import { looksLikeSlides } from "../dispense.js";
 import { applyOfficial, isSolutionsFile, officialExercises, officialQuestions, orphanSolutions, pendingOfficial, stemOf } from "../exercises.js";
 import { paperStartsOf } from "../lessons.js";
 import * as store from "../store.js";
@@ -85,7 +86,8 @@ async function addFiles(exam, files) {
         const scanned = text.replace(/\f/g, "").trim().length < 80;
         if (scanned && !core.pdfPageImages) toast(`«${file.name}»: PDF senza testo selezionabile (scansione): incolla il testo a mano.`, "error");
         else {
-          exam.materials.push(structure({ id: uid(), kind: "notes", role: guessRole(file.name, true), title: `${name} (da PDF)`, text: scanned ? Array(pages).fill("").join("\f") : text, size: text.length, numPages: pages, fromPdf: true, pdfFileId, fileName: file.name, addedAt: now() }));
+          const role = !scanned ? slidesOrDispense(file.name, guessRole(file.name, true), text.split("\f")) : guessRole(file.name, true);
+          exam.materials.push(structure({ id: uid(), kind: "notes", role, title: `${name} (da PDF)`, text: scanned ? Array(pages).fill("").join("\f") : text, size: text.length, numPages: pages, fromPdf: true, pdfFileId, fileName: file.name, addedAt: now() }));
           if (scanned) toast(`«${file.name}» è una scansione: scegli le pagine e usa «Leggi formule e testo con Claude».`);
         }
       } catch (e) {
@@ -106,6 +108,7 @@ async function addFiles(exam, files) {
         /* il conteggio serve solo a scegliere le pagine */
       }
       const m = { id: uid(), kind: "pdf", role: guessRole(file.name, true), title: name, fileId, size: file.size, numPages, addedAt: now() };
+      if (m.role === "dispense" && numPages >= 4) m.role = slidesOrDispense(file.name, m.role, await pdfPageTexts(m, 60).catch(() => []));
       exam.materials.push(m);
       if (m.role === "esami") await findPdfPapers(m);
       if (m.role === "domande") await pdfToQuestions(m);
@@ -126,8 +129,18 @@ async function addFiles(exam, files) {
       exam.materials.push(structure({ id: uid(), kind: "notes", role: guessRole(file.name), title: name, text, size: text.length, addedAt: now() }));
     } else toast(`«${file.name}»: formato non supportato (usa .pdf, .docx, .pptx, .txt o .md).`, "error");
   }
+  for (const d of await syncDispense(exam)) {
+    toast(`«${d.title}»: dispense con ${d.chapters} capitoli (${d.from === "indice" ? "dalla pagina dell'indice" : "dai titoli nelle pagine"}). Per ogni argomento ti dirò quali pagine leggere${exam.module ? ", dopo «Aggiungi al modulo»" : ""}.`, "ok");
+  }
   store.save();
   core.rerender();
+}
+
+/** Un PDF «Lezione 3» senza la parola «dispense» nel nome, con poche parole per pagina, sono slide esportate in PDF. */
+function slidesOrDispense(fileName, role, pages) {
+  if (role !== "dispense" || /dispens/i.test(fileName) || !looksLikeSlides(pages)) return role;
+  toast(`«${fileName}»: poche parole per pagina, sembrano slide: le ho segnate come «Slide del docente». Se sono dispense, cambia il tipo.`);
+  return "slide";
 }
 
 async function removeMaterial(exam, m) {
@@ -135,6 +148,7 @@ async function removeMaterial(exam, m) {
   if (m.pdfFileId) await store.delFile(m.pdfFileId);
   for (const id of m.imageIds ?? []) await store.delFile(id);
   exam.materials = exam.materials.filter((x) => x.id !== m.id);
+  if (exam.books?.some((b) => b.kind === "dispense" && b.materialId === m.id)) { exam.books = exam.books.filter((b) => b.kind !== "dispense" || b.materialId !== m.id); exam.plan = null; }
   if (["esami", "domande"].includes(roleOf(m)) && exam.module) { applyExamBoost(exam); exam.plan = null; } // senza quelle prove o domande la frequenza cambia
   store.save();
   core.rerender();
@@ -251,6 +265,17 @@ function slidesRow(m) {
     fig.length ? h("div", { class: "callout warn" }, `${fig.length === 1 ? "La slide" : "Le slide"} ${list} ${fig.length === 1 ? "ha" : "hanno"} grafici o immagini che dal file PowerPoint non si leggono (i grafici disegnati con linee e frecce, le immagini senza descrizione). `,
       `Per farli vedere a Claude esporta la presentazione in PDF (File → Esporta → PDF) e carica quello${core.ai.pdf === false ? ", poi usa «Leggi formule e figure con Claude»" : ": Claude legge anche i grafici"}.`) : null,
     h("div", { class: "muted" }, "Slide del docente: l'app le usa come traccia del corso (quali argomenti e in che ordine) e per capire su cosa insiste. Sono schematiche: le spiegazioni le prende da libro, dispense, sbobine e appunti, e ti segnala gli argomenti che sono solo sulle slide."));
+}
+
+/** Dispense del docente: come le usa l'AI, e l'indice per sapere quali pagine leggere. */
+function dispenseRow(exam, m) {
+  if (roleOf(m) !== "dispense") return null;
+  const b = (exam.books ?? []).find((x) => x.kind === "dispense" && x.materialId === m.id);
+  const pdf = m.kind === "pdf" || m.fromPdf;
+  return h("div", { class: "small muted" }, "Dispense del docente: l'AI usa le sue definizioni e la sua notazione, e se non concordano con il libro te lo segnala. ",
+    b ? `Indice: ${b.toc.length} capitoli (sopra, tra i libri): per ogni argomento ti dico quali pagine leggere. `
+      : pdf && m.tocChecked && !m.noReading ? "Non trovo l'indice (né una pagina «Indice» né titoli come «Capitolo 3»): non posso dirti quali pagine leggere per ogni argomento. " : "",
+    "Se sono dispense scritte da studenti, cambia il tipo in «Appunti».");
 }
 
 /** Elenco di domande d'esame: quante, quante ripetute, a cosa servono. */
@@ -378,6 +403,7 @@ async function generate(exam) {
     applyExamBoost(exam);
     const off = await syncOfficial(exam, onProgress);
     if (off) toast(`Esercitazioni: ${off}`, "ok");
+    await syncDispense(exam);
     const books = await syncChapterLinks(exam, onProgress);
     if (books) toast(`Libri: ${books}`, "ok");
     exam.materials.forEach(markSent);
@@ -402,6 +428,7 @@ async function update(exam) {
     pending.forEach(markSent);
     const off = await syncOfficial(exam, onProgress);
     if (off) toast(`Esercitazioni: ${off}`, "ok");
+    await syncDispense(exam);
     const books = await syncChapterLinks(exam, onProgress);
     if (books) toast(`Libri: ${books}`, "ok");
   });
@@ -740,13 +767,13 @@ export function materialsTab(exam) {
         h("div", { class: "card flat" },
           h("div", { class: "row between" }, h("div", {}, h("b", {}, m.title), " ", badge(KIND[m.kind], m.kind === "web" ? "brand" : ""), " ", isPending.has(m.id) ? badge("non ancora nel modulo", "warn") : null, " ", h("span", { class: "muted small" }, kb(m.size)),
               m.kind !== "web" ? h("div", { class: "row", style: { gap: "6px", marginTop: "4px" } }, h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Tipo",
-                h("select", { class: "role-select", "aria-label": `Tipo di ${m.title}`, onchange: async (e) => { m.role = e.target.value; if (m.role === "sbobine") withLessons(m); if (m.role === "esami") { if (m.kind === "pdf") await findPdfPapers(m); else preparePapers(m); } if (m.role === "domande" && m.kind === "pdf") await pdfToQuestions(m); store.save(); rerenderSoon(); } },
+                h("select", { class: "role-select", "aria-label": `Tipo di ${m.title}`, onchange: async (e) => { m.role = e.target.value; if (m.role === "sbobine") withLessons(m); if (m.role === "esami") { if (m.kind === "pdf") await findPdfPapers(m); else preparePapers(m); } if (m.role === "domande" && m.kind === "pdf") await pdfToQuestions(m); await syncDispense(exam); store.save(); rerenderSoon(); } },
                   Object.entries(ROLES).map(([k, t]) => h("option", { value: k, selected: roleOf(m) === k }, t)))),
                 roleOf(m) === "sbobine" ? h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Anno accademico",
                   h("input", { class: "sbobina-year", value: m.year ?? "", placeholder: "es. 2025-26", "aria-label": `Anno accademico di ${m.title}`, style: { width: "100px", padding: "4px 8px" }, onchange: (e) => { m.year = e.target.value.trim(); store.save(); } })) : null,
                 m.numPages > 1 ? pagePicker(m) : null) : null,
               roleOf(m) === "sbobine" ? h("div", { class: "small muted" }, "Sbobine: le frasi del docente sull'esame finiscono nel modulo (verificate sul testo). Possono contenere errori di trascrizione su termini e formule, e se sono di un altro anno docente e programma potrebbero essere cambiati.") : null,
-              papersRow(exam, m), questionsRow(m), exercisesRow(exam, m), slidesRow(m),
+              papersRow(exam, m), questionsRow(m), exercisesRow(exam, m), slidesRow(m), dispenseRow(exam, m),
               roleOf(m) === "svolti" ? h("div", { class: "small muted" }, "Esercizi svolti dal docente: l'AI ne ricava il metodo in passi (come li risolve lui, con la sua notazione) e crea esercizi dello stesso tipo. Li ritrovi negli argomenti come «Esercizi guidati». Se sono scansioni o appunti a mano, controlla le formule nell'anteprima.") : null,
               m.kind === "notes" ? (m.handwritten ? handwrittenRow(exam, m) : formulaRow(exam, m)) : null),
             h("button", { class: "btn small danger", onclick: () => removeMaterial(exam, m), "aria-label": `Rimuovi ${m.title}` }, "Rimuovi")),

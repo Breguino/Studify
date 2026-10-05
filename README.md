@@ -90,7 +90,7 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
 2. **Porta i materiali**: carica o incolla **libro, slide, dispense, esercizi e appunti** (`.pdf`, `.docx`, `.pptx`, `.txt`, `.md`),
    oppure «Cerca online con l'AI» (ricerca web con fonti e link, che puoi leggere ed eliminare prima di usarla).
    - Ogni materiale ha un **tipo** (indovinato dal nome del file, modificabile) che cambia come l'AI lo usa: gli **appunti** dicono
-     cosa ha sottolineato il docente (importanza), **libro e dispense** sono la fonte per definizioni e approfondimenti, gli
+     cosa ha sottolineato il docente (importanza), **dispense del docente e libro** sono la fonte per definizioni e approfondimenti, gli
      **esercizi** (eserciziari, temi d'esame) non diventano flashcard ma il modello delle domande-esercizio, con svolgimento
      (se la soluzione non è nei materiali, l'AI lo risolve e lo segnala come da verificare).
    - Di un **libro** (o di un PDF/una presentazione lunghi) si scelgono le **pagine**: un libro intero non sta in una richiesta
@@ -212,7 +212,19 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
    nel quiz viene riconosciuto (stessi numeri e parole) e prende testo e soluzione ufficiali, senza doppioni e senza perdere i progressi.
    «Fai l'esercitazione» propone gli esercizi nell'ordine; la soluzione ufficiale compare dopo il tuo tentativo. Nel piano l'esercitazione
    sull'argomento segue lo studio. Versione con server: un PDF di esercitazione lo legge Claude (formule comprese) e diventa testo.
-10. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
+10. **Dispense del docente** (tipo «Dispense del docente»): il corso scritto per esteso da chi fa l'esame, quindi la fonte principale.
+   L'AI usa le sue definizioni, i suoi simboli e la sua impostazione in carte, risposte e dispensa, ne copre tutti i capitoli e, se su
+   una definizione o una formula non concordano con il libro, usa le dispense e **segnala la differenza** tra le lacune (può essere una
+   scelta del docente o un refuso: va chiesto). Da un PDF di dispense l'app ricava l'**indice**, dalla pagina «Indice» o dai titoli
+   «Capitolo 3 …» nelle pagine, e lo usa come quello di un libro (le dispense compaiono tra i libri, prima di loro):
+   - nell'argomento e nel piano: **quali pagine delle dispense leggere** («Studia: Elasticità (leggi Dispense Microeconomia cap. 2,
+     pp. 5–6)»); nel piano si legge una fonte sola, le dispense dove ci sono e il libro dove non arrivano;
+   - nel modulo: i **capitoli delle dispense di cui l'AI non ha fatto un argomento**, pur avendo ricevuto quelle pagine (accorpati a un
+     altro, o saltati): un controllo che il modulo copra davvero il testo del docente;
+   - un PDF chiamato «Lezione 4» con poche parole per pagina (almeno 8 pagine) è un pacco di **slide**: l'app lo segna come tale e lo
+     dice; «riassunti» e «schemi» sono appunti di studenti, non del docente.
+   Nella scheda «Dispensa» l'app ricorda che, se ci sono le dispense del docente, il testo di riferimento restano quelle.
+11. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
 
 | Sessione | Cosa fa |
 |---|---|
@@ -251,6 +263,11 @@ una prima lettura guidata e da esempi svolti (expertise reversal); con pochi gio
   a memoria le risposte dell'elenco non basta all'orale, dove il docente incalza.
 - **Libri consigliati**: i capitoli «non coperti» sono quelli che nessun argomento del modulo tratta, non la prova che non li sai; e un
   argomento collegato a un capitolo non vuol dire che i tuoi materiali lo trattino come il libro. Il tempo di lettura è una stima.
+- **Dispense del docente**: l'indice si ricava da una pagina «Indice» o da titoli come «Capitolo 3»; dispense senza né l'una né gli altri
+  (o una scansione) non danno le pagine da leggere, e un indice ricavato dai titoli va controllato. Il riconoscimento delle slide
+  guarda solo quante parole ci sono per pagina: slide molto fitte restano «dispense» (cambia il tipo a mano). Che le dispense
+  prevalgano sul libro vale per definizioni e notazione; su un fatto o un calcolo un refuso del docente resta un refuso, per questo
+  le differenze vengono segnalate e non risolte in silenzio.
 - **Esercitazioni**: rifare più volte gli stessi esercizi fa ricordare i numeri, non il metodo: dopo i primi giri passa agli esercizi
   nuovi dello stesso tipo (quelli creati dall'AI) e agli esercizi misti. Le soluzioni ufficiali possono essere sintetiche («Q = 20»):
   in quel caso la correzione di Claude confronta anche il procedimento.
@@ -280,7 +297,8 @@ artifact/         versione pagina Claude: generate.js (sample), backend.js (db),
 scripts/          build-artifact.mjs (esbuild)
 public/js/        logica pura (testata): dates, methods, srs, planner, progress, local-builder, tabular (CSV/xlsx), importers, timetable,
                   lessons (lezioni e prove), past-exams (prove, frequenze, voto), exam-questions (elenchi di domande d'esame),
-                  worked (metodi del docente ed esercizi guidati), exercises (esercitazioni con le soluzioni), books (libri consigliati)
+                  worked (metodi del docente ed esercizi guidati), exercises (esercitazioni con le soluzioni), books (libri consigliati),
+                  dispense (indice delle dispense del docente, slide o dispense)
                   stato/UI: store (IndexedDB), domain, api, ui, views/*
 public/demo/      modulo demo (Microeconomia)
 test/             node --test: logica pura + client AI con SDK simulato

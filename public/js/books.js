@@ -1,6 +1,8 @@
 // Libri consigliati (i «testi di riferimento» della scheda dell'insegnamento): spesso cartacei, quindi l'app non li legge, ma ne usa
 // l'indice: quali capitoli sono nel programma, quale capitolo leggere per ogni argomento del modulo (con le pagine), quali capitoli
 // del programma i materiali dello studente non coprono, e quanto tempo serve a leggerli.
+// Le dispense del docente (kind «dispense», indice ricavato dal PDF: vedi dispense.js) si usano allo stesso modo e vengono prima:
+// sono il testo di chi fa l'esame.
 
 const ROMAN = /^(?:[ivxlc]+)$/i;
 // «Capitolo 5 L'elasticità e le sue applicazioni ...... 89», «5. L'elasticità 89», «5.2 La domanda 93», «Chapter 5 Elasticity 89»
@@ -94,10 +96,14 @@ export function programPdfRange(book, numPages) {
 /** I collegamenti capitoli-argomenti valgono finché il modulo non viene rigenerato (gli id cambiano significato). */
 export const linksValid = (exam, book) => !!book.links && !!exam.module && book.moduleBuiltAt === exam.moduleBuiltAt;
 
-/** Che cosa leggere per un argomento: capitoli dei libri collegati, con le pagine. Prima il testo principale. */
+/** Prima le dispense del docente, poi il testo principale, poi gli altri. */
+const byRank = (books) => [...(books ?? [])].sort((x, y) => rank(y) - rank(x));
+const rank = (b) => (b.kind === "dispense" ? 2 : b.main ? 1 : 0);
+
+/** Che cosa leggere per un argomento: capitoli dei libri e delle dispense collegati, con le pagine. Prima le dispense del docente. */
 export function topicReading(exam, topicId) {
   const out = [];
-  for (const b of [...(exam.books ?? [])].sort((x, y) => (y.main ? 1 : 0) - (x.main ? 1 : 0))) {
+  for (const b of byRank(exam.books)) {
     if (!linksValid(exam, b)) continue;
     for (const n of b.links[topicId] ?? []) {
       const c = b.toc.find((x) => x.n === n);
@@ -109,13 +115,36 @@ export function topicReading(exam, topicId) {
   return out;
 }
 
-/** Capitoli del programma che nessun argomento del modulo copre: probabilmente mancano nei materiali. */
+/** Il materiale è nel modulo? E fino a quali pagine (null = non ancora; «all» = tutte). */
+export function sentRange(exam, m) {
+  if (!exam.module) return null;
+  const ids = exam.module.materialIds;
+  const inModule = ids ? ids.includes(m.id) : !!m.addedAt && m.addedAt <= (exam.moduleBuiltAt ?? "");
+  if (!inModule) return null;
+  if (m.sentPages === undefined || m.sentPages === "all") return "all";
+  const r = String(m.sentPages).match(/^(\d+)-(\d+)$/);
+  return r ? { from: +r[1], to: +r[2] } : "all";
+}
+
+/** Capitoli delle dispense le cui pagine sono già state mandate all'AI (gli altri non possono essere nel modulo). */
+export function sentChapters(exam, book) {
+  const m = exam.materials.find((x) => x.id === book.materialId);
+  const r = m ? sentRange(exam, m) : null;
+  if (!r) return [];
+  if (r === "all") return book.toc ?? [];
+  return (book.toc ?? []).filter((c) => c.page + (book.offset ?? 0) >= r.from && c.page + (book.offset ?? 0) <= r.to);
+}
+
+/**
+ * Capitoli che nessun argomento del modulo copre. Libri: capitoli del programma, probabilmente mancano nei materiali.
+ * Dispense: capitoli le cui pagine l'AI ha ricevuto ma di cui non ha fatto un argomento (accorpati a un altro, o saltati).
+ */
 export function uncoveredChapters(exam) {
   const out = [];
   for (const b of exam.books ?? []) {
     if (!linksValid(exam, b)) continue;
     const linked = new Set(Object.values(b.links).flat());
-    for (const c of programChapters(b)) if (!linked.has(c.n)) out.push({ book: b, chapter: c });
+    for (const c of b.kind === "dispense" ? sentChapters(exam, b) : programChapters(b)) if (!linked.has(c.n)) out.push({ book: b, chapter: c });
   }
   return out;
 }
@@ -123,10 +152,16 @@ export function uncoveredChapters(exam) {
 /** Minuti di lettura per studiare (non per sfogliare): circa 4 minuti a pagina partendo da zero, 3 con basi già solide. */
 export const readingMinutes = (pages, level) => Math.round(((pages ?? 0) * (level <= 2 ? 4 : 3)) / 5) * 5;
 
+/** Il nome breve: il cognome del primo autore, o il titolo; per le dispense «Dispense …». */
+export const shortName = (b) => (b.kind === "dispense" ? (/dispens/i.test(b.title) ? b.title : `Dispense ${b.title}`)
+  : b.authors ? b.authors.split(/[,;]| e /)[0].trim().split(/\s+/).at(-1) : b.title);
+
+/** «pp. 89–112»; «del PDF» quando l'indice viene dai titoli nelle pagine del PDF, non dai numeri stampati. */
+export const pagesLabel = (b, p) => (p ? `pp. ${p.from}${p.to ? `–${p.to}` : ""}${b.pdfPages ? " del PDF" : ""}` : "");
+
 /** «Mankiw cap. 5, pp. 89–112» */
 export function readingLabel(r) {
-  const who = r.book.authors ? r.book.authors.split(/[,;]| e /)[0].trim().split(/\s+/).at(-1) : r.book.title;
-  return `${who} cap. ${r.chapter.n}${r.pages ? `, pp. ${r.pages.from}${r.pages.to ? `–${r.pages.to}` : ""}` : ""}`;
+  return `${shortName(r.book)} cap. ${r.chapter.n}${r.pages ? `, ${pagesLabel(r.book, r.pages)}` : ""}`;
 }
 
 /* ------------------------- solo per la modalità demo e le prove ------------------------- */
@@ -148,12 +183,13 @@ export function demoBooks(text) {
 
 /**
  * Per il piano: per ogni argomento le pagine da leggere e l'etichetta («Mankiw cap. 5, pp. 89–112»), dai libri che lo studente ha
- * (PDF o cartaceo), prima il testo principale. Un capitolo collegato a più argomenti divide le pagine tra loro.
+ * (PDF o cartaceo). Si legge una fonte sola: prima le dispense del docente, poi il testo principale (gli altri sono nella scheda
+ * dell'argomento). Un capitolo collegato a più argomenti divide le pagine tra loro.
  * @returns {Map<string, {pages: number, label: string}>}
  */
 export function readingByTopic(exam) {
   const out = new Map();
-  const books = [...(exam.books ?? [])].filter((b) => b.own !== "no" && linksValid(exam, b)).sort((x, y) => (y.main ? 1 : 0) - (x.main ? 1 : 0));
+  const books = byRank(exam.books).filter((b) => b.own !== "no" && linksValid(exam, b));
   for (const b of books) {
     const share = new Map();
     for (const ns of Object.values(b.links)) for (const n of ns) share.set(n, (share.get(n) ?? 0) + 1);

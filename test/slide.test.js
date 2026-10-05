@@ -35,7 +35,7 @@ test("grafici: a dispersione con x e y, serie senza nome", () => {
 
 test("tipo: slide del docente separate dalle dispense, con la loro regola", () => {
   assert.equal(ROLES.slide, "Slide del docente");
-  assert.equal(ROLES.dispense, "Dispense");
+  assert.equal(ROLES.dispense, "Dispense del docente");
   for (const n of ["Slide lezione 4.pdf", "Lezione 4.pptx", "Lucidi capitolo 2.pdf", "Presentazione corso.pdf"]) assert.equal(guessRole(n, true), "slide", n);
   assert.equal(guessRole("Dispensa capitolo 2.pdf", true), "dispense");
   assert.equal(guessRole("Key concepts.pdf", true), "dispense", "«key» non è una presentazione");
