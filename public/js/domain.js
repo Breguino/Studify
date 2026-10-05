@@ -126,6 +126,9 @@ export function taskHref(exam, task) {
       return `${base}/explain/${task.mode === "oral" ? "oral" : task.topicId}?${q}`;
     case "sim":
       return `${base}/sim?${q}`;
+    case "guided":
+      q.set("m", task.methodIndex ?? 0);
+      return `${base}/guided/${task.topicId}?${q}`;
     case "quiz":
     case "mock":
       q.set("mode", task.mode ?? "mixed");

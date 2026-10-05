@@ -15,6 +15,7 @@ import { dispensaTab } from "./dispensa.js";
 import { esamiTab } from "./esami.js";
 import { allPapers, analysisValid, topicFrequency } from "../past-exams.js";
 import { examQuestionStats } from "../exam-questions.js";
+import { renderMarkdown } from "../markdown.js";
 
 const TABS = [
   ["today", "Oggi"],
@@ -157,7 +158,7 @@ function moduleTab(exam) {
     h("div", { class: "stack", style: { gap: "10px" } }, mod.topics.map((t) =>
       h("a", { class: "topic card flat", href: `#/exam/${exam.id}/topic/${t.id}`, style: { textDecoration: "none", color: "inherit" } },
         h("div", { class: "row between" }, h("h3", { style: { margin: 0 } }, rich(t.title)),
-          h("div", { class: "row" }, examBadge(t, freq), askedBadge(t), (mod.examHints ?? []).some((x) => x.topicId === t.id) ? badge("il docente ne parla per l'esame", "bad") : null, recent(t.addedAt) ? badge("nuovo", "brand") : recent(t.updatedAt) ? badge("approfondito", "brand") : null, badge(["", "marginale", "importante", "centrale"][t.importance], t.importance === 3 ? "bad" : t.importance === 2 ? "warn" : ""), exam.learned[t.id] ? badge("studiato", "good") : null)),
+          h("div", { class: "row" }, examBadge(t, freq), askedBadge(t), t.methods?.length ? badge(t.methods.length === 1 ? "metodo del docente" : `${t.methods.length} metodi del docente`, "brand") : null, (mod.examHints ?? []).some((x) => x.topicId === t.id) ? badge("il docente ne parla per l'esame", "bad") : null, recent(t.addedAt) ? badge("nuovo", "brand") : recent(t.updatedAt) ? badge("approfondito", "brand") : null, badge(["", "marginale", "importante", "centrale"][t.importance], t.importance === 3 ? "bad" : t.importance === 2 ? "warn" : ""), exam.learned[t.id] ? badge("studiato", "good") : null)),
         h("p", { class: "muted small", style: { margin: "6px 0 0" } }, rich(clipRich(t.summary, 180)))))),
     mod.sources?.length ? h("details", {}, h("summary", {}, `Fonti online (${mod.sources.length})`), h("ul", { class: "source-list" }, mod.sources.map((s) => h("li", {}, h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer" }, s.title || s.url))))) : null,
     h("p", { class: "muted small" }, "Il modulo è una bozza generata da te + AI: confrontalo con il programma e con il docente. Le fonti web e le conoscenze generali vanno verificate."),
@@ -165,6 +166,19 @@ function moduleTab(exam) {
 }
 
 /* ---------------------------------- ARGOMENTO ---------------------------------- */
+
+/** Come risolve il docente gli esercizi di questo argomento: i passaggi, il suo esercizio svolto, gli esercizi guidati. */
+function methodsBox(exam, t) {
+  if (!t.methods?.length) return null;
+  return h("div", { class: "card stack" }, h("h3", { style: { margin: 0 } }, "Come lo risolve il docente"),
+    h("p", { class: "muted small", style: { margin: 0 } }, "Dai suoi esercizi svolti: all'esame si aspetta questo procedimento e questa notazione."),
+    ...t.methods.map((m, i) => h("div", { class: "method-box" },
+      h("div", { class: "row between" }, h("b", {}, rich(m.name)), h("a", { class: "btn small primary", href: `#/exam/${exam.id}/guided/${t.id}?m=${i}` }, "Esercizi guidati")),
+      h("ol", { class: "method-steps" }, m.steps.map((st) => h("li", {}, rich(st)))),
+      m.problem ? h("details", { class: "small" }, h("summary", {}, `L'esercizio svolto dal docente${m.source ? ` (${m.source})` : ""}`),
+        h("div", { class: "worked" }, ...renderMarkdown(m.problem), h("div", { class: "worked-solution" }, ...renderMarkdown(m.solution || "(svolgimento non trovato)"))),
+        m.verified ? null : h("p", { class: "muted" }, "Copiato da Claude da un PDF: controllalo sul materiale originale.")) : null)));
+}
 
 /** Le domande d'esame vere su questo argomento (dagli elenchi), le più chieste prima. */
 function examQuestionsBox(exam, t) {
@@ -215,6 +229,7 @@ export function topicView(exam, tid, query) {
     hintsBox((mod.examHints ?? []).filter((x) => x.topicId === t.id), mod, "Il docente su questo argomento"),
     askedBox(exam, t),
     examQuestionsBox(exam, t),
+    methodsBox(exam, t),
     h("div", { class: "card" }, h("h3", {}, "In breve"), richParas(t.summary)),
     t.keyConcepts.length ? h("div", { class: "card" }, h("h3", {}, "Concetti chiave"), t.keyConcepts.map((k) => h("div", { class: "concept" }, h("b", {}, rich(k.term)), rich(k.definition)))) : null,
     t.mustKnow.length ? h("div", { class: "card" }, h("h3", {}, "Da saper dire senza appunti"), h("ul", {}, t.mustKnow.map((m) => h("li", {}, rich(m))))) : null,

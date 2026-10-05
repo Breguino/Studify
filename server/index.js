@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { MODEL, aiConfigured, analyzePastExams, buildModule, curriculum, degrees, examFormat, examFormatFromText, extendModule, gradeExam, transcribe, writeDispensa, friendlyError, gradeAnswer, importRows, parseCurriculum, research } from "./ai.js";
 import { demoAnalysis, demoGrade } from "../public/js/past-exams.js";
 import { demoExamQuestions } from "../public/js/exam-questions.js";
+import { demoMethods } from "../public/js/worked.js";
 import { findExamHints, localDelta } from "../public/js/local-builder.js";
 import { formatFromSyllabus } from "../public/js/exam-type.js";
 import { IMPORT_HEADERS } from "../shared/prompts.js";
@@ -135,7 +136,7 @@ const str = (v, max = 500) => (typeof v === "string" ? v.slice(0, max) : "");
 function parseMaterials(body) {
   const materials = (Array.isArray(body.materials) ? body.materials : []).slice(0, 40).map((m) => ({
     kind: ["pdf", "notes", "web"].includes(m.kind) ? m.kind : "notes",
-    role: ["appunti", "libro", "dispense", "esercizi", "esami", "domande", "sbobine", "altro"].includes(m.role) ? m.role : "appunti",
+    role: ["appunti", "libro", "dispense", "esercizi", "svolti", "esami", "domande", "sbobine", "altro"].includes(m.role) ? m.role : "appunti",
     unit: ["lezioni", "prove"].includes(m.unit) ? m.unit : "pagine",
     year: str(m.year, 20),
     pages: /^\d{1,4}-\d{1,4}$/.test(m.pages ?? "") ? m.pages : "",
@@ -162,6 +163,7 @@ function parseExisting(e = {}) {
     topics: arr(e.topics, 80).map((t) => ({
       id: str(t.id, 12), title: str(t.title, 300), importance: Number(t.importance) || 2, summary: str(t.summary, 3000),
       keyConcepts: arr(t.keyConcepts, 30).map((k) => str(typeof k === "string" ? k : k?.term, 200)).filter(Boolean),
+      methods: arr(t.methods, 10).map((m) => str(typeof m === "string" ? m : m?.name, 200)).filter(Boolean),
     })).filter((t) => t.id && t.title),
     flashcards: arr(e.flashcards, 3000).map((c) => ({ topicId: str(c.topicId, 12), front: str(c.front, 500) })),
     questions: arr(e.questions, 1500).map((q) => ({ topicId: str(q.topicId, 12), prompt: str(q.prompt, 800) })),
@@ -358,11 +360,16 @@ async function api(req, res, url) {
     }
     input.existing = parseExisting(body.existing);
     if (!input.existing.topics.length) return send(res, 400, { error: "Il modulo da aggiornare è vuoto: generalo prima." });
-    const notes = materials.filter((m) => !["esercizi", "esami", "domande"].includes(m.role)).map((m) => m.text).filter(Boolean).join("\n\n"); // come la modalità base: le prove non diventano argomenti
+    const notes = materials.filter((m) => !["esercizi", "svolti", "esami", "domande"].includes(m.role)).map((m) => m.text).filter(Boolean).join("\n\n"); // come la modalità base: le prove non diventano argomenti
     const examQs = demoExamQuestions(materials.filter((m) => m.role === "domande").map((m) => m.text).join("\n"), input.existing.topics);
+    const worked = demoMethods(materials.filter((m) => m.role === "svolti").map((m) => m.text).join("\n\n"), input.existing.topics);
     const mockDelta = () => {
       const d = localDelta(notes, "Appunti nuovi");
-      return { ...d, questions: [...d.questions, ...examQs], examHints: [...findExamHints(notes, "sbobine"), { quote: "Questa frase non è nei materiali: il docente non l'ha mai detta.", source: "inventata", note: "", topicId: "" }] };
+      // esercizi svolti: il metodo sull'argomento esistente e 2 esercizi dello stesso tipo, svolti un passaggio per paragrafo
+      const mt = worked.map((w) => ({ id: w.topicId, title: input.existing.topics.find((t) => t.id === w.topicId)?.title ?? "", summary: "", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", methods: [w.method] }));
+      const mq = worked.flatMap((w) => [1, 2].map((k) => ({ kind: "problem", topicId: w.topicId, method: w.method.name, prompt: `[DEMO] Esercizio ${k} come «${w.method.name}», con dati diversi.`,
+        options: [], correctIndex: -1, modelAnswer: "Dati: $P=50-Q$, $MC=10$.\n\nRicavo marginale: $MR=50-2Q$.\n\n$$MR=MC\\Rightarrow Q^*=20$$\n\nPrezzo: $P^*=30$.", explanation: "[DEMO]", rubric: w.method.steps })));
+      return { ...d, topics: [...d.topics, ...mt], questions: [...d.questions, ...examQs, ...mq], examHints: [...findExamHints(notes, "sbobine"), { quote: "Questa frase non è nei materiali: il docente non l'ha mai detta.", source: "inventata", note: "", topicId: "" }] };
     };
     const id = startJob("module", (p) => (MOCK ? mockRun(p, { delta: mockDelta(), sources: [], mode: "local" }) : extendModule(input, p)));
     return send(res, 202, { jobId: id });

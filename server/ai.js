@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_GRADE_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, PAST_EXAMS_RULES, examGradePrompt, pastExamsPrompt, practiceTasks, MATERIAL_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, where, DISPENSA_SYSTEM, chapterPrompt, splitChapter } from "../shared/prompts.js";
-import { CurriculumSchema, DegreesSchema, ExamFormatSchema, ExamGradeSchema, GradeSchema, ImportRowsSchema, ModuleSchema, PastExamsSchema, normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex, identityRefs } from "./schema.js";
+import { CurriculumSchema, DegreesSchema, ExamFormatSchema, ExamGradeSchema, GradeSchema, ImportRowsSchema, ModuleSchema, PastExamsSchema, normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex, identityRefs, exampleChecker } from "./schema.js";
 
 export const MODEL = process.env.STUDIFY_MODEL || "claude-opus-5-5";
 
@@ -366,7 +366,8 @@ export async function buildModule(input, onProgress = () => {}) {
     throw new Error("L'AI ha restituito un modulo in formato non valido. Riprova.");
   }
   const text = [...input.materials.map((m) => m.text ?? ""), input.research?.notes ?? ""].join("\n");
-  const mod = normalizeModule(parsed, sources, { checkQuote: quoteChecker(text, { hasPdf: input.materials.some((m) => m.kind === "pdf" && m.data) }), examRefs: identityRefs(input.materials) });
+  const hasPdf = input.materials.some((m) => m.kind === "pdf" && m.data);
+  const mod = normalizeModule(parsed, sources, { checkQuote: quoteChecker(text, { hasPdf }), examRefs: identityRefs(input.materials), checkExample: exampleChecker(text, { hasPdf }) });
   if (mod.topics.length === 0) throw new Error("Il modulo generato non contiene argomenti: i materiali sono sufficienti?");
   return mod;
 }

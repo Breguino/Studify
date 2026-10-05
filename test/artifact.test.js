@@ -316,3 +316,30 @@ test("pagina Claude: le domande d'esame diventano domande del quiz a gruppi di 8
   assert.ok(exq.every((q) => q.examRefs.length === 1 && q.followUp === "f" && q.topicId === "t1"), "id inventati scartati");
   assert.match(mod.gaps.at(-1), /^1 domanda d'esame non è entrata nel quiz/, "D11 senza argomento: segnalata");
 });
+
+test("pagina Claude: metodi del docente ricavati per argomento, poi gli esercizi li seguono", async () => {
+  const prompts = [];
+  const text = "Esercizio 1 — Monopolio\nDomanda P = 50 - Q, costo marginale costante MC = 10. Trovare quantità e prezzo del monopolista.\n\nMR = 50 - 2Q; Q = 20; P = 30.";
+  const sample = async () => ({ text: "", truncated: false });
+  sample.json = async (prompt) => {
+    prompts.push(prompt);
+    if (prompt.includes("METODI DEL DOCENTE DA RICAVARE"))
+      return { methods: [{ name: "Equilibrio del monopolista", steps: ["MR", "MR=MC", "Prezzo"], problem: "Domanda $P=50-Q$, costo marginale costante $MC=10$. Trovare quantità e prezzo del monopolista.", solution: "$Q=20$", source: "Es. 1" }] };
+    if (prompt.includes("<argomento>"))
+      return { flashcards: [{ front: "F?", back: "B", type: "definizione" }], questions: [{ kind: "problem", prompt: "P=80-Q, MC=20?", options: [], correctIndex: -1, modelAnswer: "a\n\nb\n\nc", explanation: "", rubric: ["r"], method: "Equilibrio del monopolista" }] };
+    return { title: "T", overview: "O", gaps: [], topics: [
+      { id: "a", title: "Monopolio", importance: 2, difficulty: 2, summary: "s", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "e", methodNames: ["Equilibrio del monopolista"] },
+      { id: "b", title: "Domanda", importance: 2, difficulty: 2, summary: "s", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "e", methodNames: [] }] };
+  };
+  const mod = await generateModule({ exam, materials: [{ kind: "notes", role: "svolti", title: "Esercitazione 4", text }], research: null }, () => {}, sample);
+  const mp = prompts.filter((p) => p.includes("METODI DEL DOCENTE DA RICAVARE"));
+  assert.equal(mp.length, 1, "solo per l'argomento con esercizi svolti");
+  assert.match(mp[0], /<esercizi_svolti titolo="Esercitazione 4">\nEsercizio 1/);
+  assert.match(prompts[0], /"methodNames"/);
+  const step2 = prompts.find((p) => p.includes("<argomento>") && p.includes('"title":"Monopolio"') && !p.includes("METODI DEL DOCENTE"));
+  assert.match(step2, /<metodi_del_docente>\n### Equilibrio del monopolista\nPassaggi:\n1\. MR/);
+  assert.match(step2, /"method": string/);
+  assert.deepEqual(mod.topics[0].methods.map((m) => m.verified), [true]);
+  assert.equal(mod.questions.find((q) => q.topicId === "t1").method, "Equilibrio del monopolista");
+  assert.ok(!mod.questions.some((q) => q.topicId === "t2" && q.method), "un argomento senza metodi non ne ha");
+});

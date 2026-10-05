@@ -1,6 +1,6 @@
 // Aggiornare un modulo con gli appunti delle lezioni successive, senza rigenerarlo e senza perdere i progressi.
 // (Il percorso «../../shared» funziona sia su disco sia nel browser, dove il server serve /shared/normalize.js.)
-import { mergeModule, quoteChecker } from "../../shared/normalize.js";
+import { exampleChecker, mergeModule, quoteChecker } from "../../shared/normalize.js";
 
 /**
  * Materiali aggiunti dopo l'ultima generazione/aggiornamento. Con i moduli creati prima di questa funzione
@@ -16,7 +16,7 @@ export function pendingMaterials(exam) {
 
 /** Il sottoinsieme del modulo che serve all'AI per sapere cosa c'è già (niente risposte, spiegazioni, rubriche). */
 export const compactModule = (mod) => ({
-  topics: mod.topics.map(({ id, title, importance, summary, keyConcepts }) => ({ id, title, importance, summary, keyConcepts: keyConcepts.map((k) => k.term) })),
+  topics: mod.topics.map(({ id, title, importance, summary, keyConcepts, methods }) => ({ id, title, importance, summary, keyConcepts: keyConcepts.map((k) => k.term), methods: (methods ?? []).map((m) => m.name) })),
   flashcards: mod.flashcards.map(({ topicId, front }) => ({ topicId, front })),
   questions: mod.questions.map(({ topicId, prompt }) => ({ topicId, prompt })),
   gaps: mod.gaps ?? [],
@@ -30,7 +30,8 @@ export const compactModule = (mod) => ({
 export function applyUpdate(exam, { delta, sources = [], mode }, usedIds, now = new Date().toISOString(), { sentText = null, hasPdf = false, examRefs = null } = {}) {
   // le citazioni del docente devono essere nei materiali appena mandati (sentText); senza testo non si possono verificare
   const checkQuote = sentText != null ? quoteChecker(sentText, { hasPdf }) : null;
-  const { module, added } = mergeModule(exam.module, delta, sources, { now, summary: mode === "local" ? "append" : "replace", replaceGaps: mode !== "local", checkQuote, examRefs });
+  const checkExample = sentText != null ? exampleChecker(sentText, { hasPdf }) : null; // esercizi svolti «copiati» dai materiali
+  const { module, added } = mergeModule(exam.module, delta, sources, { now, summary: mode === "local" ? "append" : "replace", replaceGaps: mode !== "local", checkQuote, examRefs, checkExample });
   module.materialIds = [...new Set([...(exam.module.materialIds ?? exam.materials.filter((m) => !usedIds.includes(m.id)).map((m) => m.id)), ...usedIds])];
   exam.module = module;
   exam.moduleUpdatedAt = now;
@@ -40,7 +41,7 @@ export function applyUpdate(exam, { delta, sources = [], mode }, usedIds, now = 
 
 /** Frase di riepilogo per l'utente. */
 export function updateSummary(a) {
-  if (!a.topics && !a.updated && !a.flashcards && !a.questions && !a.hints && !a.examQuestions) return "Gli appunti nuovi non aggiungono contenuti che il modulo non abbia già.";
+  if (!a.topics && !a.updated && !a.flashcards && !a.questions && !a.hints && !a.examQuestions && !a.methods) return "Gli appunti nuovi non aggiungono contenuti che il modulo non abbia già.";
   const parts = [];
   if (a.topics) parts.push(`${a.topics} ${a.topics === 1 ? "argomento nuovo" : "argomenti nuovi"}`);
   if (a.updated) parts.push(`${a.updated} ${a.updated === 1 ? "argomento approfondito" : "argomenti approfonditi"}`);
@@ -48,6 +49,7 @@ export function updateSummary(a) {
   if (a.questions) parts.push(`${a.questions} ${a.questions === 1 ? "domanda" : "domande"}`);
   if (a.hints) parts.push(`${a.hints} ${a.hints === 1 ? "indicazione" : "indicazioni"} del docente sull'esame`);
   if (a.examQuestions) parts.push(`${a.examQuestions} ${a.examQuestions === 1 ? "domanda d'esame vera" : "domande d'esame vere"} nel quiz`);
+  if (a.methods) parts.push(`${a.methods} ${a.methods === 1 ? "metodo del docente" : "metodi del docente"} (esercizi guidati)`);
   return `Aggiunti: ${parts.join(", ")}. I tuoi progressi restano.`;
 }
 

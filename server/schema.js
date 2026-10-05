@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { FORMATS, KINDS, LEVELS } from "../shared/normalize.js";
 
-export { normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex, identityRefs } from "../shared/normalize.js";
+export { normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex, identityRefs, exampleChecker } from "../shared/normalize.js";
 
 // Schema del "modulo di studio" generato dall'AI. Tutti i campi sono obbligatori
 // (gli output strutturati non gestiscono bene i campi opzionali): dove un campo
@@ -21,6 +21,8 @@ export const ModuleSchema = z.object({
       commonMistakes: z.array(z.string()),
       origin: z.enum(["notes", "online", "model"]),
       sourceIds: z.array(z.string()),
+      // dagli esercizi svolti dal docente: il procedimento in passi e un esercizio svolto copiato dal materiale
+      methods: z.array(z.object({ name: z.string(), steps: z.array(z.string()), problem: z.string(), solution: z.string(), source: z.string() })),
     }),
   ),
   flashcards: z.array(
@@ -45,6 +47,7 @@ export const ModuleSchema = z.object({
       rubric: z.array(z.string()),
       examRefs: z.array(z.string()), // id «D12» delle domande d'esame che la domanda riproduce ([] se non viene da un elenco)
       followUp: z.string(), // per le domande d'esame: come incalzerebbe il docente
+      method: z.string(), // per gli esercizi: il metodo del docente che si usa (name), "" se nessuno
     }),
   ),
   gaps: z.array(z.string()),

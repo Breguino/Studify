@@ -14,7 +14,7 @@ const fake = (responses, calls) => ({
 
 const rawModule = {
   title: "T", overview: "O",
-  topics: [{ id: "a", title: "Argomento", importance: 3, difficulty: 2, summary: "s", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "online", sourceIds: ["S1"] }],
+  topics: [{ id: "a", title: "Argomento", importance: 3, difficulty: 2, summary: "s", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "online", sourceIds: ["S1"], methods: [] }],
   flashcards: [{ id: "f", topicId: "a", front: "d", back: "r", type: "definizione" }],
   questions: [], gaps: ["manca X"], examHints: [],
 };
@@ -438,8 +438,8 @@ test("writeDispensa: un capitolo per argomento, materiali come prefisso in cache
 test("buildModule: elenco di domande d'esame numerato, regola nel prompt, examRefs solo verso voci vere", async () => {
   const calls = [];
   const raw = { ...rawModule, questions: [
-    ...rawModule.questions.map((q) => ({ ...q, examRefs: [], followUp: "" })),
-    { id: "qx", topicId: rawModule.topics[0].id, kind: "open", prompt: "Cos'è l'elasticità?", options: [], correctIndex: -1, modelAnswer: "m", explanation: "", rubric: ["r"], examRefs: ["D1", "D2", "D77"], followUp: "E il ricavo?" },
+    ...rawModule.questions.map((q) => ({ ...q, examRefs: [], followUp: "", method: "" })),
+    { id: "qx", topicId: rawModule.topics[0].id, kind: "open", prompt: "Cos'è l'elasticità?", options: [], correctIndex: -1, modelAnswer: "m", explanation: "", rubric: ["r"], examRefs: ["D1", "D2", "D77"], followUp: "E il ricavo?", method: "" },
   ] };
   setClient(fake([{ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(raw) }] }], calls));
   const mod = await buildModule({
@@ -455,4 +455,22 @@ test("buildModule: elenco di domande d'esame numerato, regola nel prompt, examRe
   assert.deepEqual(q.examRefs, ["D1", "D2"], "id inesistente scartato");
   assert.equal(q.followUp, "E il ricavo?");
   assert.equal(mod.questions.filter((x) => x.examRefs).length, 1, "le altre domande restano normali");
+});
+
+test("buildModule: esercizi svolti dal docente → metodi verificati sul testo, domande con il loro metodo", async () => {
+  const calls = [];
+  const text = "Esercizio 1 — Monopolio\nDomanda P = 50 - Q, costo marginale costante MC = 10. Trovare quantità e prezzo del monopolista.\n\nMR = 50 - 2Q; MR = MC; Q = 20; P = 30.";
+  const raw = { ...rawModule, topics: [{ ...rawModule.topics[0], methods: [
+    { name: "Equilibrio del monopolista", steps: ["MR", "MR=MC", "Prezzo dalla domanda"], problem: "Domanda $P=50-Q$, costo marginale costante $MC=10$. Trovare quantità e prezzo del monopolista.", solution: "$MR=50-2Q$\n\n$Q^*=20$", source: "Es. 1" },
+    { name: "Inventato", steps: ["a", "b"], problem: "Domanda P = 120 - 4Q con costo marginale costante MC = 37: trovare quantità e prezzo del monopolista.", solution: "x", source: "" }] }],
+    questions: [{ id: "q", topicId: "a", kind: "problem", prompt: "P=80-Q, MC=20?", options: [], correctIndex: -1, modelAnswer: "a\n\nb", explanation: "", rubric: [], examRefs: [], followUp: "", method: "Equilibrio del monopolista" }] };
+  setClient(fake([{ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(raw) }] }], calls));
+  const mod = await buildModule({ exam: { name: "Micro", type: "problemi", level: 2, daysLeft: 20, language: "italiano" }, materials: [{ kind: "notes", role: "svolti", title: "Esercitazione 4", text }], research: null });
+  const prompt = calls[0].messages[0].content.at(-1).text;
+  assert.match(prompt, /<esercizi_svolti titolo="Esercitazione 4">/);
+  assert.match(prompt, /per ogni tipo di esercizio un metodo \(topic\.methods\)/);
+  assert.match(calls[0].system, /esercizi svolti dal docente \(tag esercizi_svolti\)[\s\S]*COPIATO dal materiale/);
+  assert.deepEqual(mod.topics[0].methods.map((m) => [m.name, m.verified]), [["Equilibrio del monopolista", true]], "esercizio con dati inventati scartato");
+  assert.match(mod.gaps.at(-1), /«Inventato» non corrisponde/);
+  assert.equal(mod.questions[0].method, "Equilibrio del monopolista");
 });

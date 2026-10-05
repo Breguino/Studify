@@ -24,7 +24,7 @@ function checklist(items, label) {
  * Valutazione di una risposta libera: spunta autonoma dei punti + correzione AI facoltativa.
  * Restituisce { el, score() }.
  */
-function openReview({ question, reference, rubric, answer, language }) {
+export function openReview({ question, reference, rubric, answer, language }) {
   const points = rubric.length ? rubric : ["La mia risposta era corretta e completa"];
   const list = checklist(points, "Spunta i punti che la tua risposta copriva:");
   let ai = null;

@@ -62,13 +62,55 @@ const normTopic = (t, id, validSource) => ({
   sourceIds: (t.sourceIds ?? []).filter((s) => validSource.has(s)),
 });
 
+/**
+ * Controllo degli esercizi svolti che l'AI dice di aver copiato dai materiali: le parole lunghe e soprattutto i numeri dell'esercizio
+ * devono esserci (un esempio inventato ha dati diversi). Le formule convertite in LaTeX non contano: si guardano parole e numeri.
+ * @returns {(problem: string) => boolean|null} true = trovato, false = inventato, null = non verificabile (quasi solo formule, o PDF)
+ */
+export function exampleChecker(text, { hasPdf = false } = {}) {
+  const plain = (s) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\\[a-z]+/g, " ").replace(/(\d),(\d)/g, "$1.$2").replace(/\{,\}/g, ".");
+  const words = (s) => plain(s).match(/[a-z]{5,}/g) ?? [];
+  const nums = (s) => plain(s).match(/\d+(?:\.\d+)?/g)?.filter((x) => x.length >= 2) ?? [];
+  const hayW = new Set(words(text));
+  const hayN = new Set(nums(text));
+  return (problem) => {
+    const w = words(problem);
+    const n = [...new Set(nums(problem))];
+    if (w.length < 4 && n.length < 2) return null;
+    const okW = !w.length || w.filter((x) => hayW.has(x)).length / w.length >= 0.6;
+    const okN = n.length < 2 || n.filter((x) => hayN.has(x)).length / n.length >= 0.6;
+    if (okW && okN) return true;
+    return hasPdf ? null : false;
+  };
+}
+
+/** Metodi del docente di un argomento: nomi unici, almeno 2 passaggi; un esercizio svolto non trovato nei materiali fa scartare il metodo. */
+function normMethods(list, check) {
+  const methods = [];
+  const dropped = [];
+  const seen = new Set();
+  for (const x of Array.isArray(list) ? list : []) {
+    const name = tex(x?.name).slice(0, 120);
+    const steps = (Array.isArray(x?.steps) ? x.steps : []).map(tex).filter(Boolean).slice(0, 10).map((st) => st.slice(0, 500));
+    if (!name || steps.length < 2 || seen.has(key(name))) continue;
+    const problem = tex(x?.problem).slice(0, 3000);
+    const ok = check && problem ? check(problem) : null;
+    if (ok === false) { dropped.push(name); continue; }
+    seen.add(key(name));
+    methods.push({ name, steps, problem, solution: problem ? tex(x?.solution).slice(0, 8000) : "", source: str(x?.source).slice(0, 160), verified: ok === true });
+  }
+  return { methods: methods.slice(0, 4), dropped };
+}
+
+const droppedGap = (names) => names.map((n) => `Il metodo «${n}» non corrisponde agli esercizi svolti caricati ed è stato scartato: controlla che il materiale sia completo.`);
+
 const normCard = (c, id, topicId) => (topicId && str(c.front) && str(c.back) ? { id, topicId, front: tex(c.front), back: tex(c.back), type: c.type } : null);
 
 /**
  * `refs` (Map «D12» → chiave della domanda d'esame): gli examRefs validi diventano chiavi, gli altri si scartano.
  * examRefs e followUp ci sono solo nelle domande che vengono da un elenco di domande d'esame.
  */
-function normQuestion(q, id, topicId, refs = null) {
+function normQuestion(q, id, topicId, refs = null, methodOf = null) {
   if (!topicId || !str(q.prompt)) return null;
   const options = (q.options ?? []).map(tex).filter(Boolean);
   const correctIndex = Math.round(q.correctIndex);
@@ -87,8 +129,15 @@ function normQuestion(q, id, topicId, refs = null) {
     rubric: (q.rubric ?? []).map(tex).filter(Boolean),
     ...(examRefs.length ? { examRefs } : {}),
     ...(followUp ? { followUp } : {}),
+    ...(methodOf && q.kind !== "mcq" && methodOf(topicId, q.method) ? { method: methodOf(topicId, q.method) } : {}),
   };
 }
+
+/** (argomento, nome) → il nome del metodo com'è nell'argomento, null se l'argomento non ha quel metodo. */
+const methodLookup = (topics) => {
+  const by = new Map(topics.map((t) => [t.id, new Map((t.methods ?? []).map((m) => [key(m.name), m.name]))]));
+  return (topicId, name) => (typeof name === "string" && name.trim() ? by.get(topicId)?.get(key(name)) ?? null : null);
+};
 
 /** Gli id «D12» delle domande d'esame presenti nei materiali (righe «D12. …» dei materiali di tipo domande), id → riga. */
 export function examQuestionLines(materials) {
@@ -141,16 +190,22 @@ function normHints(list, idMap, check) {
  * `sources` è la lista [{id,title,url}] fornita al modello: gli id sconosciuti vengono scartati.
  * `checkQuote` (vedi quoteChecker) verifica le citazioni del docente in examHints.
  */
-export function normalizeModule(raw, sources = [], { checkQuote = null, examRefs = null } = {}) {
+export function normalizeModule(raw, sources = [], { checkQuote = null, examRefs = null, checkExample = null } = {}) {
   const validSource = new Set(sources.map((s) => s.id));
   const idMap = new Map();
   const topics = [];
+  const dropped = [];
   for (const t of raw.topics ?? []) {
     if (!str(t.title)) continue;
     const id = `t${topics.length + 1}`;
     idMap.set(t.id, id);
-    topics.push(normTopic(t, id, validSource));
+    const topic = normTopic(t, id, validSource);
+    const m = normMethods(t.methods, checkExample);
+    if (m.methods.length) topic.methods = m.methods;
+    dropped.push(...m.dropped);
+    topics.push(topic);
   }
+  const methodOf = methodLookup(topics);
   const flashcards = [];
   for (const c of raw.flashcards ?? []) {
     const card = normCard(c, `c${flashcards.length + 1}`, idMap.get(c.topicId));
@@ -158,7 +213,7 @@ export function normalizeModule(raw, sources = [], { checkQuote = null, examRefs
   }
   const questions = [];
   for (const q of raw.questions ?? []) {
-    const qq = normQuestion(q, `q${questions.length + 1}`, idMap.get(q.topicId), examRefs);
+    const qq = normQuestion(q, `q${questions.length + 1}`, idMap.get(q.topicId), examRefs, methodOf);
     if (qq) questions.push(qq);
   }
   return {
@@ -167,7 +222,7 @@ export function normalizeModule(raw, sources = [], { checkQuote = null, examRefs
     topics,
     flashcards,
     questions,
-    gaps: (raw.gaps ?? []).map(tex).filter(Boolean),
+    gaps: [...(raw.gaps ?? []).map(tex).filter(Boolean), ...droppedGap(dropped)],
     examHints: normHints(raw.examHints, idMap, checkQuote),
     sources,
   };
@@ -185,7 +240,7 @@ const nextNum = (items, prefix) => items.reduce((n, x) => Math.max(n, Number(Str
  * attuali e restituisce l'elenco aggiornato) se `replaceGaps`, altrimenti si aggiungono.
  * @returns {{module: object, added: {topics: number, updated: number, flashcards: number, questions: number}}}
  */
-export function mergeModule(base, raw, sources = [], { now = new Date().toISOString(), replaceGaps = true, summary = "replace", checkQuote = null, examRefs = null } = {}) {
+export function mergeModule(base, raw, sources = [], { now = new Date().toISOString(), replaceGaps = true, summary = "replace", checkQuote = null, examRefs = null, checkExample = null } = {}) {
   const mod = structuredClone(base);
   mod.sources ??= [];
   // fonti nuove: id rinumerati se si sovrappongono a quelli già presenti
@@ -209,11 +264,18 @@ export function mergeModule(base, raw, sources = [], { now = new Date().toISOStr
   const fresh = new Set(); // argomenti creati da questa fusione
   let tNext = nextNum(mod.topics, "t");
   let addedTopics = 0;
+  let addedMethods = 0;
+  const droppedMethods = [];
   for (const t of raw.topics ?? []) {
     if (!str(t.title) && !byId.has(t.id)) continue;
     const target = byId.get(t.id) ?? byTitle.get(key(t.title));
     const n = normTopic({ ...t, title: t.title || target?.title }, "", validSource);
+    const nm = normMethods(t.methods, checkExample);
+    droppedMethods.push(...nm.dropped);
     if (target) {
+      const have = new Set((target.methods ?? []).map((x) => key(x.name)));
+      const fresh = nm.methods.filter((x) => !have.has(key(x.name)));
+      if (fresh.length) { target.methods = [...(target.methods ?? []), ...fresh]; addedMethods += fresh.length; updated.add(target.id); }
       idMap.set(t.id, target.id);
       // "append": chi non vede il riassunto attuale (modalità base) lo completa invece di sostituirlo
       if (n.summary) target.summary = summary === "append" && target.summary && !target.summary.includes(n.summary) ? `${target.summary} ${n.summary}` : n.summary;
@@ -229,7 +291,8 @@ export function mergeModule(base, raw, sources = [], { now = new Date().toISOStr
       continue;
     }
     const id = `t${tNext++}`;
-    const topic = { ...n, id, sourceIds: remapSources(n.sourceIds), addedAt: now };
+    const topic = { ...n, id, sourceIds: remapSources(n.sourceIds), addedAt: now, ...(nm.methods.length ? { methods: nm.methods } : {}) };
+    addedMethods += nm.methods.length;
     mod.topics.push(topic);
     fresh.add(id);
     byId.set(id, topic);
@@ -250,13 +313,14 @@ export function mergeModule(base, raw, sources = [], { now = new Date().toISOStr
     addedCards++;
     updated.add(card.topicId);
   }
+  const methodOf = methodLookup(mod.topics);
   const qKeys = new Map(mod.questions.map((q) => [key(q.prompt), q]));
   let qNext = nextNum(mod.questions, "q");
   let addedQuestions = 0;
   let examLinked = 0; // domande d'esame entrate nel quiz (nuove o già presenti)
   let addedExam = 0;
   for (const q of raw.questions ?? []) {
-    const qq = normQuestion(q, `q${qNext}`, idMap.get(q.topicId), examRefs);
+    const qq = normQuestion(q, `q${qNext}`, idMap.get(q.topicId), examRefs, methodOf);
     if (!qq) continue;
     const same = qKeys.get(key(qq.prompt));
     if (same) {
@@ -284,10 +348,10 @@ export function mergeModule(base, raw, sources = [], { now = new Date().toISOStr
   const newHints = hints.filter((x) => !haveHints.has(flatQ(x.quote)));
   mod.examHints = [...(mod.examHints ?? []), ...newHints];
 
-  const gaps = (raw.gaps ?? []).map(tex).filter(Boolean);
+  const gaps = [...(raw.gaps ?? []).map(tex).filter(Boolean), ...droppedGap(droppedMethods)];
   if (replaceGaps && Array.isArray(raw.gaps)) mod.gaps = gaps;
   else mod.gaps = [...new Set([...(mod.gaps ?? []), ...gaps])];
-  return { module: mod, added: { topics: addedTopics, updated: updated.size, flashcards: addedCards, questions: addedQuestions - addedExam, hints: newHints.length, examQuestions: examLinked } };
+  return { module: mod, added: { topics: addedTopics, updated: updated.size, flashcards: addedCards, questions: addedQuestions - addedExam, hints: newHints.length, examQuestions: examLinked, ...(addedMethods ? { methods: addedMethods } : {}) } };
 }
 
 /** Piano di studi: nomi unici, valori nei range, URL accettati solo se visti davvero nella ricerca. */

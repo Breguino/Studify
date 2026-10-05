@@ -56,7 +56,8 @@ export function buildPlan({ examDate, examType, level, hoursPerDay, topics, lear
   const add = (day, t) => day.tasks.push({ ...t, id: `${day.date}|${t.kind}|${t.key ?? ""}`, date: day.date });
 
   // --- argomenti da studiare, con selezione per importanza se il tempo non basta
-  const pending = topics.filter((t) => !learned[t.id]).map((t) => ({ ...t, minutes: topicMinutes(t, level) }));
+  // load = studio + esercizi guidati sui metodi del docente (25 min ciascuno, al massimo 2): conta per capacità e distribuzione
+  const pending = topics.filter((t) => !learned[t.id]).map((t) => ({ ...t, minutes: topicMinutes(t, level), load: topicMinutes(t, level) + 25 * Math.min(2, t.methods?.length ?? 0) }));
   // Nei giorni quasi pieni di lezioni (meno del 30% del tempo libero) non si introducono argomenti nuovi.
   const learnIdx = days.slice(0, ph.learn).map((_, i) => i);
   let eligible = learnIdx.filter((i) => days[i].avail >= budget * 0.3);
@@ -64,14 +65,14 @@ export function buildPlan({ examDate, examType, level, hoursPerDay, topics, lear
   const capacity = eligible.reduce((sum, i) => sum + days[i].usable * 0.6, 0);
   let selected = pending;
   let skipped = [];
-  if (pending.reduce((s, t) => s + t.minutes, 0) > capacity) {
+  if (pending.reduce((s, t) => s + t.load, 0) > capacity) {
     const byImportance = [...pending].sort((a, b) => b.importance - a.importance || topics.indexOf(a) - topics.indexOf(b));
     const keep = new Set();
     let used = 0;
     for (const t of byImportance) {
-      if (used + t.minutes <= capacity || keep.size === 0) {
+      if (used + t.load <= capacity || keep.size === 0) {
         keep.add(t.id);
-        used += t.minutes;
+        used += t.load;
       }
     }
     selected = pending.filter((t) => keep.has(t.id));
@@ -79,17 +80,17 @@ export function buildPlan({ examDate, examType, level, hoursPerDay, topics, lear
   }
 
   // --- distribuzione sui giorni di comprensione (in ordine di programma), più argomenti nei giorni più liberi
-  const total = selected.reduce((s, t) => s + t.minutes, 0);
+  const total = selected.reduce((s, t) => s + t.load, 0);
   const weights = eligible.map((i) => days[i].usable);
   const wsum = weights.reduce((a, b) => a + b, 0) || 1;
   let cum = 0;
   const learnByDay = Array.from({ length: ph.learn }, () => []);
   for (const t of selected) {
-    const pos = ((cum + t.minutes / 2) / (total || 1)) * wsum;
+    const pos = ((cum + t.load / 2) / (total || 1)) * wsum;
     let k = 0;
     for (let acc = weights[0] ?? 0; k < eligible.length - 1 && acc < pos; acc += weights[k + 1]) k++;
     learnByDay[eligible[k] ?? 0].push(t);
-    cum += t.minutes;
+    cum += t.load;
   }
 
   const lastLearnDay = ph.learn - 1;
@@ -98,8 +99,12 @@ export function buildPlan({ examDate, examType, level, hoursPerDay, topics, lear
     add(day, { kind: "flash", key: "", title: "Flashcard del giorno", minutes: isLight ? 10 : 15, method: "retrieval" });
 
     if (day.phase === "learn") {
-      for (const t of learnByDay[i])
+      for (const t of learnByDay[i]) {
         add(day, { kind: "learn", key: t.id, topicId: t.id, title: `Studia: ${t.title}`, minutes: t.minutes, method: level <= 2 ? "firstpass" : "elaborate" });
+        // esercizi svolti dal docente: subito dopo averlo studiato, il suo metodo (esempio → completamento → da solo)
+        (t.methods ?? []).slice(0, 2).forEach((m, k) =>
+          add(day, { kind: "guided", key: `${t.id}-${k}`, topicId: t.id, methodIndex: k, title: `Esercizi guidati: ${m.name} (metodo del docente)`, minutes: 25, method: "practice" }));
+      }
       const prev = i > 0 ? learnByDay[i - 1] : [];
       if (prev.length)
         add(day, { kind: "quiz", key: "prev", mode: "topics", topicIds: prev.map((t) => t.id), title: "Quiz sugli argomenti di ieri", minutes: 15, method: "practice" });

@@ -172,7 +172,19 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
      almeno 10 domande) diventa «centrale»; nel piano c'è un giro sulle domande d'esame nei giorni di consolidamento e la
      simulazione orale usa quelle vere. Nella dispensa ogni capitolo ha le sue «Domande uscite all'esame», con le risposte in appendice.
      Un PDF con l'elenco (versione con server) viene letto come testo; una foto si trascrive come gli appunti a mano.
-6. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
+6. **Esercizi svolti dal docente** (tipo «Esercizi svolti dal docente», riconosciuto da «svolti», «risolti», «svolgimenti»): non
+   sono esercizi da fare ma il **metodo** che il docente si aspetta all'esame. L'AI ne ricava, per ogni tipo di esercizio, il
+   procedimento in passi generici e copia un suo esercizio svolto (testo e svolgimento); un esercizio «copiato» le cui parole e i cui
+   numeri non sono nei materiali viene scartato e segnalato tra le lacune (un esempio inventato ha dati diversi). Gli esercizi del
+   quiz dello stesso tipo hanno dati diversi, lo stesso procedimento e la stessa notazione. Nell'argomento c'è «Come lo risolve il
+   docente» e gli **esercizi guidati**, secondo gli studi sugli esempi svolti:
+   - **esempio del docente**, un passaggio alla volta, chiedendosi il perché di ognuno (autospiegazione); poi il metodo in generale;
+   - **svolgimento da completare**: un esercizio simile con i primi passaggi, gli altri li scrivi tu;
+   - **da solo**, con il metodo come aiuto se ti blocchi (un esercizio riuscito con l'aiuto conta al massimo 70%).
+   Chi è già bravo (livello 4-5, o esercizi dell'argomento già riusciti) parte direttamente dall'esercizio da solo: a chi sa impostare
+   gli esercizi gli esempi svolti servono poco (effetto di inversione dell'esperienza). Nel piano gli esercizi guidati seguono lo
+   studio dell'argomento; la dispensa usa gli esercizi del docente come esempi svolti.
+7. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
 
 | Sessione | Cosa fa |
 |---|---|
@@ -209,6 +221,8 @@ una prima lettura guidata e da esempi svolti (expertise reversal); con pochi gio
   La frequenza degli argomenti su poche prove è rumorosa, e prove di un altro docente o di un programma vecchio possono ingannare.
   Gli elenchi di domande raccolti dagli studenti riflettono ciò che chi li ha scritti ricorda: i conteggi sono indicativi. E sapere
   a memoria le risposte dell'elenco non basta all'orale, dove il docente incalza.
+- **Esercizi svolti**: leggere uno svolgimento dà l'impressione di saperlo rifare. Per questo gli esercizi guidati finiscono sempre
+  con un esercizio da solo. Da scansioni o appunti a mano le formule possono essere trascritte male: controllale.
 - **Modalità base** (senza chiave API): argomenti e flashcard ricavati euristicamente dalle definizioni nei tuoi appunti testuali; niente quiz, PDF, né ricerca.
 - Un solo utente per browser, nessun account né sincronizzazione (usa «Dati → Esporta backup»).
 
@@ -232,7 +246,8 @@ shared/           prompts.js, normalize.js: usati sia dal server sia dalla pagin
 artifact/         versione pagina Claude: generate.js (sample), backend.js (db), api.js, entry.js, template, fake-claude (prove)
 scripts/          build-artifact.mjs (esbuild)
 public/js/        logica pura (testata): dates, methods, srs, planner, progress, local-builder, tabular (CSV/xlsx), importers, timetable,
-                  lessons (lezioni e prove), past-exams (prove, frequenze, voto), exam-questions (elenchi di domande d'esame)
+                  lessons (lezioni e prove), past-exams (prove, frequenze, voto), exam-questions (elenchi di domande d'esame),
+                  worked (metodi del docente ed esercizi guidati)
                   stato/UI: store (IndexedDB), domain, api, ui, views/*
 public/demo/      modulo demo (Microeconomia)
 test/             node --test: logica pura + client AI con SDK simulato

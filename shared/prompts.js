@@ -66,6 +66,15 @@ export const MODULE_PRINCIPLES = `Principi inderogabili:
      l'importanza degli argomenti su cui vertono) e sono il modello delle domande kind="problem": stesso tipo di esercizio, con
      svolgimento passo-passo in modelAnswer. Se la soluzione è nei materiali, seguila; se non c'è, risolvilo tu e scrivi in
      explanation "Svolgimento non presente nei materiali: verificalo".
+   - esercizi svolti dal docente (tag esercizi_svolti): il procedimento del docente è quello che si aspetta all'esame (ordine dei
+     passaggi, notazione, come si giustifica e si presenta il risultato). Per ogni TIPO di esercizio svolto ricava un metodo
+     (topic.methods, al massimo 3 per argomento): name = il tipo di esercizio in poche parole («Equilibrio del monopolista»);
+     steps = i passaggi del docente nell'ordine, generici (validi per altri dati), 3-8 frasi brevi con le formule in LaTeX; problem =
+     il testo di UN esercizio svolto di quel tipo, COPIATO dal materiale; solution = lo svolgimento del docente di quell'esercizio,
+     COPIATO (formule in LaTeX, un passaggio per paragrafo); source = titolo del materiale e numero dell'esercizio. Non inventare
+     esercizi: se non c'è un esercizio svolto, niente metodo. Le domande kind="problem" sugli stessi tipi hanno dati diversi, sono
+     svolte con lo stesso procedimento e la stessa notazione (un passaggio per paragrafo in modelAnswer) e method = il name del metodo.
+     Non farne flashcard. Per gli argomenti senza esercizi svolti: methods = []; per le altre domande: method = "".
    - temi d'esame (prove degli appelli passati): sono la prova più diretta di cosa chiede l'esame. Alza l'importanza degli argomenti
      che ricorrono e modella domande e esercizi sul loro stile (tipo di richiesta, livello, formulazione). NON copiarli nel quiz e
      non farne flashcard: lo studente li tiene per le simulazioni a tempo. Crea esercizi dello stesso tipo con dati e contesto diversi.
@@ -160,6 +169,8 @@ export function moduleDigest(mod, maxChars = 60_000) {
       if (t.summary) out.push(`Riassunto: ${clip(t.summary, 900)}`);
       const terms = (t.keyConcepts ?? []).map((k) => (typeof k === "string" ? k : k.term)).filter(Boolean);
       if (terms.length) out.push(`Concetti: ${terms.map((x) => clip(x, 80)).join("; ")}`);
+      const methods = (t.methods ?? []).map((x) => (typeof x === "string" ? x : x.name)).filter(Boolean);
+      if (methods.length) out.push(`Metodi del docente già presenti: ${methods.map((x) => clip(x, 80)).join("; ")}`);
       const cards = (mod.flashcards ?? []).filter((c) => c.topicId === t.id);
       if (cards.length) out.push(`Carte già presenti:\n${cards.slice(0, cardsPerTopic).map((c) => `- ${clip(c.front, 140)}`).join("\n")}${cards.length > cardsPerTopic ? `\n- … e altre ${cards.length - cardsPerTopic}` : ""}`);
       const qs = questions ? (mod.questions ?? []).filter((q) => q.topicId === t.id) : [];
@@ -186,6 +197,8 @@ uno storico di ripasso. Dai MATERIALI NUOVI ricava SOLO ciò che manca, senza ri
   già presenti, nemmeno con parole diverse;
 - gaps = l'elenco AGGIORNATO delle lacune dell'intero modulo: togli quelle che i materiali nuovi colmano, aggiungi le nuove;
 - examHints = SOLO le indicazioni sull'esame che si trovano nei materiali nuovi;
+- methods (esercizi svolti dal docente nei materiali nuovi): SOLO i metodi nuovi; un argomento esistente che ne riceve va riportato con
+  il suo id; le domande kind="problem" su quei metodi hanno method = il nome del metodo;
 - domande d'esame (voci con id D…) nei materiali nuovi: creale tutte come domande nuove con i loro examRefs, anche se il modulo ne ha
   di simili (il testo deve essere quello dell'esame), sotto l'argomento esistente a cui si riferiscono;
 - title e overview: ripeti quelli del modulo (non vengono cambiati);
@@ -199,8 +212,8 @@ evidence = la frase sulla modalità d'esame COPIATA alla lettera dal testo (max 
 details = in breve durata, parti, prove intermedie, orale facoltativo. caveats: differenze tra docenti/canali, anno accademico vecchio, dubbi.`;
 
 /** Tag con cui ogni tipo di materiale testuale entra nel prompt. */
-export const MATERIAL_TAG = { appunti: "appunti_studente", libro: "libro", dispense: "dispense", esercizi: "esercizi", esami: "temi_esame", domande: "domande_esame", sbobine: "sbobina", altro: "materiale" };
-export const MATERIAL_LABEL = { appunti: "Appunti", libro: "Libro", dispense: "Dispense", esercizi: "Esercizi", esami: "Temi d'esame", domande: "Domande d'esame", sbobine: "Sbobine", altro: "Materiale" };
+export const MATERIAL_TAG = { appunti: "appunti_studente", libro: "libro", dispense: "dispense", esercizi: "esercizi", svolti: "esercizi_svolti", esami: "temi_esame", domande: "domande_esame", sbobine: "sbobina", altro: "materiale" };
+export const MATERIAL_LABEL = { appunti: "Appunti", libro: "Libro", dispense: "Dispense", esercizi: "Esercizi", svolti: "Esercizi svolti dal docente", esami: "Temi d'esame", domande: "Domande d'esame", sbobine: "Sbobine", altro: "Materiale" };
 
 /** Blocco di testo di un materiale per il prompt (pagine indicate se è un estratto). */
 export function materialText(m) {
@@ -215,6 +228,10 @@ export function materialText(m) {
 export const EXERCISES_TASK = `- Ci sono materiali di tipo esercizi: almeno metà delle domande siano kind="problem" modellate su quegli esercizi (stesso tipo, dati diversi
   o gli stessi esercizi se sono tipici d'esame), distribuite sugli argomenti a cui si riferiscono.`;
 
+/** Istruzione aggiuntiva quando tra i materiali ci sono esercizi svolti dal docente. */
+export const WORKED_TASK = `- Ci sono esercizi svolti dal docente: per ogni tipo di esercizio un metodo (topic.methods) con un esercizio svolto copiato, e almeno
+  2 domande kind="problem" per metodo, con dati diversi, svolte con il procedimento del docente e con method = il nome del metodo.`;
+
 /** Istruzione aggiuntiva quando tra i materiali ci sono temi d'esame passati. */
 export const EXAMS_TASK = `- Ci sono temi d'esame passati: le domande imitino il loro stile (per gli esercizi kind="problem" con dati diversi, mai copiati), e gli
   argomenti che vi ricorrono abbiano importance 3. I temi d'esame restano intatti per le simulazioni.`;
@@ -224,7 +241,7 @@ export const EXAM_QUESTIONS_TASK = `- Ci sono domande d'esame (voci con id D…)
   aggiunta alle altre domande degli argomenti; ogni id D… deve comparire negli examRefs di una question.`;
 
 /** Il compito aggiuntivo per i tipi di materiale presenti. */
-export const practiceTasks = (roles) => [roles.includes("esercizi") ? EXERCISES_TASK : "", roles.includes("esami") ? EXAMS_TASK : "", roles.includes("domande") ? EXAM_QUESTIONS_TASK : ""].filter(Boolean).join("\n");
+export const practiceTasks = (roles) => [roles.includes("esercizi") ? EXERCISES_TASK : "", roles.includes("svolti") ? WORKED_TASK : "", roles.includes("esami") ? EXAMS_TASK : "", roles.includes("domande") ? EXAM_QUESTIONS_TASK : ""].filter(Boolean).join("\n");
 
 /** Per le risposte JSON scritte come testo (pagina Claude): i backslash del LaTeX vanno raddoppiati, altrimenti \frac diventa un carattere di controllo. */
 export const JSON_LATEX_RULE = String.raw`Nel JSON ogni backslash del LaTeX va scritto doppio: "$\\frac{a}{b}$", "$\\beta_1$" (un solo backslash, come in "\frac", nel JSON diventa un carattere di controllo).`;
@@ -280,6 +297,8 @@ Regole:
   materiali manca, aggiungilo in un riquadro «> Integrazione (non è nei tuoi materiali): …». Non inventare dati, esempi d'esame o citazioni.
 - FONTI. Dopo i passaggi importanti indica tra parentesi quadre da dove vengono: [Libro p. 45], [Slide 12], [Sbobine, lez. 3],
   [Appunti]. Se due fonti dicono cose diverse, scrivilo: «> Attenzione: le sbobine dicono…, il libro…».
+- ESERCIZI SVOLTI DAL DOCENTE: nell'«Esempio svolto» usa quelli, con lo stesso procedimento e la stessa notazione del docente, e prima
+  dei passaggi scrivi il metodo in passi generici («Per trovare l'equilibrio del monopolista: 1. … 2. …»).
 - TEMI D'ESAME passati: non risolverli e non copiarli nella dispensa (lo studente li usa per le simulazioni a tempo); puoi dire che tipo
   di esercizio chiedono sull'argomento («Negli appelli: calcolo dell'elasticità da una funzione di domanda»).
 - SBOBINE: togli il parlato (ripetizioni, battute, avvisi) e tieni la spiegazione; i termini o le formule sospette vanno controllati

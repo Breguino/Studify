@@ -13,6 +13,7 @@ import { hubView, topicView } from "./views/hub.js";
 import { flashView } from "./views/flash.js";
 import { explainView, quizView } from "./views/quiz.js";
 import { simView } from "./views/sim.js";
+import { guidedView } from "./views/guided.js";
 
 const main = document.getElementById("main");
 
@@ -38,6 +39,7 @@ function route() {
       case "explain": return explainView(exam, c, query);
       case "topic": return topicView(exam, c, query);
       case "sim": return simView(exam, query);
+      case "guided": return guidedView(exam, c, query);
       case "edit": return examFormView(exam);
       default: return hubView(exam, b || "today");
     }

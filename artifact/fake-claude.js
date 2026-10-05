@@ -3,6 +3,7 @@
 import demo from "../public/demo/module.json";
 import { demoAnalysis, demoGrade } from "../public/js/past-exams.js";
 import { demoExamQuestions } from "../public/js/exam-questions.js";
+import { demoMethods } from "../public/js/worked.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const calls = (window.__sampleCalls = []);
@@ -39,7 +40,21 @@ const examIdsByTopic = (prompt, topics) => {
   return out;
 };
 
+// Esercizi svolti dal docente nel prompt → nomi dei metodi per argomento.
+const workedIn = (prompt) => [...prompt.matchAll(/<esercizi_svolti[^>]*>\n([\s\S]*?)\n<\/esercizi_svolti>/g)].map((m) => m[1]).join("\n\n");
+const methodNamesByTopic = (prompt) => {
+  const out = new Map();
+  for (const w of demoMethods(workedIn(prompt), demo.topics)) out.set(w.topicId, [...(out.get(w.topicId) ?? []), w.method.name]);
+  return out;
+};
+
 const answer = (prompt) => {
+  if (prompt.includes("METODI DEL DOCENTE DA RICAVARE")) {
+    const names = [...prompt.matchAll(/«([^»]+)»/g)].map((m) => m[1]);
+    const real = demoMethods(workedIn(prompt), demo.topics).map((w) => w.method).filter((m) => names.includes(m.name));
+    // un metodo con un esercizio inventato (dati che nei materiali non ci sono): l'app deve scartarlo
+    return { methods: [...real, { name: "Metodo inventato", steps: ["Primo passo", "Secondo passo"], problem: "Con costo totale C = 9999 + 777Q e prezzo 4321 trova la quantità che massimizza il profitto.", solution: "Q = 12", source: "Esercizio 99" }] };
+  }
   if (prompt.includes("DOMANDE D'ESAME DA PREPARARE")) {
     const list = prompt.split("<domande_esame_argomento>")[1].split("</domande_esame_argomento>")[0];
     const qs = demoExamQuestions(list, [{ id: "x", title: "x" }]).map(({ topicId, ...q }) => ({
@@ -79,6 +94,9 @@ const answer = (prompt) => {
     return { found: !!sentence, format: /eserciz/i.test(sentence) ? "problemi" : "scritto", evidence: sentence.trim(), details: /facoltativ/i.test(text) ? "Orale facoltativo (finto)." : "", url: "", academicYear: "2026-27", teacher: "", caveats: [] };
   }
   if (prompt.includes("<modulo_esistente>")) {
+    const worked = methodNamesByTopic(prompt);
+    if (worked.size) // esercizi svolti: gli argomenti esistenti su cui il docente svolge esercizi
+      return { examHints: [], gaps: demo.gaps, topics: [...worked].map(([id, names]) => ({ id, title: demo.topics.find((t) => t.id === id).title, importance: 3, difficulty: 2, summary: "", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "", methodNames: names })) };
     const byTopic = examIdsByTopic(prompt.split("Materiali NUOVI")[1] ?? "", demo.topics);
     if (byTopic.size) // solo un elenco di domande d'esame: gli argomenti esistenti a cui si riferiscono, senza riassunto nuovo
       return { examHints: [], gaps: demo.gaps, topics: [...byTopic].map(([id, ids]) => ({ id, title: demo.topics.find((t) => t.id === id).title, importance: 3, difficulty: 2, summary: "", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "", examQuestionIds: ids })) };
@@ -89,9 +107,13 @@ const answer = (prompt) => {
   if (prompt.includes("<argomento>")) {
     const t = JSON.parse(prompt.split("<argomento>")[1].split("</argomento>")[0]);
     const topic = demo.topics.find((x) => x.title === t.title);
+    // con i metodi del docente: 2 esercizi per metodo, stesso procedimento, un passaggio per paragrafo
+    const methods = [...(prompt.split("<metodi_del_docente>")[1]?.split("</metodi_del_docente>")[0] ?? "").matchAll(/^### (.+)$/gm)].map((m) => m[1]);
+    const worked = methods.flatMap((name) => [1, 2].map((k) => ({ kind: "problem", method: name, prompt: `Esercizio ${k} sul metodo «${name}»: la domanda è $Q=${80 + 10 * k}-2P$, trova l'elasticità in $P=${10 * k}$.`, options: [], correctIndex: -1,
+      modelAnswer: `Quantità nel punto: $Q=${80 + 10 * k}-${20 * k}=${80 - 10 * k}$.\n\nDerivata: $\\dfrac{dQ}{dP}=-2$.\n\n$$\\varepsilon_P=\\left|-2\\cdot\\frac{${10 * k}}{${80 - 10 * k}}\\right|$$\n\nConfronta con 1 per dire se è elastica.`, explanation: "", rubric: ["Calcola Q nel punto", "Derivata", "Formula dell'elasticità", "Conclusione"] })));
     if (!topic || prompt.includes("<carte_esistenti>")) return {
       flashcards: [1, 2, 3].map((i) => ({ front: `${t.title}: domanda nuova ${i}?`, back: `Risposta ${i}`, type: "definizione" })),
-      questions: [{ kind: "open", prompt: `Spiega ${t.title} con un esempio.`, options: [], correctIndex: -1, modelAnswer: "…", explanation: "…", rubric: ["definizione", "esempio"] }],
+      questions: [{ kind: "open", prompt: `Spiega ${t.title} con un esempio.`, options: [], correctIndex: -1, modelAnswer: "…", explanation: "…", rubric: ["definizione", "esempio"] }, ...worked],
     };
     return {
       flashcards: demo.flashcards.filter((c) => c.topicId === topic.id).map(({ front, back, type }) => ({ front, back, type })),
@@ -99,7 +121,8 @@ const answer = (prompt) => {
     };
   }
   const byTopic = examIdsByTopic(prompt, demo.topics);
-  return { title: demo.title, overview: demo.overview, gaps: demo.gaps, examHints: hintsFrom(prompt), topics: demo.topics.map((t) => ({ ...t, excerpt: "estratto dagli appunti", examQuestionIds: byTopic.get(t.id) ?? [] })) };
+  const worked = methodNamesByTopic(prompt);
+  return { title: demo.title, overview: demo.overview, gaps: demo.gaps, examHints: hintsFrom(prompt), topics: demo.topics.map((t) => ({ ...t, excerpt: "estratto dagli appunti", examQuestionIds: byTopic.get(t.id) ?? [], methodNames: worked.get(t.id) ?? [] })) };
 };
 
 // Trascrizione delle pagine (immagini): risponde con i marcatori e una formula in LaTeX per pagina.
