@@ -152,7 +152,7 @@ const str = (v, max = 500) => (typeof v === "string" ? v.slice(0, max) : "");
 function parseMaterials(body) {
   const materials = (Array.isArray(body.materials) ? body.materials : []).slice(0, 40).map((m) => ({
     kind: ["pdf", "notes", "web"].includes(m.kind) ? m.kind : "notes",
-    role: ["appunti", "libro", "dispense", "esercizi", "svolti", "esami", "domande", "sbobine", "altro"].includes(m.role) ? m.role : "appunti",
+    role: ["appunti", "libro", "slide", "dispense", "esercizi", "svolti", "esami", "domande", "sbobine", "altro"].includes(m.role) ? m.role : "appunti",
     unit: ["lezioni", "prove"].includes(m.unit) ? m.unit : "pagine",
     year: str(m.year, 20),
     pages: /^\d{1,4}-\d{1,4}$/.test(m.pages ?? "") ? m.pages : "",

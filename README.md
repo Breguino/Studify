@@ -87,7 +87,7 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
    1 CFU = 25 ore di lavoro complessivo, lezioni comprese, quindi circa 15-18 ore di studio individuale per CFU partendo da zero.
    È una stima, non una regola (chi ha studiato durante il semestre ne usa meno), ma rende visibile quando una settimana per un
    esame da 9 CFU copre una piccola parte del lavoro. Segnala anche le finestre che si sovrappongono con altri esami.
-2. **Porta i materiali**: carica o incolla **libro, dispense/slide, esercizi e appunti** (`.pdf`, `.docx`, `.pptx`, `.txt`, `.md`),
+2. **Porta i materiali**: carica o incolla **libro, slide, dispense, esercizi e appunti** (`.pdf`, `.docx`, `.pptx`, `.txt`, `.md`),
    oppure «Cerca online con l'AI» (ricerca web con fonti e link, che puoi leggere ed eliminare prima di usarla).
    - Ogni materiale ha un **tipo** (indovinato dal nome del file, modificabile) che cambia come l'AI lo usa: gli **appunti** dicono
      cosa ha sottolineato il docente (importanza), **libro e dispense** sono la fonte per definizioni e approfondimenti, gli
@@ -184,7 +184,17 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
    Chi è già bravo (livello 4-5, o esercizi dell'argomento già riusciti) parte direttamente dall'esercizio da solo: a chi sa impostare
    gli esercizi gli esempi svolti servono poco (effetto di inversione dell'esperienza). Nel piano gli esercizi guidati seguono lo
    studio dell'argomento; la dispensa usa gli esercizi del docente come esempi svolti.
-7. **Esercitazioni con le soluzioni** (tipo «Esercizi»): l'app divide il testo in esercizi («Esercizio 3», o «1.», «2.» consecutivi)
+7. **Slide del docente** (tipo «Slide del docente», riconosciuto da «slide», «lucidi», «presentazione» e dai file .pptx): sono la traccia
+   del corso, cioè quali argomenti fa il docente e in che ordine, e ciò su cui insiste, ma sono schematiche. L'AI segue il loro ordine
+   per gli argomenti, prende le spiegazioni da libro, dispense, sbobine e appunti e segnala tra le lacune gli argomenti che sono **solo
+   sulle slide**; nella dispensa le spiega per esteso citando [Slide n]. Da un PowerPoint l'app legge:
+   - le slide **nell'ordine della presentazione** (non dei file: una slide spostata ha un nome «fuori posto»), con il loro titolo, che
+     compare quando scegli quali slide usare («Slide 2–3: Elasticità → Monopolio»); le slide nascoste sono incluse e segnalate;
+   - le **note del relatore**, spesso la spiegazione del docente («Note del docente: …»);
+   - i **grafici con i dati**, come tabelle («[Grafico a barre: …]»), e il testo alternativo delle immagini.
+   I grafici disegnati con linee e frecce e le immagini senza descrizione da un PowerPoint non si leggono: l'app indica in quali slide
+   sono e consiglia di caricare la presentazione in PDF, che Claude legge con le figure.
+8. **Esercitazioni con le soluzioni** (tipo «Esercizi»): l'app divide il testo in esercizi («Esercizio 3», o «1.», «2.» consecutivi)
    e trova la soluzione di ciascuno: sotto l'esercizio («Soluzione»), in una sezione «Soluzioni» in fondo, o in un file a parte con lo
    stesso nome («Esercitazione 3» ↔ «Esercitazione 3 - soluzioni»; «Esercitazione 4 con soluzioni» è un file unico). Gli esercizi con
    soluzione entrano nel quiz **così come sono**, testo e soluzione ufficiali: a Claude si chiede solo l'argomento e una rubrica, e se
@@ -192,7 +202,7 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
    nel quiz viene riconosciuto (stessi numeri e parole) e prende testo e soluzione ufficiali, senza doppioni e senza perdere i progressi.
    «Fai l'esercitazione» propone gli esercizi nell'ordine; la soluzione ufficiale compare dopo il tuo tentativo. Nel piano l'esercitazione
    sull'argomento segue lo studio. Versione con server: un PDF di esercitazione lo legge Claude (formule comprese) e diventa testo.
-8. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
+9. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
 
 | Sessione | Cosa fa |
 |---|---|

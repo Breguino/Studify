@@ -61,7 +61,12 @@ export const MODULE_PRINCIPLES = `Principi inderogabili:
 6. Gli id che usi (t1, c1, q1...) servono solo come riferimenti incrociati. sourceIds: usa solo gli id delle fonti elencate.
 7. TIPI DI MATERIALE (indicati dal tag o dal titolo del documento):
    - appunti: ciò che il docente ha spiegato e sottolineato a lezione → usali soprattutto per decidere l'importanza degli argomenti;
-   - libro e dispense: la fonte per definizioni, dimostrazioni e approfondimenti;
+   - libro e dispense (testi scritti per esteso): la fonte per definizioni, dimostrazioni e approfondimenti;
+   - slide del docente (tag slide): sono la traccia del corso, cioè gli argomenti e l'ordine in cui li fa il docente (di solito il
+     programma vero dell'esame), e ciò su cui insiste; sono schematiche, non una spiegazione completa. Segui il loro ordine per gli
+     argomenti; un argomento che è nelle slide ha importance almeno 2. Spiega con libro, dispense, sbobine e appunti; se un argomento
+     è SOLO nelle slide, senza spiegazione altrove, scrivilo in gaps («X è solo sulle slide: studialo sul libro»). «Note del docente:»
+     sono le note del relatore, cioè la sua spiegazione; «[Grafico …]» e «[Immagine: …]» descrivono le figure delle slide.
    - esercizi (eserciziari, esercitazioni): NON trasformarli in flashcard. Ti dicono che cosa chiede l'esame (alza
      l'importanza degli argomenti su cui vertono) e sono il modello delle domande kind="problem": stesso tipo di esercizio, con
      svolgimento passo-passo in modelAnswer. Se la soluzione è nei materiali, seguila; se non c'è, risolvilo tu e scrivi in
@@ -212,8 +217,8 @@ evidence = la frase sulla modalità d'esame COPIATA alla lettera dal testo (max 
 details = in breve durata, parti, prove intermedie, orale facoltativo. caveats: differenze tra docenti/canali, anno accademico vecchio, dubbi.`;
 
 /** Tag con cui ogni tipo di materiale testuale entra nel prompt. */
-export const MATERIAL_TAG = { appunti: "appunti_studente", libro: "libro", dispense: "dispense", esercizi: "esercizi", svolti: "esercizi_svolti", esami: "temi_esame", domande: "domande_esame", sbobine: "sbobina", altro: "materiale" };
-export const MATERIAL_LABEL = { appunti: "Appunti", libro: "Libro", dispense: "Dispense", esercizi: "Esercizi", svolti: "Esercizi svolti dal docente", esami: "Temi d'esame", domande: "Domande d'esame", sbobine: "Sbobine", altro: "Materiale" };
+export const MATERIAL_TAG = { appunti: "appunti_studente", libro: "libro", slide: "slide", dispense: "dispense", esercizi: "esercizi", svolti: "esercizi_svolti", esami: "temi_esame", domande: "domande_esame", sbobine: "sbobina", altro: "materiale" };
+export const MATERIAL_LABEL = { appunti: "Appunti", libro: "Libro", slide: "Slide", dispense: "Dispense", esercizi: "Esercizi", svolti: "Esercizi svolti dal docente", esami: "Temi d'esame", domande: "Domande d'esame", sbobine: "Sbobine", altro: "Materiale" };
 
 /** Blocco di testo di un materiale per il prompt (pagine indicate se è un estratto). */
 export function materialText(m) {
@@ -298,6 +303,8 @@ Regole:
   materiali manca, aggiungilo in un riquadro «> Integrazione (non è nei tuoi materiali): …». Non inventare dati, esempi d'esame o citazioni.
 - FONTI. Dopo i passaggi importanti indica tra parentesi quadre da dove vengono: [Libro p. 45], [Slide 12], [Sbobine, lez. 3],
   [Appunti]. Se due fonti dicono cose diverse, scrivilo: «> Attenzione: le sbobine dicono…, il libro…».
+- SLIDE: sono schematiche. Spiega per esteso quello che riassumono, nell'ordine del docente, citando [Slide n]; usa le «Note del
+  docente» (la sua spiegazione) e i grafici descritti. Quello che sulle slide è solo un titolo va spiegato con le altre fonti o segnato.
 - ESERCIZI SVOLTI DAL DOCENTE: nell'«Esempio svolto» usa quelli, con lo stesso procedimento e la stessa notazione del docente, e prima
   dei passaggi scrivi il metodo in passi generici («Per trovare l'equilibrio del monopolista: 1. … 2. …»).
 - TEMI D'ESAME passati: non risolverli e non copiarli nella dispensa (lo studente li usa per le simulazioni a tempo); puoi dire che tipo

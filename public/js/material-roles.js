@@ -1,5 +1,5 @@
 // Tipi di materiale: cambiano il modo in cui l'AI li usa (vedi shared/prompts.js, principio 7).
-export const ROLES = { appunti: "Appunti", sbobine: "Sbobine (lezioni trascritte)", libro: "Libro", dispense: "Dispense / slide", esercizi: "Esercizi", svolti: "Esercizi svolti dal docente", esami: "Esami passati (temi d'esame)", domande: "Domande d'esame (elenchi)", altro: "Altro" };
+export const ROLES = { appunti: "Appunti", sbobine: "Sbobine (lezioni trascritte)", libro: "Libro", slide: "Slide del docente", dispense: "Dispense", esercizi: "Esercizi", svolti: "Esercizi svolti dal docente", esami: "Esami passati (temi d'esame)", domande: "Domande d'esame (elenchi)", altro: "Altro" };
 
 /** Tipo probabile dal nome del file (modificabile dallo studente). */
 export function guessRole(fileName, isPdf = false) {
@@ -14,7 +14,9 @@ export function guessRole(fileName, isPdf = false) {
   // «Esercizi per l'esame» è un eserciziario, non una prova
   if (/eserciz|esercitaz|soluzion|exercis|problem set/.test(n)) return "esercizi";
   if (/\besam[ei]\b|\bexams?\b/.test(n)) return "esami";
-  if (/dispens|slide|lucid|lezion|lecture|appunti del docente/.test(n)) return "dispense";
+  // slide (anche in PDF): schematiche, la traccia del corso; le dispense sono testo scritto per esteso
+  if (/\bpptx?\b|slide|lucid|presentazion/.test(n)) return "slide";
+  if (/dispens|lezion|lecture|appunti del docente/.test(n)) return "dispense";
   if (/\blibro\b|manuale|textbook|\bbook\b|capitol|\bcap\b\s*\d|chapter/.test(n)) return "libro";
   if (/appunt|note|notes/.test(n)) return "appunti";
   return isPdf ? "dispense" : "appunti";

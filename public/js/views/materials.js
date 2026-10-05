@@ -110,9 +110,10 @@ async function addFiles(exam, files) {
       pdfTotal += file.size;
     } else if (/\.(docx|pptx)$/i.test(file.name)) {
       try {
-        const { text, pages } = await officeText(await file.arrayBuffer(), file.name);
+        const { text, pages, ...extra } = await officeText(await file.arrayBuffer(), file.name);
         if (text.replace(/\f/g, "").trim().length < 20) toast(`«${file.name}»: nessun testo trovato (solo immagini?).`, "error");
-        else exam.materials.push(structure({ id: uid(), kind: "notes", role: guessRole(file.name, /\.pptx$/i.test(file.name)), title: name, text, size: text.length, numPages: pages || undefined, addedAt: now() }));
+        else exam.materials.push(structure({ id: uid(), kind: "notes", role: guessRole(file.name, /\.pptx$/i.test(file.name)), title: name, text, size: text.length, numPages: pages || undefined, addedAt: now(),
+          ...(extra.sections ? { sections: extra.sections, figureSlides: extra.figureSlides, notesSlides: extra.notesSlides, hiddenSlides: extra.hiddenSlides } : {}) }));
       } catch (e) {
         toast(`«${file.name}»: ${e.message}`, "error");
       }
@@ -242,6 +243,20 @@ function exercisesRow(exam, m) {
       h("button", { class: "btn small primary", disabled: jobs.has(exam.id) || !core.ai.ai, onclick: () => run(exam, "update", async (p) => { toast(`Esercitazioni: ${(await syncOfficial(exam, p)) ?? "niente da aggiungere."}`, "ok"); }) }, `Metti nel quiz ${missing.length === 1 ? "l'esercizio" : `i ${missing.length} esercizi`} con soluzione`),
       h("span", { class: "muted" }, "Testo e soluzione restano quelli ufficiali: Claude sceglie solo l'argomento.")) : null,
     !exam.module && solved.length ? h("div", { class: "muted" }, "Quando generi il modulo, gli esercizi con soluzione entrano nel quiz così come sono.") : null);
+}
+
+/** Slide del docente: a cosa servono, le note del relatore lette, e le figure che da un PowerPoint non si leggono. */
+function slidesRow(m) {
+  if (roleOf(m) !== "slide") return null;
+  const fig = m.figureSlides ?? [];
+  const list = fig.length > 10 ? `${fig.slice(0, 10).join(", ")}…` : fig.join(", ");
+  return h("div", { class: "stack small", style: { gap: "4px" } },
+    m.notesSlides || m.hiddenSlides ? h("div", { class: "row", style: { gap: "8px" } },
+      m.notesSlides ? badge(`note del relatore in ${m.notesSlides} ${m.notesSlides === 1 ? "slide" : "slide"}`, "good") : null,
+      m.hiddenSlides ? h("span", { class: "muted" }, `${m.hiddenSlides} ${m.hiddenSlides === 1 ? "slide nascosta" : "slide nascoste"} nella presentazione (incluse)`) : null) : null,
+    fig.length ? h("div", { class: "callout warn" }, `${fig.length === 1 ? "La slide" : "Le slide"} ${list} ${fig.length === 1 ? "ha" : "hanno"} grafici o immagini che dal file PowerPoint non si leggono (i grafici disegnati con linee e frecce, le immagini senza descrizione). `,
+      `Per farli vedere a Claude esporta la presentazione in PDF (File → Esporta → PDF) e carica quello${core.ai.pdf === false ? ", poi usa «Leggi formule e figure con Claude»" : ": Claude legge anche i grafici"}.`) : null,
+    h("div", { class: "muted" }, "Slide del docente: l'app le usa come traccia del corso (quali argomenti e in che ordine) e per capire su cosa insiste. Sono schematiche: le spiegazioni le prende da libro, dispense, sbobine e appunti, e ti segnala gli argomenti che sono solo sulle slide."));
 }
 
 /** Elenco di domande d'esame: quante, quante ripetute, a cosa servono. */
@@ -733,7 +748,7 @@ export function materialsTab(exam) {
                   h("input", { class: "sbobina-year", value: m.year ?? "", placeholder: "es. 2025-26", "aria-label": `Anno accademico di ${m.title}`, style: { width: "100px", padding: "4px 8px" }, onchange: (e) => { m.year = e.target.value.trim(); store.save(); } })) : null,
                 m.numPages > 1 ? pagePicker(m) : null) : null,
               roleOf(m) === "sbobine" ? h("div", { class: "small muted" }, "Sbobine: le frasi del docente sull'esame finiscono nel modulo (verificate sul testo). Possono contenere errori di trascrizione su termini e formule, e se sono di un altro anno docente e programma potrebbero essere cambiati.") : null,
-              papersRow(exam, m), questionsRow(m), exercisesRow(exam, m),
+              papersRow(exam, m), questionsRow(m), exercisesRow(exam, m), slidesRow(m),
               roleOf(m) === "svolti" ? h("div", { class: "small muted" }, "Esercizi svolti dal docente: l'AI ne ricava il metodo in passi (come li risolve lui, con la sua notazione) e crea esercizi dello stesso tipo. Li ritrovi negli argomenti come «Esercizi guidati». Se sono scansioni o appunti a mano, controlla le formule nell'anteprima.") : null,
               m.kind === "notes" ? (m.handwritten ? handwrittenRow(exam, m) : formulaRow(exam, m)) : null),
             h("button", { class: "btn small danger", onclick: () => removeMaterial(exam, m), "aria-label": `Rimuovi ${m.title}` }, "Rimuovi")),
