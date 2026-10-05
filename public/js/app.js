@@ -9,6 +9,7 @@ import { homeView, settingsView } from "./views/home.js";
 import { examFormView } from "./views/form.js";
 import { importView } from "./views/import.js";
 import { profileView } from "./views/profile.js";
+import { careerView } from "./views/career.js";
 import { hubView, topicView } from "./views/hub.js";
 import { flashView } from "./views/flash.js";
 import { explainView, quizView } from "./views/quiz.js";
@@ -26,7 +27,8 @@ function route() {
   const { seg, query } = parse();
   const [a, id, b, c] = seg;
   if (!a) return homeView();
-  if (a === "new") return examFormView(null);
+  if (a === "new") return examFormView(null, { name: query.get("course") ?? "" });
+  if (a === "libretto") return careerView();
   if (a === "settings") return settingsView();
   if (a === "profile") return profileView();
   if (a === "import") return importView();

@@ -200,5 +200,5 @@ export function profileView() {
       h("h3", { style: { marginBottom: 0 } }, "Aggiungi a mano"), addManual,
       p.courses.length ? h("div", {}, h("button", { class: "btn small danger", onclick: async () => { if (await confirmDialog("Rimuovere tutti gli insegnamenti del piano?", { ok: "Rimuovi", danger: true })) { p.courses = []; p.fetchedAt = null; store.save(); core.rerender(); } } }, "Svuota il piano")) : null,
       p.sources?.length ? h("details", {}, h("summary", {}, `Fonti consultate (${p.sources.length})`), h("ul", { class: "source-list" }, p.sources.map((s) => h("li", {}, h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer" }, s.title || s.url))))) : null),
-    h("div", { class: "row" }, h("a", { class: "btn primary", href: "#/new", onclick: commit }, "Aggiungi un esame"), h("a", { class: "btn", href: "#/import" }, "Importa piano da CSV / Excel"), h("a", { class: "btn ghost", href: "#/" }, "Home")));
+    h("div", { class: "row" }, h("a", { class: "btn primary", href: "#/new", onclick: commit }, "Aggiungi un esame"), p.courses.length ? h("a", { class: "btn", href: "#/libretto", onclick: commit }, "Libretto: esami superati e da superare") : null, h("a", { class: "btn", href: "#/import" }, "Importa piano da CSV / Excel"), h("a", { class: "btn ghost", href: "#/" }, "Home")));
 }

@@ -1,5 +1,6 @@
 import { go } from "../nav.js";
 import { daysLeft, dueCount, ensurePlan, isDone, statsFor } from "../domain.js";
+import { careerSummary } from "./career.js";
 import { fmtDate, addDays, today } from "../dates.js";
 import { EXAM_TYPES } from "../methods.js";
 import * as store from "../store.js";
@@ -59,6 +60,7 @@ export function homeView() {
     "div",
     { class: "stack" },
     h("div", { class: "row between" }, h("h1", {}, "I tuoi esami"), h("div", { class: "row" }, h("a", { class: "btn", href: "#/import" }, "Importa CSV / Excel"), h("a", { class: "btn primary", href: "#/new" }, "+ Nuovo esame"))),
+    careerSummary(),
     exams.length
       ? h("div", { class: "grid" }, exams.map(examCard))
       : h(

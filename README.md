@@ -266,6 +266,17 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
 | Spiega a parole tue | Per scritto aperto/orale: spieghi senza appunti e confronti con i punti chiave. «Simulazione orale» sceglie 3 argomenti pesati per importanza. |
 | Progressi | Stima di preparazione per argomento (flashcard solide + quiz), con i punti dove conviene lavorare. |
 
+### Libretto: esami superati e da superare
+
+Dal piano di studi (pagina «Ateneo e corso di studio») la pagina **Libretto** fa la checklist degli insegnamenti per anno:
+superati con voto e data, da superare con l'esame in preparazione nell'app (data e preparazione) o il pulsante «Prepara», che
+crea l'esame con CFU e tipo di prova dal piano. In cima: esami e CFU superati sul totale, **media ponderata sui CFU** (la lode vale
+30, le idoneità non contano) e **base di laurea stimata** (media × 110 / 30), con l'avvertenza che ogni ateneo la calcola a modo suo.
+Il libretto si incolla da **Esse3** (Carriera → Libretto, copia della tabella): si leggono le righe con voto e data, abbinate al
+piano per nome; quelle che nel piano non ci sono vengono aggiunte. Delle opzioni a scelta contano solo quelle superate o segnate «lo
+scelgo». Quando la data di un esame dell'app è passata, il libretto chiede com'è andata. In home una riga riassume a che punto sei.
+Il libretto ufficiale resta quello dell'ateneo: qui si copia, non si sostituisce.
+
 ### Perché questi metodi (e non gli «stili di apprendimento»)
 
 La scelta dei metodi dipende da **tipo di prova, giorni rimasti e livello di partenza** (`public/js/methods.js`),
