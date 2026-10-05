@@ -1,0 +1,13 @@
+Tutorato 3 — esercizi svolti dal tutor
+
+Esercizio 1 — Costo marginale da una funzione di costo totale
+Un'impresa ha costo totale $CT = 100 + 4q + q^2$. Trovare il costo marginale e il costo medio quando $q = 10$.
+
+Il costo marginale è la derivata del costo totale: $CMa = 4 + 2q$, quindi in $q = 10$ vale $24$.
+
+Il costo medio è $CT/q = 100/q + 4 + q$: in $q = 10$ vale $10 + 4 + 10 = 24$.
+
+Esercizio 2 — Prezzo di chiusura in concorrenza perfetta
+Con costo variabile $CV = 4q + q^2$ trovare il prezzo sotto il quale l'impresa chiude nel breve periodo.
+
+Il costo variabile medio è $CVMe = 4 + q$, minimo per $q \to 0$: il prezzo di chiusura è $p = 4$.

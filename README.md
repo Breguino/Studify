@@ -250,7 +250,13 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
    come «tutte le precedenti»), così non si impara la lettera. L'AI le usa come modello per domande nuove sugli stessi concetti,
    formulate in un altro modo, e nel piano arriva «Quiz del docente su …» dopo lo studio dell'argomento. Le domande senza la risposta
    corretta (il docente può non mostrarla nella revisione) restano fuori dal quiz, e l'app lo dice.
-13. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
+13. **Tutorati**: non sono un tipo a parte (sono esercizi, esercizi svolti, appunti o registrazioni), ma ogni materiale ha la casella
+   **«dal tutorato»**, spuntata da sola se il nome contiene «tutor». Il tutor non è chi fa l'esame: l'AI usa quel materiale per
+   studiare ed esercitarsi ma non come parola del docente (se notazione o procedimento differiscono segue il docente e lo segnala),
+   le sue dispense non passano davanti al libro, e l'app lo dice dove conta: una frase sull'esame trovata in un materiale del
+   tutorato è segnata «detta al tutorato, non dal docente», i metodi ricavati dai suoi esercizi svolti sono «Come lo risolve il
+   tutor», negli esercizi guidati e nel piano «metodo del tutor». Un PDF «Tutorato 3» senza altri indizi è un foglio di esercizi.
+14. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
 
 | Sessione | Cosa fa |
 |---|---|

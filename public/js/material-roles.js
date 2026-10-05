@@ -15,6 +15,8 @@ export function guessRole(fileName, isPdf = false) {
   if (/\bsvolt[aeio]\b|\brisolt[aeio]\b|worked|svolgiment/.test(n)) return "svolti";
   // «Appunti esercitazione 6», «Appunti in aula»: gli appunti presi all'esercitazione (le soluzioni alla lavagna), non il foglio
   if (/appunt/.test(n) && /esercitaz|\baula\b|lavagna/.test(n)) return "appunti";
+  // tutorato: di solito esercizi con le soluzioni (che sia del tutor e non del docente lo dice `tutor`, vedi isTutorFile)
+  if (/tutor/.test(n)) return "esercizi";
   // «Esercizi per l'esame» è un eserciziario, non una prova
   if (/eserciz|esercitaz|soluzion|exercis|problem set/.test(n)) return "esercizi";
   // appunti presi da un altro studente (dopo domande ed esercizi: «Domande d'esame dei colleghi» resta un elenco di domande)
@@ -29,6 +31,9 @@ export function guessRole(fileName, isPdf = false) {
   if (/appunt|note|notes/.test(n)) return "appunti";
   return isPdf ? "dispense" : "appunti";
 }
+
+/** Preparato dal tutor, non dal docente («Tutorato 3», «Esercizi tutor»): si può cambiare nella scheda del materiale. */
+export const isTutorFile = (name) => /tutor/i.test(String(name ?? ""));
 
 /** Tipo di un materiale salvato prima che esistessero i tipi. */
 export const roleOf = (m) => m.role ?? (m.kind === "pdf" ? "dispense" : "appunti");

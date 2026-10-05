@@ -10,6 +10,10 @@ import { studyStart, windowDays } from "./workload.js";
 import { allPapers, attemptsOf, paperMinutes } from "./past-exams.js";
 import { examQuestionStats } from "./exam-questions.js";
 import { readingByTopic } from "./books.js";
+import { methodByTutor } from "./provenance.js";
+
+/** I metodi ricavati da esercizi svolti al tutorato: nel piano «metodo del tutor». */
+const tutorMarked = (exam, methods) => methods?.map((m) => (methodByTutor(exam, m) ? { ...m, tutor: true } : m));
 import { save } from "./store.js";
 
 export const daysLeft = (exam) => daysBetween(today(), exam.date);
@@ -33,7 +37,7 @@ export function ensurePlan(exam, force = false) {
         examType: exam.type,
         level: exam.level,
         hoursPerDay: exam.hoursPerDay,
-        topics: exam.module.topics.map((t) => (official.get(t.id) || reading.get(t.id)
+        topics: exam.module.topics.map((t0) => (t0.methods?.length ? { ...t0, methods: tutorMarked(exam, t0.methods) } : t0)).map((t) => (official.get(t.id) || reading.get(t.id)
           ? { ...t, officialCount: official.get(t.id) ?? 0, officialQuizOnly: !!official.get(t.id) && fromQuiz.get(t.id) === official.get(t.id), officialClassOnly: !!official.get(t.id) && fromClass.get(t.id) === official.get(t.id), readPages: reading.get(t.id)?.pages ?? 0, readLabel: reading.get(t.id)?.label ?? "" } : t)),
         learned: exam.learned,
         today: today(),

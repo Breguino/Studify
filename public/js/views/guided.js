@@ -6,9 +6,10 @@ import { recordScore } from "../progress.js";
 import * as store from "../store.js";
 import { badge, emptyState, h } from "../ui.js";
 import { fade, guidedPlan, splitSteps } from "../worked.js";
+import { methodByTutor } from "../provenance.js";
 import { openReview } from "./quiz.js";
 
-const STEP_NAME = { example: "Studia l'esempio del docente", complete: "Completa lo svolgimento", solo: "Risolvi da solo" };
+const STEP_NAME = (who) => ({ example: `Studia l'esempio ${who}`, complete: "Completa lo svolgimento", solo: "Risolvi da solo" });
 
 export function guidedView(exam, tid, query) {
   const t = exam.module?.topics.find((x) => x.id === tid);
@@ -17,6 +18,7 @@ export function guidedView(exam, tid, query) {
   const back = h("a", { class: "muted", href: `#/exam/${exam.id}/topic/${tid}` }, "← Argomento");
   if (!method) return emptyState("Nessun metodo del docente", "Questo argomento non ha esercizi svolti dal docente: caricali nei materiali con il tipo «Esercizi svolti dal docente».", h("a", { class: "btn", href: `#/exam/${exam.id}/materials` }, "Materiali"));
   const taskId = query.get("task");
+  const who = methodByTutor(exam, method) ? "del tutor" : "del docente"; // esercizi svolti al tutorato: è il tutor, non chi fa l'esame
   const plan = guidedPlan(exam, tid, method);
   // da solo: un esercizio simile; se non c'è, si rifà quello del docente senza guardare
   const solo = plan.solo ?? (method.problem ? { prompt: method.problem, modelAnswer: method.solution, rubric: method.steps, own: true } : null);
@@ -25,7 +27,7 @@ export function guidedView(exam, tid, query) {
   let k = 0;
 
   const head = () => h("div", { class: "session-head" }, back,
-    h("div", { class: "row" }, badge("esercizi guidati", "brand"), h("span", { class: "muted small" }, `${k + 1}/${steps.length} · ${STEP_NAME[steps[k]]}`)));
+    h("div", { class: "row" }, badge("esercizi guidati", "brand"), h("span", { class: "muted small" }, `${k + 1}/${steps.length} · ${STEP_NAME(who)[steps[k]]}`)));
   const methodList = () => h("ol", { class: "method-steps" }, method.steps.map((st) => h("li", {}, rich(st))));
   const next = () => { k++; render(); };
 
@@ -49,8 +51,8 @@ export function guidedView(exam, tid, query) {
     show();
     return h("div", { class: "card stack" },
       h("h2", { style: { margin: 0 } }, rich(method.name)),
-      h("div", { class: "callout" }, h("b", {}, "Un passaggio alla volta: "), "prima di andare avanti chiediti perché il docente fa quel passaggio e da dove viene ogni numero. Spiegarsi i passaggi è ciò che rende utile un esempio svolto; leggerlo e basta dà solo l'impressione di aver capito."),
-      h("div", { class: "worked" }, h("b", { class: "small" }, `Esercizio del docente${method.source ? ` (${method.source})` : ""}`), ...renderMarkdown(method.problem || "")),
+      h("div", { class: "callout" }, h("b", {}, "Un passaggio alla volta: "), `prima di andare avanti chiediti perché ${who === "del tutor" ? "il tutor" : "il docente"} fa quel passaggio e da dove viene ogni numero. Spiegarsi i passaggi è ciò che rende utile un esempio svolto; leggerlo e basta dà solo l'impressione di aver capito.`),
+      h("div", { class: "worked" }, h("b", { class: "small" }, `Esercizio ${who}${method.source ? ` (${method.source})` : ""}`), ...renderMarkdown(method.problem || "")),
       sol, h("div", {}, more), after,
       method.verified ? null : h("p", { class: "muted small", style: { margin: 0 } }, "Copiato da Claude da un PDF: se un passaggio non torna, controlla sul materiale originale."));
   }
@@ -69,7 +71,7 @@ export function guidedView(exam, tid, query) {
         h("div", {}, h("button", { class: "btn primary", onclick: next }, "Avanti: risolvi da solo")));
     } }, "Controlla");
     return h("div", { class: "card stack" },
-      h("p", { class: "muted small", style: { margin: 0 } }, "Un esercizio dello stesso tipo: i primi passaggi ci sono, completa tu gli altri con il metodo del docente."),
+      h("p", { class: "muted small", style: { margin: 0 } }, `Un esercizio dello stesso tipo: i primi passaggi ci sono, completa tu gli altri con il metodo ${who}.`),
       h("div", { class: "q-prompt" }, ...renderMarkdown(q.prompt)),
       h("div", { class: "worked-solution" }, ...shown.flatMap((p, i) => [h("div", { class: "step-label small muted" }, `Passaggio ${i + 1}`), ...renderMarkdown(p)])),
       ta, box, h("div", {}, check));
@@ -97,7 +99,7 @@ export function guidedView(exam, tid, query) {
     } }, "Controlla");
     return h("div", { class: "card stack" },
       plan.expert ? h("div", { class: "callout" }, h("b", {}, "Parti dall'esercizio: "), "con i risultati che hai, gli esempi svolti ti servirebbero poco. Se ti blocchi, apri il metodo.") : null,
-      solo.own ? h("p", { class: "muted small", style: { margin: 0 } }, "Non ci sono ancora esercizi simili nel modulo: rifai quello del docente senza guardare la soluzione.") : null,
+      solo.own ? h("p", { class: "muted small", style: { margin: 0 } }, `Non ci sono ancora esercizi simili nel modulo: rifai quello ${who} senza guardare la soluzione.`) : null,
       h("div", { class: "q-prompt" }, ...renderMarkdown(solo.prompt)),
       ta, hintBox, h("div", { class: "row" }, check, hintBtn), review);
   }
@@ -106,8 +108,8 @@ export function guidedView(exam, tid, query) {
     const others = t.methods.map((m, i) => [m, i]).filter(([, i]) => i !== mi);
     root.replaceChildren(h("div", { class: "card stack" },
       h("h2", { style: { margin: 0 } }, "Fatto"),
-      h("p", { style: { margin: 0 } }, score >= 0.75 && !hint ? "Hai risolto l'esercizio con il metodo del docente. Tra qualche giorno rifallo con esercizi misti: riconoscere quale metodo usare è la parte che all'esame conta di più."
-        : hint ? "Ti è servito il metodo: rifai un esercizio di questo tipo domani, senza aiuto." : "Qualche passaggio non torna: rileggi l'esempio del docente e riprova domani con un esercizio nuovo."),
+      h("p", { style: { margin: 0 } }, score >= 0.75 && !hint ? `Hai risolto l'esercizio con il metodo ${who}. Tra qualche giorno rifallo con esercizi misti: riconoscere quale metodo usare è la parte che all'esame conta di più.`
+        : hint ? "Ti è servito il metodo: rifai un esercizio di questo tipo domani, senza aiuto." : `Qualche passaggio non torna: rileggi l'esempio ${who} e riprova domani con un esercizio nuovo.`),
       h("div", { class: "row" },
         h("a", { class: "btn primary", href: `#/exam/${exam.id}/quiz?mode=topics&topics=${tid}&kind=problem` }, "Altri esercizi su questo argomento"),
         ...others.map(([m, i]) => h("a", { class: "btn", href: `#/exam/${exam.id}/guided/${tid}?m=${i}` }, `Metodo: ${m.name}`)),

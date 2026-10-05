@@ -119,6 +119,11 @@ export const MODULE_PRINCIPLES = `Principi inderogabili:
      punteggiatura è inaffidabile, i termini tecnici possono essere storpiati (deducili dal contesto e dalle altre fonti) e le formule
      sono dette a parole («x al quadrato fratto due»): riscrivile in LaTeX. Le voci con un nome davanti («Mario Rossi: …») sono di chi
      parla (anche studenti che fanno domande). I segni come «[12:30]» sono i minuti della registrazione: non copiarli nel modulo.
+   - materiali con autore="tutor" (o «dal tutorato» nel titolo): preparati da un tutor (un dottorando o uno studente più avanti), non
+     dal docente, qualunque sia il tipo. Esercizi, soluzioni e spiegazioni valgono come materiale di studio, ma non come parola del
+     docente: definizioni e notazione restano quelle di dispense, slide e appunti delle lezioni; se differiscono, segui il docente e
+     scrivilo in "gaps". Un metodo ricavato da esercizi svolti dal tutor ha source che inizia con «Tutorato:». Le frasi sull'esame dette
+     dal tutor vanno in examHints solo se riferiscono il docente, con note che dice che è un'indicazione del tutor, di seconda mano.
    - appunti scritti a mano (trascritti da foto): «[?]» segna una parola letta con incertezza, «[illeggibile]» una parte non letta.
      Non basare carte o domande su una lettura incerta che gli altri materiali non confermano; se è importante, segnalala in "gaps".
 ${FORMULA_RULE}
@@ -248,12 +253,13 @@ export function materialText(m) {
   const pages = m.pages ? ` ${m.unit === "lezioni" ? "lezioni" : m.unit === "prove" ? "prove" : "pagine"}="${m.pages}"` : "";
   const hand = m.handwritten ? ` scritti_a_mano="sì"` : "";
   const auto = m.auto ? ` trascrizione_automatica="sì"` : "";
+  const tutor = m.tutor ? ` autore="tutor"` : "";
   const year = m.year ? ` anno="${String(m.year).replace(/"/g, "")}"` : "";
-  return `<${tag} titolo="${String(m.title ?? "").replace(/"/g, "'")}"${pages}${year}${hand}${auto}>\n${m.text}\n</${tag}>`;
+  return `<${tag} titolo="${String(m.title ?? "").replace(/"/g, "'")}"${pages}${year}${hand}${auto}${tutor}>\n${m.text}\n</${tag}>`;
 }
 
 /** Titolo di un PDF allegato: tipo, nome, pagine scelte e anno accademico (per sbobine e appunti di colleghi di altri anni). */
-export const pdfTitle = (m) => `${MATERIAL_LABEL[m.role] ?? "Materiale"} — ${m.title}${m.pages ? ` (pagine ${m.pages})` : ""}${m.year ? ` (anno ${m.year})` : ""}`;
+export const pdfTitle = (m) => `${MATERIAL_LABEL[m.role] ?? "Materiale"}${m.tutor ? " (dal tutorato)" : ""} — ${m.title}${m.pages ? ` (pagine ${m.pages})` : ""}${m.year ? ` (anno ${m.year})` : ""}`;
 
 /** Istruzione aggiuntiva quando tra i materiali ci sono esercizi. */
 export const EXERCISES_TASK = `- Ci sono materiali di tipo esercizi: almeno metà delle domande siano kind="problem" modellate su quegli esercizi (stesso tipo, dati diversi
@@ -342,6 +348,8 @@ Regole:
   dei passaggi scrivi il metodo in passi generici («Per trovare l'equilibrio del monopolista: 1. … 2. …»).
 - TEMI D'ESAME passati: non risolverli e non copiarli nella dispensa (lo studente li usa per le simulazioni a tempo); puoi dire che tipo
   di esercizio chiedono sull'argomento («Negli appelli: calcolo dell'elasticità da una funzione di domanda»).
+- TUTORATO (autore="tutor"): materiale del tutor, non del docente: citalo [Tutorato] e, se la notazione differisce, usa quella del
+  docente.
 - APPUNTI DI COLLEGHI: sono di seconda mano. Usali per ciò che il docente ha spiegato, ma definizioni e formule prendile da dispense
   e libro quando ci sono; ciò che è solo lì citalo [Appunti di un collega] perché lo studente sappia che va verificato.
 - SBOBINE: togli il parlato (ripetizioni, battute, avvisi) e tieni la spiegazione (i segni dei minuti come «[12:30]» non vanno copiati); i termini o le formule sospette vanno controllati

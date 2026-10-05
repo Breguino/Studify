@@ -159,6 +159,7 @@ function parseMaterials(body) {
     pages: /^\d{1,4}-\d{1,4}$/.test(m.pages ?? "") ? m.pages : "",
     handwritten: !!m.handwritten,
     auto: !!m.auto,
+    tutor: !!m.tutor,
     title: str(m.title, 200) || "Appunti",
     text: str(m.text, 2_000_000),
     data: m.kind === "pdf" && typeof m.data === "string" ? m.data : "",

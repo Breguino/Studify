@@ -68,7 +68,7 @@ const pageTextsOf = async (m) => (m.kind === "pdf" ? pdfPageTexts(await store.ge
  */
 export async function syncDispense(exam) {
   exam.books ??= [];
-  const isDisp = (m) => roleOf(m) === "dispense" && (m.kind === "pdf" || m.fromPdf) && !m.noReading;
+  const isDisp = (m) => roleOf(m) === "dispense" && (m.kind === "pdf" || m.fromPdf) && !m.noReading && !m.tutor; // dispense del tutor: non vengono prima del libro
   const keep = new Set(exam.materials.filter(isDisp).map((m) => m.id));
   const before = exam.books.length;
   // tornando dispense, l'indice si cerca di nuovo

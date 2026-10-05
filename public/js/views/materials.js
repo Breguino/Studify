@@ -11,7 +11,7 @@ import { officeText } from "../office-text.js";
 import { extractPdfPages } from "../pdf-pages.js";
 import { readPdf } from "../pdf-text.js";
 import { pdfPageTexts as pageTexts } from "../pdf-page-texts.js";
-import { guessRole, isPractice, roleOf, ROLES } from "../material-roles.js";
+import { guessRole, isPractice, isTutorFile, roleOf, ROLES } from "../material-roles.js";
 import { applyExamBoost, papersOf, parseStarts, preparePapers } from "../past-exams.js";
 import { countLabel, numberedQuestions, questionsOf, remapExamRefs } from "../exam-questions.js";
 import { booksCard, syncChapterLinks, syncDispense } from "./books.js";
@@ -68,6 +68,7 @@ async function run(exam, kind, fn, meta = {}) {
 }
 
 async function addFiles(exam, files) {
+  const before = new Set(exam.materials.map((m) => m.id));
   let pdfTotal = exam.materials.filter((m) => m.kind === "pdf").reduce((s, m) => s + m.size, 0);
   const audio = files.filter((f) => /^audio\/|^video\//.test(f.type) || /\.(mp3|m4a|wav|aac|ogg|opus|flac|mp4|mov|webm)$/i.test(f.name));
   if (audio.length) {
@@ -142,6 +143,8 @@ async function addFiles(exam, files) {
       else exam.materials.push(structure({ id: uid(), kind: "notes", role: quizOrRole(file.name, guessRole(file.name), text), title: name, text, size: text.length, addedAt: now() }));
     } else toast(`«${file.name}»: formato non supportato (usa .pdf, .docx, .pptx, .txt, .md, o .srt/.vtt per le trascrizioni).`, "error");
   }
+  // dal nome: «Tutorato 3», «Esercizi del tutor» sono del tutor, non del docente
+  for (const m of exam.materials) if (!before.has(m.id) && (isTutorFile(m.title) || isTutorFile(m.fileName))) m.tutor = true;
   for (const d of await syncDispense(exam)) {
     toast(`«${d.title}»: dispense con ${d.chapters} capitoli (${d.from === "indice" ? "dalla pagina dell'indice" : "dai titoli nelle pagine"}). Per ogni argomento ti dirò quali pagine leggere${exam.module ? ", dopo «Aggiungi al modulo»" : ""}.`, "ok");
   }
@@ -422,8 +425,8 @@ async function payload(list, { onlyNew = false } = {}) {
       if (r && extractPdfPages && (r.from > 1 || r.to < (m.numPages ?? Infinity))) data = await extractPdfPages(data, r.from, r.to);
       pages += r ? r.to - r.from + 1 : m.numPages ?? 0;
       bytes += data.length;
-      materials.push({ kind: "pdf", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", year: m.year ?? "", data });
-    } else materials.push({ kind: "notes", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", unit: m.unit ?? "pagine", year: m.year ?? "", handwritten: !!m.handwritten, auto: !!m.auto, text: sliceText(m.text, range) });
+      materials.push({ kind: "pdf", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", year: m.year ?? "", tutor: !!m.tutor, data });
+    } else materials.push({ kind: "notes", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", unit: m.unit ?? "pagine", year: m.year ?? "", handwritten: !!m.handwritten, auto: !!m.auto, tutor: !!m.tutor, text: sliceText(m.text, range) });
   }
   if (pages > MAX_SEND_PAGES || bytes > MAX_SEND_BYTES)
     throw new Error(`Troppo materiale PDF per una volta (${pages} pagine, ${kb(bytes * 0.75)}): il limite è ${MAX_SEND_PAGES} pagine e ~${kb(MAX_SEND_BYTES * 0.75)}. Nel materiale scegli le pagine (es. i capitoli del programma) e aggiungi il resto dopo con «Aggiungi al modulo».`);
@@ -780,6 +783,7 @@ export function materialsTab(exam) {
     e.preventDefault();
     if (!text.value.trim()) return toast("Incolla del testo.", "error");
     exam.materials.push(structure({ id: uid(), kind: "notes", role: quizOrRole(title.value || "Testo incollato", pasteRole.value, text.value), title: title.value.trim() || `${ROLES[pasteRole.value].replace(/ \(.*\)$/, "")} ${exam.materials.length + 1}`, text: text.value, size: text.value.length, addedAt: now() }));
+    if (isTutorFile(title.value)) exam.materials.at(-1).tutor = true;
     store.save();
     core.rerender();
   } }, h("h3", {}, "Incolla appunti, esercizi, temi d'esame o parti di libro"), h("div", { class: "row", style: { gap: "8px", flexWrap: "nowrap" } }, title, pasteRole), text, h("div", {}, h("button", { class: "btn", type: "submit" }, "Aggiungi")));
@@ -849,7 +853,10 @@ export function materialsTab(exam) {
                   Object.entries(ROLES).map(([k, t]) => h("option", { value: k, selected: roleOf(m) === k }, t)))),
                 ["sbobine", "colleghi"].includes(roleOf(m)) ? h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Anno accademico",
                   h("input", { class: "sbobina-year", value: m.year ?? "", placeholder: "es. 2025-26", "aria-label": `Anno accademico di ${m.title}`, style: { width: "100px", padding: "4px 8px" }, onchange: (e) => { m.year = e.target.value.trim(); store.save(); } })) : null,
+                h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } },
+                  h("input", { type: "checkbox", checked: !!m.tutor, "aria-label": `${m.title}: preparato dal tutor`, onchange: async (e) => { m.tutor = e.target.checked; exam.plan = null; await syncDispense(exam); store.save(); rerenderSoon(); } }), "dal tutorato"),
                 m.numPages > 1 ? pagePicker(m) : null) : null,
+              m.tutor ? h("div", { class: "small muted" }, "Dal tutorato: l'AI lo usa per studiare ed esercitarti, ma non come parola del docente. Se notazione o procedimento sono diversi da quelli del docente, segue il docente e te lo segnala; le frasi sull'esame del tutor non diventano «il docente ha detto».") : null,
               roleOf(m) === "sbobine" ? h("div", { class: "small muted" }, m.auto
                 ? `Trascrizione automatica di una registrazione${m.duration ? ` (${clock(m.duration)})` : ""}: sono le parole del docente, ma il programma di trascrizione sbaglia termini tecnici, numeri e formule (dette a parole). L'AI le controlla su dispense e libro. I segni come [12:30] sono i minuti della registrazione: le frasi del docente sull'esame te li indicano, così puoi riascoltarle.`
                 : "Sbobine: le frasi del docente sull'esame finiscono nel modulo (verificate sul testo). Possono contenere errori di trascrizione su termini e formule, e se sono di un altro anno docente e programma potrebbero essere cambiati.") : null,

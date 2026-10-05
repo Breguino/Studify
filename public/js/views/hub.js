@@ -18,6 +18,7 @@ import { examQuestionStats } from "../exam-questions.js";
 import { renderMarkdown } from "../markdown.js";
 import { pagesLabel, readingMinutes, shortName, topicReading, uncoveredChapters } from "../books.js";
 import { timeOfQuote } from "../transcripts.js";
+import { methodByTutor, saidByTutor } from "../provenance.js";
 
 const TABS = [
   ["today", "Oggi"],
@@ -130,6 +131,7 @@ function hintsBox(exam, hints, mod, title = "Cosa ha detto il docente sull'esame
     h("ul", {}, hints.map((x) => h("li", {},
       h("q", {}, rich(x.quote)),
       h("span", { class: "muted small" }, ` — ${[x.source, whenSaid(exam, x.quote), title === "Cosa ha detto il docente sull'esame" ? topicTitle(x.topicId) : null].filter(Boolean).join(" · ")}`),
+      saidByTutor(exam, x.quote) ? h("div", { class: "small" }, badge("detta al tutorato, non dal docente", "warn")) : null,
       x.note ? h("div", { class: "small" }, rich(x.note)) : null,
       x.verified === false ? h("div", { class: "small muted" }, "Citazione da un PDF: non verificata sul testo, controllala.") : null))),
     h("div", { class: "small muted" }, "Frasi copiate dai materiali: quelle da sbobine o appunti di colleghi sono di seconda mano, e se sono di un anno precedente il docente potrebbe aver cambiato idea."));
@@ -231,12 +233,16 @@ function officialBox(exam, t) {
 /** Come risolve il docente gli esercizi di questo argomento: i passaggi, il suo esercizio svolto, gli esercizi guidati. */
 function methodsBox(exam, t) {
   if (!t.methods?.length) return null;
-  return h("div", { class: "card stack" }, h("h3", { style: { margin: 0 } }, "Come lo risolve il docente"),
-    h("p", { class: "muted small", style: { margin: 0 } }, "Dai suoi esercizi svolti: all'esame si aspetta questo procedimento e questa notazione."),
+  const byTutor = t.methods.map((m) => !!methodByTutor(exam, m));
+  const all = byTutor.every(Boolean);
+  return h("div", { class: "card stack" }, h("h3", { style: { margin: 0 } }, all ? "Come lo risolve il tutor" : "Come lo risolve il docente"),
+    h("p", { class: "muted small", style: { margin: 0 } }, all
+      ? "Dagli esercizi svolti al tutorato: un buon procedimento da imparare, ma all'esame valgono notazione e impostazione del docente, se sono diverse."
+      : "Dai suoi esercizi svolti: all'esame si aspetta questo procedimento e questa notazione."),
     ...t.methods.map((m, i) => h("div", { class: "method-box" },
-      h("div", { class: "row between" }, h("b", {}, rich(m.name)), h("a", { class: "btn small primary", href: `#/exam/${exam.id}/guided/${t.id}?m=${i}` }, "Esercizi guidati")),
+      h("div", { class: "row between" }, h("b", {}, rich(m.name), !all && byTutor[i] ? h("span", {}, " ", badge("dal tutorato", "warn")) : null), h("a", { class: "btn small primary", href: `#/exam/${exam.id}/guided/${t.id}?m=${i}` }, "Esercizi guidati")),
       h("ol", { class: "method-steps" }, m.steps.map((st) => h("li", {}, rich(st)))),
-      m.problem ? h("details", { class: "small" }, h("summary", {}, `L'esercizio svolto dal docente${m.source ? ` (${m.source})` : ""}`),
+      m.problem ? h("details", { class: "small" }, h("summary", {}, `L'esercizio svolto ${byTutor[i] ? "al tutorato" : "dal docente"}${m.source ? ` (${m.source})` : ""}`),
         h("div", { class: "worked" }, ...renderMarkdown(m.problem), h("div", { class: "worked-solution" }, ...renderMarkdown(m.solution || "(svolgimento non trovato)"))),
         m.verified ? null : h("p", { class: "muted" }, "Copiato da Claude da un PDF: controllalo sul materiale originale.")) : null)));
 }
