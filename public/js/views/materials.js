@@ -16,6 +16,7 @@ import { applyExamBoost, papersOf, parseStarts, preparePapers } from "../past-ex
 import { countLabel, numberedQuestions, questionsOf, remapExamRefs } from "../exam-questions.js";
 import { booksCard, syncChapterLinks, syncDispense } from "./books.js";
 import { looksLikeSlides } from "../dispense.js";
+import { clock, parseTranscript } from "../transcripts.js";
 import { applyOfficial, isSolutionsFile, officialExercises, officialQuestions, orphanSolutions, pendingOfficial, stemOf } from "../exercises.js";
 import { paperStartsOf } from "../lessons.js";
 import * as store from "../store.js";
@@ -69,7 +70,7 @@ async function addFiles(exam, files) {
   let pdfTotal = exam.materials.filter((m) => m.kind === "pdf").reduce((s, m) => s + m.size, 0);
   const audio = files.filter((f) => /^audio\/|^video\//.test(f.type) || /\.(mp3|m4a|wav|aac|ogg|opus|flac|mp4|mov|webm)$/i.test(f.name));
   if (audio.length) {
-    toast(`«${audio[0].name}»${audio.length > 1 ? ` e altri ${audio.length - 1}` : ""}: le registrazioni audio non si possono usare direttamente (Claude legge testo, PDF e immagini, non audio). Trascrivi la registrazione con un servizio di trascrizione e carica qui il testo come «Sbobine».`, "error");
+    toast(`«${audio[0].name}»${audio.length > 1 ? ` e altri ${audio.length - 1}` : ""}: le registrazioni audio non si possono usare direttamente (Claude legge testo, PDF e immagini, non audio). Trascrivile con un programma di trascrizione (per esempio uno basato su Whisper) e carica qui il file che ne esce: .txt, .srt o .vtt. L'app toglie i tempi e tiene i minuti, per ritrovare le frasi nella registrazione.`, "error");
     files = files.filter((f) => !audio.includes(f));
   }
   const photos = files.filter(isImage);
@@ -124,10 +125,14 @@ async function addFiles(exam, files) {
       }
     } else if (/\.(doc|ppt)$/i.test(file.name)) {
       toast(`«${file.name}»: il vecchio formato Office non è supportato. Salvalo come .docx/.pptx o PDF.`, "error");
-    } else if (/\.(txt|md|markdown)$/i.test(file.name) || file.type.startsWith("text/")) {
+    } else if (/\.(txt|md|markdown|srt|vtt)$/i.test(file.name) || file.type.startsWith("text/")) {
       const text = await readFileAs(file, "text");
-      exam.materials.push(structure({ id: uid(), kind: "notes", role: guessRole(file.name), title: name, text, size: text.length, addedAt: now() }));
-    } else toast(`«${file.name}»: formato non supportato (usa .pdf, .docx, .pptx, .txt o .md).`, "error");
+      // trascrizione automatica di una registrazione (sottotitoli, Whisper): testo pulito con i minuti, tipo «Sbobine»
+      const tr = parseTranscript(text);
+      if (tr) exam.materials.push({ id: uid(), kind: "notes", role: "sbobine", auto: true, duration: tr.duration, title: name, text: tr.text, size: tr.text.length, addedAt: now() });
+      else if (/\.(srt|vtt)$/i.test(file.name)) toast(`«${file.name}»: non trovo i tempi dei sottotitoli. È un file .srt o .vtt valido?`, "error");
+      else exam.materials.push(structure({ id: uid(), kind: "notes", role: guessRole(file.name), title: name, text, size: text.length, addedAt: now() }));
+    } else toast(`«${file.name}»: formato non supportato (usa .pdf, .docx, .pptx, .txt, .md, o .srt/.vtt per le trascrizioni).`, "error");
   }
   for (const d of await syncDispense(exam)) {
     toast(`«${d.title}»: dispense con ${d.chapters} capitoli (${d.from === "indice" ? "dalla pagina dell'indice" : "dai titoli nelle pagine"}). Per ogni argomento ti dirò quali pagine leggere${exam.module ? ", dopo «Aggiungi al modulo»" : ""}.`, "ok");
@@ -356,7 +361,7 @@ async function payload(list, { onlyNew = false } = {}) {
       pages += r ? r.to - r.from + 1 : m.numPages ?? 0;
       bytes += data.length;
       materials.push({ kind: "pdf", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", year: m.year ?? "", data });
-    } else materials.push({ kind: "notes", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", unit: m.unit ?? "pagine", year: m.year ?? "", handwritten: !!m.handwritten, text: sliceText(m.text, range) });
+    } else materials.push({ kind: "notes", role: roleOf(m), title: m.title, pages: r ? `${r.from}-${r.to}` : "", unit: m.unit ?? "pagine", year: m.year ?? "", handwritten: !!m.handwritten, auto: !!m.auto, text: sliceText(m.text, range) });
   }
   if (pages > MAX_SEND_PAGES || bytes > MAX_SEND_BYTES)
     throw new Error(`Troppo materiale PDF per una volta (${pages} pagine, ${kb(bytes * 0.75)}): il limite è ${MAX_SEND_PAGES} pagine e ~${kb(MAX_SEND_BYTES * 0.75)}. Nel materiale scegli le pagine (es. i capitoli del programma) e aggiungi il resto dopo con «Aggiungi al modulo».`);
@@ -707,7 +712,7 @@ export function materialsTab(exam) {
   } }, h("h3", {}, "Incolla appunti, esercizi, temi d'esame o parti di libro"), h("div", { class: "row", style: { gap: "8px", flexWrap: "nowrap" } }, title, pasteRole), text, h("div", {}, h("button", { class: "btn", type: "submit" }, "Aggiungi")));
 
   /* --- carica file --- */
-  const input = h("input", { type: "file", multiple: true, accept: `${core.ai.pdf === false && !core.pdfText ? "" : ".pdf,application/pdf,"}.docx,.pptx,.txt,.md,.markdown,text/plain,image/*,.heic`, hidden: true });
+  const input = h("input", { type: "file", multiple: true, accept: `${core.ai.pdf === false && !core.pdfText ? "" : ".pdf,application/pdf,"}.docx,.pptx,.txt,.md,.markdown,.srt,.vtt,text/plain,image/*,.heic`, hidden: true });
   const camera = h("input", { type: "file", accept: "image/*", capture: "environment", multiple: true, hidden: true, id: "camera-input" });
   camera.addEventListener("change", () => addFiles(exam, [...camera.files]));
   const handBox = h("div", { class: "card stack" },
@@ -772,7 +777,9 @@ export function materialsTab(exam) {
                 ["sbobine", "colleghi"].includes(roleOf(m)) ? h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Anno accademico",
                   h("input", { class: "sbobina-year", value: m.year ?? "", placeholder: "es. 2025-26", "aria-label": `Anno accademico di ${m.title}`, style: { width: "100px", padding: "4px 8px" }, onchange: (e) => { m.year = e.target.value.trim(); store.save(); } })) : null,
                 m.numPages > 1 ? pagePicker(m) : null) : null,
-              roleOf(m) === "sbobine" ? h("div", { class: "small muted" }, "Sbobine: le frasi del docente sull'esame finiscono nel modulo (verificate sul testo). Possono contenere errori di trascrizione su termini e formule, e se sono di un altro anno docente e programma potrebbero essere cambiati.") : null,
+              roleOf(m) === "sbobine" ? h("div", { class: "small muted" }, m.auto
+                ? `Trascrizione automatica di una registrazione${m.duration ? ` (${clock(m.duration)})` : ""}: sono le parole del docente, ma il programma di trascrizione sbaglia termini tecnici, numeri e formule (dette a parole). L'AI le controlla su dispense e libro. I segni come [12:30] sono i minuti della registrazione: le frasi del docente sull'esame te li indicano, così puoi riascoltarle.`
+                : "Sbobine: le frasi del docente sull'esame finiscono nel modulo (verificate sul testo). Possono contenere errori di trascrizione su termini e formule, e se sono di un altro anno docente e programma potrebbero essere cambiati.") : null,
               papersRow(exam, m), questionsRow(m), exercisesRow(exam, m), slidesRow(m), dispenseRow(exam, m),
               roleOf(m) === "colleghi" ? h("div", { class: "small muted" }, "Appunti di colleghi: dicono che cosa ha spiegato e sottolineato il docente, ma sono di seconda mano. L'AI controlla definizioni e formule su dispense, libro e i tuoi appunti, e ti segnala gli argomenti che sono solo qui. Se sono di un altro anno, scrivilo: programma e docente potrebbero essere cambiati.") : null,
               roleOf(m) === "svolti" ? h("div", { class: "small muted" }, "Esercizi svolti dal docente: l'AI ne ricava il metodo in passi (come li risolve lui, con la sua notazione) e crea esercizi dello stesso tipo. Li ritrovi negli argomenti come «Esercizi guidati». Se sono scansioni o appunti a mano, controlla le formule nell'anteprima.") : null,

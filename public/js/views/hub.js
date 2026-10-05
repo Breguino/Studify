@@ -17,6 +17,7 @@ import { allPapers, analysisValid, topicFrequency } from "../past-exams.js";
 import { examQuestionStats } from "../exam-questions.js";
 import { renderMarkdown } from "../markdown.js";
 import { pagesLabel, readingMinutes, shortName, topicReading, uncoveredChapters } from "../books.js";
+import { timeOfQuote } from "../transcripts.js";
 
 const TABS = [
   ["today", "Oggi"],
@@ -111,14 +112,24 @@ function todayTab(exam) {
 
 const ORIGIN = { notes: "dai tuoi materiali", online: "dal web", model: "conoscenza generale dell'AI (verifica)" };
 
+/** In quale registrazione e a che minuto c'è la frase (dalle trascrizioni automatiche, che hanno i segni dei minuti). */
+function whenSaid(exam, quote) {
+  for (const m of exam.materials) {
+    if (!m.auto) continue;
+    const at = timeOfQuote(m.text, quote);
+    if (at) return `dal min ${at} della registrazione «${m.title}»`; // il segno è l'inizio del paragrafo (circa un minuto)
+  }
+  return null;
+}
+
 /** Frasi del docente sull'esame (dalle sbobine o dagli appunti), con la fonte. */
-function hintsBox(hints, mod, title = "Cosa ha detto il docente sull'esame") {
+function hintsBox(exam, hints, mod, title = "Cosa ha detto il docente sull'esame") {
   if (!hints?.length) return null;
   const topicTitle = (id) => mod.topics.find((t) => t.id === id)?.title;
   return h("div", { class: "callout hints" }, h("b", {}, `${title} (${hints.length})`),
     h("ul", {}, hints.map((x) => h("li", {},
       h("q", {}, rich(x.quote)),
-      h("span", { class: "muted small" }, ` — ${[x.source, title === "Cosa ha detto il docente sull'esame" ? topicTitle(x.topicId) : null].filter(Boolean).join(" · ")}`),
+      h("span", { class: "muted small" }, ` — ${[x.source, whenSaid(exam, x.quote), title === "Cosa ha detto il docente sull'esame" ? topicTitle(x.topicId) : null].filter(Boolean).join(" · ")}`),
       x.note ? h("div", { class: "small" }, rich(x.note)) : null,
       x.verified === false ? h("div", { class: "small muted" }, "Citazione da un PDF: non verificata sul testo, controllala.") : null))),
     h("div", { class: "small muted" }, "Frasi copiate dai materiali: quelle da sbobine o appunti di colleghi sono di seconda mano, e se sono di un anno precedente il docente potrebbe aver cambiato idea."));
@@ -164,7 +175,7 @@ function moduleTab(exam) {
     h("div", { class: "card" }, h("h2", {}, mod.title || "Modulo di studio"), richParas(mod.overview),
       h("div", { class: "row" }, badge(`${mod.topics.length} argomenti`, "brand"), badge(`${mod.flashcards.length} flashcard`), badge(`${mod.questions.length} domande`), mod.examHints?.length ? badge(`${mod.examHints.length} ${mod.examHints.length === 1 ? "indicazione" : "indicazioni"} sull'esame`, "bad") : null, mod.local ? badge("modalità base", "warn") : null),
       exam.moduleUpdatedAt ? h("p", { class: "muted small", style: { margin: "8px 0 0" } }, `Aggiornato con appunti nuovi il ${fmtDate(today(new Date(exam.moduleUpdatedAt)))}.`) : null),
-    hintsBox(mod.examHints, mod),
+    hintsBox(exam, mod.examHints, mod),
     papers ? h("div", { class: "callout row between" }, h("span", {}, freq.n
       ? `Esami passati: ${freq.n} ${freq.n === 1 ? "prova analizzata" : "prove analizzate"}. Accanto a ogni argomento, in quante prove compare.`
       : `Hai ${papers} ${papers === 1 ? "prova" : "prove"} d'esame tra i materiali: analizzale per vedere quali argomenti escono di più.`),
@@ -273,7 +284,7 @@ export function topicView(exam, tid, query) {
     h("a", { class: "muted", href: `#/exam/${exam.id}/module` }, "← Modulo"),
     h("div", { class: "row between" }, h("h1", {}, rich(t.title)), h("div", { class: "row" }, badge(`difficoltà ${t.difficulty}/3`), badge(["", "marginale", "importante", "centrale"][t.importance], t.importance === 3 ? "bad" : "warn"))),
     h("div", { class: "callout" }, h("b", {}, "Prima di leggere: "), "scrivi o pensa a 3 cose che già sai su questo argomento (anche sbagliate). Il tentativo di ricordare rende la lettura successiva più efficace."),
-    hintsBox((mod.examHints ?? []).filter((x) => x.topicId === t.id), mod, "Il docente su questo argomento"),
+    hintsBox(exam, (mod.examHints ?? []).filter((x) => x.topicId === t.id), mod, "Il docente su questo argomento"),
     askedBox(exam, t),
     examQuestionsBox(exam, t),
     readingBox(exam, t),

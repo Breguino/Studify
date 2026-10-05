@@ -1,0 +1,224 @@
+1
+00:00:00,000 --> 00:00:04,500
+Buongiorno a tutti, oggi
+parliamo di elasticità della domanda.
+
+2
+00:00:05,000 --> 00:00:09,500
+L'elasticità misura quanto cambia la
+quantità quando cambia il prezzo.
+
+3
+00:00:10,000 --> 00:00:14,500
+Si calcola come variazione percentuale della quantità
+
+4
+00:00:15,000 --> 00:00:19,500
+diviso la variazione percentuale del prezzo.
+
+5
+00:00:20,000 --> 00:00:24,500
+Se il valore assoluto è maggiore
+di uno la domanda è elastica.
+
+6
+00:00:25,000 --> 00:00:29,500
+Facciamo un esempio con la domanda
+Q uguale cento meno due P.
+
+7
+00:00:30,000 --> 00:00:34,500
+Nel punto P uguale
+venti la quantità è sessanta.
+
+8
+00:00:35,000 --> 00:00:39,500
+La derivata della quantità rispetto
+al prezzo è meno due.
+
+9
+00:00:40,000 --> 00:00:44,500
+Quindi l'elasticità è meno
+due per venti fratto sessanta.
+
+10
+00:00:45,000 --> 00:00:49,500
+Cioè circa zero virgola sessantasette in valore assoluto.
+
+11
+00:00:50,000 --> 00:00:54,500
+La domanda in quel punto è anelastica.
+
+12
+00:00:55,000 --> 00:00:59,500
+Vediamo adesso l'elasticità incrociata tra due beni.
+
+13
+00:01:00,000 --> 00:01:04,500
+Buongiorno a tutti, oggi
+parliamo di elasticità della domanda.
+
+14
+00:01:05,000 --> 00:01:09,500
+L'elasticità misura quanto cambia la
+quantità quando cambia il prezzo.
+
+15
+00:01:10,000 --> 00:01:14,500
+Si calcola come variazione percentuale della quantità
+
+16
+00:01:15,000 --> 00:01:19,500
+diviso la variazione percentuale del prezzo.
+
+17
+00:01:20,000 --> 00:01:24,500
+Se il valore assoluto è maggiore
+di uno la domanda è elastica.
+
+18
+00:01:25,000 --> 00:01:29,500
+Facciamo un esempio con la domanda
+Q uguale cento meno due P.
+
+19
+00:01:30,000 --> 00:01:34,500
+Nel punto P uguale
+venti la quantità è sessanta.
+
+20
+00:01:35,000 --> 00:01:39,500
+La derivata della quantità rispetto
+al prezzo è meno due.
+
+21
+00:01:40,000 --> 00:01:44,500
+Quindi l'elasticità è meno
+due per venti fratto sessanta.
+
+22
+00:01:45,000 --> 00:01:49,500
+Cioè circa zero virgola sessantasette in valore assoluto.
+
+23
+00:01:50,000 --> 00:01:54,500
+La domanda in quel punto è anelastica.
+
+24
+00:01:55,000 --> 00:01:59,500
+Vediamo adesso l'elasticità incrociata tra due beni.
+
+25
+00:02:00,000 --> 00:02:04,500
+Buongiorno a tutti, oggi
+parliamo di elasticità della domanda.
+
+26
+00:02:05,000 --> 00:02:09,500
+L'elasticità misura quanto cambia la
+quantità quando cambia il prezzo.
+
+27
+00:02:10,000 --> 00:02:14,500
+Si calcola come variazione percentuale della quantità
+
+28
+00:02:15,000 --> 00:02:19,500
+diviso la variazione percentuale del prezzo.
+
+29
+00:02:20,000 --> 00:02:24,500
+Se il valore assoluto è maggiore
+di uno la domanda è elastica.
+
+30
+00:02:25,000 --> 00:02:29,500
+Facciamo un esempio con la domanda
+Q uguale cento meno due P.
+
+31
+00:02:30,000 --> 00:02:34,500
+Ragazzi, questo all'esame lo
+chiedo sempre: il calcolo dell'elasticità.
+
+32
+00:02:35,000 --> 00:02:39,500
+Nel punto P uguale
+venti la quantità è sessanta.
+
+33
+00:02:40,000 --> 00:02:44,500
+La derivata della quantità rispetto
+al prezzo è meno due.
+
+34
+00:02:45,000 --> 00:02:49,500
+Quindi l'elasticità è meno
+due per venti fratto sessanta.
+
+35
+00:02:50,000 --> 00:02:54,500
+Cioè circa zero virgola sessantasette in valore assoluto.
+
+36
+00:02:55,000 --> 00:02:59,500
+La domanda in quel punto è anelastica.
+
+37
+00:03:00,000 --> 00:03:04,500
+Vediamo adesso l'elasticità incrociata tra due beni.
+
+38
+00:03:05,000 --> 00:03:09,500
+Buongiorno a tutti, oggi
+parliamo di elasticità della domanda.
+
+39
+00:03:10,000 --> 00:03:14,500
+L'elasticità misura quanto cambia la
+quantità quando cambia il prezzo.
+
+40
+00:03:15,000 --> 00:03:19,500
+Si calcola come variazione percentuale della quantità
+
+41
+00:03:20,000 --> 00:03:24,500
+diviso la variazione percentuale del prezzo.
+
+42
+00:03:25,000 --> 00:03:29,500
+Se il valore assoluto è maggiore
+di uno la domanda è elastica.
+
+43
+00:03:30,000 --> 00:03:34,500
+Facciamo un esempio con la domanda
+Q uguale cento meno due P.
+
+44
+00:03:35,000 --> 00:03:39,500
+Nel punto P uguale
+venti la quantità è sessanta.
+
+45
+00:03:40,000 --> 00:03:44,500
+La derivata della quantità rispetto
+al prezzo è meno due.
+
+46
+00:03:45,000 --> 00:03:49,500
+Quindi l'elasticità è meno
+due per venti fratto sessanta.
+
+47
+00:03:50,000 --> 00:03:54,500
+Cioè circa zero virgola sessantasette in valore assoluto.
+
+48
+00:03:55,000 --> 00:03:59,500
+La domanda in quel punto è anelastica.
+
+49
+00:04:00,000 --> 00:04:04,500
+Vediamo adesso l'elasticità incrociata tra due beni.

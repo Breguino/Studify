@@ -117,8 +117,13 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
      chiedo», con fonte e argomento, nel riquadro «Cosa ha detto il docente sull'esame» del modulo e nella pagina dell'argomento.
      Devono essere **copiate** dai materiali: l'app controlla che compaiano nel testo mandato all'AI e scarta quelle inventate o
      parafrasate (da un PDF non si può verificare: restano, segnate come non verificate). In modalità base si trovano con le regole.
-   - **Registrazioni audio**: Claude non legge l'audio. L'app lo dice e suggerisce di trascriverle con un servizio apposito e
-     caricare il testo come sbobina.
+   - **Registrazioni delle lezioni**: Claude non legge l'audio, quindi un file audio o video non si può usare così com'è (l'app lo
+     dice). Si trascrive con un programma di trascrizione (per esempio uno basato su Whisper, anche in locale) o si usano i sottotitoli
+     automatici della piattaforma (Teams, Zoom, YouTube), e si carica il file che ne esce: **.srt, .vtt** o testo con i tempi. L'app
+     toglie numeri e tempi, unisce le righe in paragrafi, toglie le righe ripetute dei sottotitoli «a scorrimento», tiene i nomi di chi
+     parla (Teams) e mette davanti a ogni paragrafo il **minuto della registrazione** («[12:30]»). Il file diventa una sbobina segnata
+     come trascrizione automatica: l'AI sa che termini tecnici e numeri possono essere storpiati e che le formule sono dette a parole
+     (le riscrive in LaTeX), e accanto a ogni frase del docente sull'esame l'app indica **da che minuto riascoltarla**.
    - **Appunti scritti a mano.** «Fotografa gli appunti» (fotocamera del telefono) o «Carica foto o scansioni»: una foto per
      pagina, in ordine di nome. Le foto vengono raddrizzate, ridotte a 2576 px sul lato lungo (il massimo che i modelli usano) e
      convertite in JPEG nel browser; Claude le trascrive (3 per richiesta) con le formule in LaTeX, segnando «[?]» le parole lette
@@ -274,6 +279,9 @@ una prima lettura guidata e da esempi svolti (expertise reversal); con pochi gio
   guarda solo quante parole ci sono per pagina: slide molto fitte restano «dispense» (cambia il tipo a mano). Che le dispense
   prevalgano sul libro vale per definizioni e notazione; su un fatto o un calcolo un refuso del docente resta un refuso, per questo
   le differenze vengono segnalate e non risolte in silenzio.
+- **Registrazioni**: la trascrizione la fa un altro programma, e i suoi errori (un termine storpiato, «quindici» al posto di «cinquanta»)
+  arrivano all'AI; per questo le frasi del docente portano il minuto, per riascoltarle. Una lezione di 90 minuti trascritta sono
+  circa 12.000 parole: nella pagina Claude ne entrano un paio per volta, il resto si aggiunge con «Aggiungi al modulo».
 - **Appunti di colleghi**: servono a recuperare le lezioni perse e a confrontare i tuoi; leggerli non sostituisce lo studio (chi li ha
   scritti ha fatto il lavoro di capire e riassumere, tu no). Il controllo dell'AI trova i contrasti con dispense e libro, non gli
   errori di un collega su ciò che c'è solo nei suoi appunti: per questo quegli argomenti vengono segnalati.
@@ -307,7 +315,7 @@ scripts/          build-artifact.mjs (esbuild)
 public/js/        logica pura (testata): dates, methods, srs, planner, progress, local-builder, tabular (CSV/xlsx), importers, timetable,
                   lessons (lezioni e prove), past-exams (prove, frequenze, voto), exam-questions (elenchi di domande d'esame),
                   worked (metodi del docente ed esercizi guidati), exercises (esercitazioni con le soluzioni), books (libri consigliati),
-                  dispense (indice delle dispense del docente, slide o dispense)
+                  dispense (indice delle dispense del docente, slide o dispense), transcripts (sottotitoli e trascrizioni con i tempi)
                   stato/UI: store (IndexedDB), domain, api, ui, views/*
 public/demo/      modulo demo (Microeconomia)
 test/             node --test: logica pura + client AI con SDK simulato

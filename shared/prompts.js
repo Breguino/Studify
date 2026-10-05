@@ -109,6 +109,10 @@ export const MODULE_PRINCIPLES = `Principi inderogabili:
      e mustKnow. Ignora battute, ripetizioni, avvisi organizzativi. Possono avere errori di trascrizione (termini tecnici, formule,
      numeri capiti male): se contrastano con dispense del docente o libro valgono quelli, e segnalalo in "gaps". Se l'attributo anno indica un anno
      accademico precedente, docente e programma potrebbero essere cambiati: tienilo presente.
+     Con trascrizione_automatica="sì" è la registrazione della lezione trascritta da un programma: sono le parole del docente, ma la
+     punteggiatura è inaffidabile, i termini tecnici possono essere storpiati (deducili dal contesto e dalle altre fonti) e le formule
+     sono dette a parole («x al quadrato fratto due»): riscrivile in LaTeX. Le voci con un nome davanti («Mario Rossi: …») sono di chi
+     parla (anche studenti che fanno domande). I segni come «[12:30]» sono i minuti della registrazione: non copiarli nel modulo.
    - appunti scritti a mano (trascritti da foto): «[?]» segna una parola letta con incertezza, «[illeggibile]» una parte non letta.
      Non basare carte o domande su una lettura incerta che gli altri materiali non confermano; se è importante, segnalala in "gaps".
 ${FORMULA_RULE}
@@ -237,8 +241,9 @@ export function materialText(m) {
   const tag = MATERIAL_TAG[m.role] ?? MATERIAL_TAG.appunti;
   const pages = m.pages ? ` ${m.unit === "lezioni" ? "lezioni" : m.unit === "prove" ? "prove" : "pagine"}="${m.pages}"` : "";
   const hand = m.handwritten ? ` scritti_a_mano="sì"` : "";
+  const auto = m.auto ? ` trascrizione_automatica="sì"` : "";
   const year = m.year ? ` anno="${String(m.year).replace(/"/g, "")}"` : "";
-  return `<${tag} titolo="${String(m.title ?? "").replace(/"/g, "'")}"${pages}${year}${hand}>\n${m.text}\n</${tag}>`;
+  return `<${tag} titolo="${String(m.title ?? "").replace(/"/g, "'")}"${pages}${year}${hand}${auto}>\n${m.text}\n</${tag}>`;
 }
 
 /** Titolo di un PDF allegato: tipo, nome, pagine scelte e anno accademico (per sbobine e appunti di colleghi di altri anni). */
@@ -329,7 +334,7 @@ Regole:
   di esercizio chiedono sull'argomento («Negli appelli: calcolo dell'elasticità da una funzione di domanda»).
 - APPUNTI DI COLLEGHI: sono di seconda mano. Usali per ciò che il docente ha spiegato, ma definizioni e formule prendile da dispense
   e libro quando ci sono; ciò che è solo lì citalo [Appunti di un collega] perché lo studente sappia che va verificato.
-- SBOBINE: togli il parlato (ripetizioni, battute, avvisi) e tieni la spiegazione; i termini o le formule sospette vanno controllati
+- SBOBINE: togli il parlato (ripetizioni, battute, avvisi) e tieni la spiegazione (i segni dei minuti come «[12:30]» non vanno copiati); i termini o le formule sospette vanno controllati
   sulle altre fonti. Le parole segnate «[?]» negli appunti a mano sono letture incerte: non basarci la spiegazione.
 - FORMULE in LaTeX compatibile con KaTeX: $...$ nel testo, $$...$$ su una riga a sé (con una riga vuota prima e dopo). Mai formule in testo
   semplice. Spiega il significato dei simboli la prima volta che compaiono.
