@@ -45,7 +45,10 @@ test("errori dell'API → codici dell'app", () => {
   assert.equal(claudeErrorCode({ status: 429 }), "rate_limited");
   assert.equal(claudeErrorCode({ status: 529 }), "rate_limited");
   assert.equal(claudeErrorCode({ status: 400, message: "prompt is too long: 250000 tokens" }), "prompt_too_large");
-  assert.equal(claudeErrorCode({ status: 401 }), "sampling_disabled");
+  assert.equal(claudeErrorCode({ status: 401, message: "invalid x-api-key" }), "invalid_key");
+  assert.equal(claudeErrorCode({ status: 403 }), "sampling_disabled");
+  assert.equal(claudeErrorCode({ status: 400, message: "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits." }), "billing");
+  assert.equal(claudeErrorCode({ status: 404, message: "model: claude-xyz" }), "model_unavailable");
   assert.equal(claudeErrorCode({ name: "APIUserAbortError" }), "cancelled");
   assert.equal(claudeErrorCode(new Error("boh")), "server_error");
 });
@@ -147,15 +150,25 @@ test("handler: rifiuto e interruzione → riga d'errore, consumo comunque regist
   sb = fakeSupabase();
   await createHandler({ env: ENV, anthropic: fakeAnthropic({ fail: Object.assign(new Error("overloaded"), { status: 529 }) }), fetchFn: sb.fetchFn, log: () => {} })(fakeReq(), res);
   assert.deepEqual(res.lines().at(-1), { type: "error", code: "rate_limited" });
+  res = fakeRes();
+  const logged = [];
+  await createHandler({ env: ENV, anthropic: fakeAnthropic({ fail: Object.assign(new Error("Your credit balance is too low"), { status: 400 }) }), fetchFn: fakeSupabase().fetchFn, log: (m) => logged.push(String(m)) })(fakeReq(), res);
+  assert.deepEqual(res.lines().at(-1), { type: "error", code: "billing" });
+  assert.match(logged.join(" "), /billing \(400\)/, "l'errore finisce nei log di Vercel");
   const rec = JSON.parse(sb.calls.find((c) => c.url.endsWith("record_ai_usage")).init.body);
   assert.equal(rec.p_input, 1000, "i token d'ingresso già pagati sono registrati anche se lo stream si interrompe");
   assert.ok(res.writableEnded);
 });
 
-test("handler: GET restituisce solo il limite mensile", async () => {
+test("handler: GET restituisce il limite mensile e se la chiave è configurata (non il valore)", async () => {
   const res = fakeRes();
   await createHandler({ env: ENV, anthropic: fakeAnthropic(), fetchFn: fakeSupabase().fetchFn })(fakeReq({ method: "GET", token: null }), res);
-  assert.deepEqual(JSON.parse(res.chunks.join("")), { limits: { user: 3 } });
+  assert.deepEqual(JSON.parse(res.chunks.join("")), { limits: { user: 3 }, configured: true, model: "claude-opus-5-5" });
+  const res2 = fakeRes();
+  await createHandler({ env: { ...ENV, ANTHROPIC_API_KEY: "" }, anthropic: null, fetchFn: fakeSupabase().fetchFn })(fakeReq({ method: "GET", token: null }), res2);
+  const body = JSON.parse(res2.chunks.join(""));
+  assert.equal(body.configured, false, "dice se la chiave manca");
+  assert.ok(!JSON.stringify(body).includes("sk-"), "mai il valore della chiave");
 });
 
 /* --------------------------------- accesso --------------------------------- */
