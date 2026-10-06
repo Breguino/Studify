@@ -28,6 +28,9 @@ export function explain(e) {
     empty_completion: "Claude non ha prodotto una risposta. Riprova con meno materiale.",
     session_expired: "Sessione scaduta: riapri la pagina ed effettua l'accesso.",
     quota_exceeded: "Hai usato tutto il credito di Claude di questo mese.",
+    billing: "Il credito dell'API di Claude del gestore di Studify è esaurito: le funzioni AI torneranno quando verrà ricaricato.",
+    invalid_key: "La chiave di Claude configurata sul server non è valida: il gestore deve controllarla.",
+    model_unavailable: "Il modello di Claude configurato sul server non è disponibile per questa chiave.",
     server_error: "Il server di Studify non ha risposto. Riprova tra poco.",
     cancelled: "Operazione annullata.",
   }[e?.code] ?? "Errore di comunicazione con Claude. Riprova.";
@@ -36,7 +39,7 @@ export function explain(e) {
 }
 
 // Errori per cui non ha senso continuare con gli altri passi (le altre richieste fallirebbero allo stesso modo).
-const FATAL = new Set(["not_granted", "sampling_disabled", "rate_limited", "quota_exceeded", "session_expired"]);
+const FATAL = new Set(["not_granted", "sampling_disabled", "rate_limited", "quota_exceeded", "session_expired", "billing", "invalid_key", "model_unavailable"]);
 const isFatal = (e) => FATAL.has(e?.code);
 
 /** Esegue `fn` su ogni elemento con al più `n` richieste in volo. */

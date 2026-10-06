@@ -68,10 +68,14 @@ export function messageParams({ prompt, images, json }, { model, maxTokens }) {
 /** Errore dell'API di Claude → codice per l'app (gli stessi della capability `sample`). */
 export function claudeErrorCode(e) {
   const s = e?.status;
-  if (s === 429 || s === 529) return "rate_limited";
-  if (s === 413 || (s === 400 && /prompt is too long|too many tokens|exceed/i.test(e?.message ?? ""))) return "prompt_too_large";
-  if (s === 401 || s === 403) return "sampling_disabled";
+  const msg = e?.message ?? "";
   if (e?.name === "APIUserAbortError" || e?.name === "AbortError") return "cancelled";
+  if (s === 429 || s === 529) return "rate_limited";
+  if (/credit balance|billing|purchase credits|spend limit|usage limit/i.test(msg)) return "billing"; // credito Anthropic del gestore esaurito
+  if (s === 413 || (s === 400 && /prompt is too long|too many tokens|exceed/i.test(msg))) return "prompt_too_large";
+  if (s === 401) return "invalid_key"; // chiave sbagliata o revocata
+  if (s === 403) return "sampling_disabled";
+  if (s === 404 || /model/i.test(msg) && s === 400) return "model_unavailable";
   return "server_error";
 }
 
@@ -140,7 +144,8 @@ export function createHandler({ env, anthropic, fetchFn = fetch, log = console.e
       // limite mensile per utente, mostrato nella finestra «Account» (nessun dato personale)
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/json; charset=utf-8");
-      return res.end(JSON.stringify({ limits: { user: limits(env).user } }));
+      // solo SE la chiave è configurata (mai il valore): serve a capire «Claude non configurato» senza un account
+      return res.end(JSON.stringify({ limits: { user: limits(env).user }, configured: Boolean(env.ANTHROPIC_API_KEY), model }));
     }
     if (req.method !== "POST") return fail(405, "bad_request", "Usa POST.");
     if (!env.SUPABASE_URL || !env.SUPABASE_KEY) return fail(503, "sampling_disabled", "Server non configurato.");
@@ -178,7 +183,7 @@ export function createHandler({ env, anthropic, fetchFn = fetch, log = console.e
       else line({ type: "done", truncated: msg.stop_reason === "max_tokens" });
     } catch (e) {
       const code = claudeErrorCode(e);
-      if (code === "server_error") log(e);
+      if (code !== "cancelled") log(`claude: ${code} (${e?.status ?? "-"}) ${String(e?.message ?? e).slice(0, 300)}`); // nei log di Vercel
       line({ type: "error", code });
     } finally {
       // il consumo si registra anche se la risposta si è interrotta: i token sono stati pagati
