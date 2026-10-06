@@ -24,7 +24,9 @@ import * as store from "../store.js";
 import { fmtDate, today } from "../dates.js";
 import { clipRich, rich, richParas } from "../math.js";
 import { blobToBase64, byName, isImage, prepareImage } from "../images.js";
-import { badge, confirmDialog, h, readFileAs, toast, uid } from "../ui.js";
+import { badge, confirmDialog, h, icon, readFileAs, stepper, toast, uid } from "../ui.js";
+import { currentHash, go } from "../nav.js";
+import { examMeta } from "./exam-meta.js";
 
 const MAX_PDF_TOTAL = 300 * 1024 * 1024; // archiviati nel browser: anche libri interi, poi se ne scelgono le pagine
 // Per una richiesta all'AI (limiti dell'API: 600 pagine e 32 MB; il server accetta 40 MB di richiesta in base64)
@@ -491,7 +493,13 @@ async function generate(exam) {
     if (books) toast(`Libri: ${books}`, "ok");
     exam.materials.forEach(markSent);
     toast("Modulo pronto!", "ok");
+    toReady(exam);
   });
+}
+
+/** Primo esame: appena il modulo è pronto, se sei ancora su questo esame, si passa al passo 3 (il modulo da controllare). */
+function toReady(exam) {
+  if (exam.onboarding && currentHash().startsWith(`#/exam/${exam.id}`)) go(`#/exam/${exam.id}/pronto`);
 }
 
 function resetProgress(exam, mod) {
@@ -538,6 +546,7 @@ function generateLocal(exam) {
   exam.materials.forEach(markSent);
   store.save();
   toast(`Modulo base: ${mod.topics.length} argomenti, ${mod.flashcards.length} flashcard.`, "ok");
+  toReady(exam);
   core.rerender();
 }
 
@@ -772,7 +781,7 @@ function pagePicker(m) {
     m.kind === "notes" ? h("span", {}, ` (${chars(sliceText(m.text, m.pages).length)})`) : null);
 }
 
-export function materialsTab(exam) {
+export function materialsTab(exam, { first = false } = {}) {
   const ai = core.ai.ai;
   const hasContent = exam.materials.length > 0;
   const busy = jobs.has(exam.id);
@@ -794,24 +803,28 @@ export function materialsTab(exam) {
   const input = h("input", { type: "file", multiple: true, accept: `${core.ai.pdf === false && !core.pdfText ? "" : ".pdf,application/pdf,"}.docx,.pptx,.txt,.md,.markdown,.srt,.vtt,.html,.htm,text/plain,image/*,.heic`, hidden: true });
   const camera = h("input", { type: "file", accept: "image/*", capture: "environment", multiple: true, hidden: true, id: "camera-input" });
   camera.addEventListener("change", () => addFiles(exam, [...camera.files]));
-  const handBox = h("div", { class: "card stack" },
-    h("h3", {}, "Appunti scritti a mano"),
-    h("p", { class: "muted small", style: { margin: 0 } }, ai
-      ? "Fotografa le pagine del quaderno (una foto per pagina, in ordine) o caricane le foto: Claude le trascrive, formule comprese. Le parti incerte vengono segnate: controllale accanto alle foto prima di generare il modulo."
-      : "Per leggere la scrittura a mano serve Claude: qui l'AI non è attiva."),
-    h("div", { class: "row" },
-      h("button", { class: "btn", disabled: !ai, onclick: () => camera.click() }, "Fotografa gli appunti"),
-      h("button", { class: "btn ghost", disabled: !ai, onclick: () => input.click() }, "Carica foto o scansioni"), camera),
-    h("details", { class: "small muted" }, h("summary", {}, "Come fare foto che si leggono bene"),
-      h("ul", {}, h("li", {}, "Luce uniforme, senza ombre del telefono; foglio piatto e inquadrato tutto."), h("li", {}, "Una pagina per foto, dritta; penna scura."),
-        h("li", {}, "Per le tavolette (GoodNotes, Notability): esporta in PDF e caricalo come documento."), h("li", {}, "La calligrafia molto corsiva e le formule scritte piccole sono i punti dove Claude sbaglia di più: controllali."))));
   input.addEventListener("change", () => addFiles(exam, [...input.files]));
-  const drop = h("div", { class: "file-drop", tabindex: 0, role: "button", onclick: () => input.click(), onkeydown: (e) => (e.key === "Enter" || e.key === " ") && input.click(),
-    ondragover: (e) => e.preventDefault(), ondrop: (e) => { e.preventDefault(); addFiles(exam, [...e.dataTransfer.files]); } },
-    h("b", {}, "Carica libro, dispense, slide, esercizi, esami passati"), h("div", { class: "small" }, core.ai.pdf === false
-      ? (core.pdfText ? ".pdf, .docx, .pptx, .txt, .md: di un PDF si legge il testo (le scansioni no; le formule possono uscire male)" : ".docx, .pptx, .txt o .md (i PDF non sono supportati qui: copia il testo e incollalo)")
-      : ".pdf (anche scansioni e formule: il PDF viene letto dall'AI), .docx, .pptx, .txt, .md, foto"),
-      h("div", { class: "small muted" }, "Di un libro scegli poi le pagine dei capitoli del programma."), input);
+  const accepts = core.ai.pdf === false
+    ? (core.pdfText ? ".pdf, .docx, .pptx, .txt, .md: di un PDF si legge il testo (le scansioni no; le formule possono uscire male)" : ".docx, .pptx, .txt o .md (i PDF non sono supportati qui: copia il testo e incollalo)")
+    : "PDF (anche scansioni e formule: li legge l'AI), Word, PowerPoint, foto degli appunti, trascrizioni (.txt, .vtt, .srt)";
+  // area grande per i file: si trascinano qui o si scelgono con i pulsanti (che sono i comandi da tastiera)
+  const drop = h("div", { class: "file-drop big", ondragover: (e) => e.preventDefault(), ondrop: (e) => { e.preventDefault(); addFiles(exam, [...e.dataTransfer.files]); },
+    onclick: (e) => { if (!e.target.closest("button, a, summary, details, input")) input.click(); } },
+    h("span", { class: "drop-icon" }, icon("upload", 26)),
+    h("b", { class: "drop-title" }, "Trascina qui i file"),
+    h("span", { class: "small" }, accepts),
+    h("span", { class: "small" }, "Libro, dispense, slide, esercizi, esami passati, sbobine. Di un libro scegli poi le pagine dei capitoli del programma."),
+    h("div", { class: "row drop-actions" },
+      h("button", { class: "btn", type: "button", onclick: () => input.click() }, "Scegli i file"),
+      h("button", { class: "btn", type: "button", disabled: !ai, onclick: () => camera.click() }, "Fotografa gli appunti"),
+      h("button", { class: "btn", type: "button", onclick: () => { text.scrollIntoView({ block: "center", behavior: "smooth" }); text.focus({ preventScroll: true }); } }, "Incolla un testo")),
+    ai
+      ? h("details", { class: "small photo-tips" }, h("summary", {}, "Appunti a mano: come fare foto che si leggono bene"),
+          h("ul", {}, h("li", {}, "Una foto per pagina, in ordine: Claude le trascrive, formule comprese, e segna le parti incerte da controllare accanto alle foto."),
+            h("li", {}, "Luce uniforme, senza ombre del telefono; foglio piatto e inquadrato tutto; penna scura."),
+            h("li", {}, "Per le tavolette (GoodNotes, Notability): esporta in PDF e caricalo come documento."), h("li", {}, "La calligrafia molto corsiva e le formule scritte piccole sono i punti dove Claude sbaglia di più: controllali.")))
+      : h("span", { class: "small" }, "Per leggere la scrittura a mano serve Claude: qui l'AI non è attiva."),
+    input, camera);
 
   /* --- ricerca online (o, senza web, traccia dal programma) --- */
   const webOk = core.ai.web !== false;
@@ -849,7 +862,7 @@ export function materialsTab(exam) {
   const list = hasContent
     ? h("div", { class: "stack", style: { gap: "8px" } }, exam.materials.map((m) =>
         h("div", { class: "card flat" },
-          h("div", { class: "row between" }, h("div", {}, h("b", {}, m.title), " ", badge(KIND[m.kind], m.kind === "web" ? "brand" : ""), " ", isPending.has(m.id) ? badge("non ancora nel modulo", "warn") : null, " ", h("span", { class: "muted small" }, kb(m.size)),
+          h("div", { class: "row between" }, h("div", {}, h("span", { class: "mat-icon", "aria-hidden": "true" }, icon(m.kind === "web" ? "web" : m.handwritten ? "image" : roleOf(m) === "sbobine" ? "mic" : "file", 18)), h("b", {}, m.title), " ", badge(KIND[m.kind], m.kind === "web" ? "brand" : ""), " ", isPending.has(m.id) ? badge("non ancora nel modulo", "warn") : null, " ", h("span", { class: "muted small" }, kb(m.size)),
               m.kind !== "web" ? h("div", { class: "row", style: { gap: "6px", marginTop: "4px" } }, h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Tipo",
                 h("select", { class: "role-select", "aria-label": `Tipo di ${m.title}`, onchange: async (e) => { m.role = e.target.value; if (m.role === "sbobine" || m.role === "colleghi") withLessons(m); if (m.role === "esami") { if (m.kind === "pdf") await findPdfPapers(m); else preparePapers(m); } if ((m.role === "domande" || m.role === "quiz") && m.kind === "pdf") await pdfToQuestions(m); await syncDispense(exam); store.save(); rerenderSoon(); } },
                   Object.entries(ROLES).map(([k, t]) => h("option", { value: k, selected: roleOf(m) === k }, t)))),
@@ -885,7 +898,8 @@ export function materialsTab(exam) {
         : "AI non disponibile: la modalità base ricava argomenti e flashcard dalle definizioni presenti nei tuoi appunti testuali (niente quiz)."),
       h("p", { class: "muted small", style: { margin: 0 } }, "Non serve aspettare di avere tutto: puoi partire dagli appunti delle prime lezioni e aggiungere gli altri man mano."),
       jobLine(exam, "module", "Generazione in corso"),
-      h("div", { class: "row" },
+      h("div", { class: "row gen-actions" },
+        first ? h("a", { class: "btn ghost", href: `#/exam/${exam.id}/edit` }, "← Indietro") : null,
         ai ? h("button", { class: "btn primary", disabled: !hasContent || busy, onclick: () => generate(exam) }, "Genera con l'AI") : null,
         !ai ? h("button", { class: "btn primary", disabled: !hasContent || busy, onclick: () => generateLocal(exam) }, "Crea modulo base") : null));
   else {
@@ -910,9 +924,35 @@ export function materialsTab(exam) {
           h("div", { class: "row" }, toPlan, regen));
   }
 
+  const check = (t) => h("li", {}, h("span", { class: "check-dot" }, icon("check", 12)), h("span", {}, t));
+  const side = h("aside", { class: "materials-side" },
+    h("section", { class: "card side-card", "aria-labelledby": "come-li-usiamo" }, h("h2", { id: "come-li-usiamo" }, "Come li usiamo"),
+      h("ul", { class: "check-list" },
+        check("Le frasi del docente e le soluzioni ufficiali entrano così come sono, con la fonte."),
+        check("Ciò che non viene dai tuoi materiali è segnato: «dal web» o «da verificare»."),
+        check("Gli esami passati dicono quali argomenti pesano di più nel piano."))),
+    h("section", { class: "callout files-here", "aria-labelledby": "file-qui" }, h("h2", { id: "file-qui" }, "I file restano qui"),
+      h("p", {}, "PDF e foto sono salvati solo in questo browser; Claude li legge per generare il modulo.")),
+    researchBox);
+
+  return h("div", { class: "materials-layout" },
+    h("div", { class: "materials-main stack" },
+      drop, h("div", { class: "card stack paste-card" }, paste),
+      formatBox, booksCard(exam),
+      h("div", { class: "row between list-head" }, h("h2", {}, exam.materials.length === 1 ? "1 materiale" : `${exam.materials.length} materiali`),
+        hasContent ? h("span", { class: "small muted" }, "Il tipo decide come vengono usati: controllalo") : null),
+      list, gen),
+    side);
+}
+
+/** Primo esame, passo 2: i materiali, senza le schede dell'esame (servono solo quando c'è il modulo). */
+export function firstMaterialsView(exam) {
   return h("div", { class: "stack" },
-    h("div", { class: "grid" }, h("div", { class: "card stack" }, paste, drop), handBox, researchBox),
-    formatBox, booksCard(exam), h("h2", { style: { margin: "6px 0 0" } }, `Materiali (${exam.materials.length})`), list, gen);
+    h("div", { class: "row between" }, stepper(2), h("a", { class: "btn ghost small", href: "#/" }, "Continua dopo")),
+    h("div", { class: "page-intro" }, h("h1", {}, "Porta quello che hai già"),
+      h("p", { class: "lead" }, `Per ${exam.name}: dispense, slide, esami passati, quiz del docente, appunti, sbobine. Più è vicino al corso, più il modulo è fedele.`)),
+    h("div", { class: "row between first-meta" }, h("div", { class: "hub-title" }, examMeta(exam)), h("a", { class: "btn small", href: `#/exam/${exam.id}/edit` }, "Modifica")),
+    materialsTab(exam, { first: true }));
 }
 
 // La dispensa usa gli stessi materiali (pagine e lezioni scelte, limiti controllati).

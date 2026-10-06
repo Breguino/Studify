@@ -111,10 +111,27 @@ export function quizView(exam, query) {
     }, 1000);
   }
 
+  const topicOf = (q) => mod.topics.find((t) => t.id === q.topicId)?.title ?? "";
+  const topicIds = query.get("topics")?.split(",").filter(Boolean) ?? [];
+  const title = mock ? "Simulazione d'esame"
+    : mode === "exam" ? "Domande d'esame vere"
+    : mode === "official" ? (items.every((x) => x.q.official?.quiz) ? "Quiz del docente" : "Esercitazione")
+    : mode === "weak" ? "Rivedi gli errori"
+    : mode === "topics" && topicIds.length === 1 ? `Quiz: ${mod.topics.find((t) => t.id === topicIds[0])?.title ?? ""}`
+    : mode === "topics" ? "Quiz sugli argomenti studiati" : "Quiz misto";
   const head = () => h("div", { class: "session-head" },
     h("a", { class: "btn ghost small back", href: `#/exam/${exam.id}/today` }, "← Esci"),
+    h("b", { class: "session-title" }, title),
     h("div", { class: "row" }, mock ? badge(phase === "review" ? "correzione" : "simulazione", "warn") : null, mock && phase === "answer" ? clock : null,
-      h("span", { class: "muted small" }, `${i + 1}/${items.length} · ${mod.topics.find((t) => t.id === items[i].q.topicId)?.title ?? ""}`)));
+      h("span", { class: "muted small" }, `Domanda ${i + 1}/${items.length}`)));
+  /** Una tacca per domanda: giusta, da rivedere, quella di adesso, da fare. */
+  const steps = (current) => {
+    const tone = (it) => (it.score == null ? "" : it.score >= 0.7 ? "good" : "bad");
+    const good = items.filter((it) => tone(it) === "good").length;
+    const bad = items.filter((it) => tone(it) === "bad").length;
+    return h("ol", { class: "q-steps", "aria-label": `${good} giuste, ${bad} da rivedere, ${items.length - good - bad} da fare` },
+      items.map((it, k) => h("li", { class: k === i ? `current ${current ?? ""}` : tone(it) || (mock && it.answer != null && it.answer !== "" ? "answered" : "") })));
+  };
 
   const commit = (it) => {
     exam.qstats = recordScore(exam.qstats, it.q.id, it.score);
@@ -145,13 +162,32 @@ export function quizView(exam, query) {
     const opts = h("div", { class: "options" }, it.order.map((k, pos) => {
       const o = q.options[k];
       const cls = reveal ? (k === q.correctIndex ? "correct" : k === it.answer ? "wrong" : "") : it.answer === k ? "correct" : "";
-      return h("button", { class: `btn option ${cls}`, disabled: reveal, "aria-pressed": !reveal && it.answer === k ? "true" : null, onclick: () => {
-        it.answer = k;
-        if (!mock) { phase = "review"; render(); } else render();
-      } }, `${String.fromCharCode(65 + pos)}. `, rich(o));
+      const tag = reveal ? (k === q.correctIndex ? "Corretta" : k === it.answer ? "La tua risposta" : null) : null;
+      return h("button", { class: `btn option ${cls}`, disabled: reveal, "aria-pressed": !reveal && it.answer === k ? "true" : null, onclick: () => choose(it, k) },
+        h("span", { class: "opt-key" }, String.fromCharCode(65 + pos)),
+        h("span", { class: "opt-text" }, rich(o)), tag ? h("span", { class: "opt-tag" }, tag) : null);
     }));
     return opts;
   }
+
+  function choose(it, k) {
+    it.answer = k;
+    if (!mock) phase = "review";
+    render();
+  }
+
+  // tastiera: A–D (o 1–4) per rispondere, Invio per andare avanti
+  let onEnter = null;
+  function onKey(e) {
+    if (!root.isConnected) return removeEventListener("keydown", onKey);
+    if (e.target.matches?.("input, textarea, select, button, a") || e.ctrlKey || e.metaKey || e.altKey) return;
+    const it = items[i];
+    if (phase === "answer" && it?.q.kind === "mcq") {
+      const pos = "abcdefgh".indexOf(e.key.toLowerCase()) >= 0 ? "abcdefgh".indexOf(e.key.toLowerCase()) : "12345678".indexOf(e.key);
+      if (pos >= 0 && pos < it.q.options.length) { e.preventDefault(); choose(it, it.order[pos]); }
+    } else if (e.key === "Enter" && onEnter) { e.preventDefault(); onEnter(); }
+  }
+  addEventListener("keydown", onKey);
 
   function render() {
     const it = items[i];
@@ -159,7 +195,10 @@ export function quizView(exam, query) {
     const q = it?.q;
     const w = examStats.weight(q);
     const examBadge = w ? badge(`domanda d'esame vera${w > 1 ? ` · chiesta ${w} volte` : ""}`, "bad") : q.official ? badge(`${q.official.source} · ${q.official.quiz ? "risposta del docente" : q.official.aula ? "svolta in aula" : "soluzione ufficiale"}`, q.official.aula ? "" : "good") : null;
-    const body = [head(), bar(i / items.length, { label: "avanzamento" }), h("div", { class: "card stack", style: { marginTop: "14px" } }, h("div", { class: "row" }, badge(KIND[q.kind]), examBadge), h("div", { class: "q-prompt" }, richParas(q.prompt)))];
+    onEnter = null;
+    const reviewing = phase === "review" && q.kind === "mcq";
+    const body = [head(), steps(reviewing ? (it.answer === q.correctIndex ? "good" : "bad") : null),
+      h("div", { class: "card stack q-card" }, h("div", { class: "row" }, topicOf(q) ? badge(topicOf(q), "brand") : null, badge(KIND[q.kind]), examBadge), h("div", { class: "q-prompt" }, richParas(q.prompt)))];
     const card = body.at(-1);
 
     if (phase === "answer") {
@@ -177,8 +216,17 @@ export function quizView(exam, query) {
       // review
       if (q.kind === "mcq") {
         const ok = it.answer === q.correctIndex;
-        card.append(mcqScreen(it, true), h("div", { class: `callout ${ok ? "good" : "bad"}` }, h("b", {}, it.answer == null ? "Nessuna risposta." : ok ? "Corretto." : "Non proprio."), " ", rich(q.explanation)),
-          h("div", {}, h("button", { class: "btn primary", onclick: () => advanceReview(ok ? 1 : 0) }, i < items.length - 1 ? "Avanti" : "Vedi il risultato")));
+        card.append(mcqScreen(it, true)); // prima: fissa l'ordine delle alternative
+        const letter = String.fromCharCode(65 + it.order.indexOf(q.correctIndex));
+        const next = () => advanceReview(ok ? 1 : 0);
+        onEnter = next;
+        body.push(
+          h("section", { class: `callout q-why ${ok ? "good" : "bad"}`, "aria-live": "polite" },
+            h("p", { class: "q-verdict" }, h("b", {}, it.answer == null ? "Nessuna risposta." : ok ? "Corretto." : "Non proprio."), ok ? null : ` La risposta giusta è la ${letter}.`),
+            q.explanation ? h("div", {}, h("h2", {}, "Perché"), richParas(q.explanation)) : null), // per le domande del docente la spiegazione dice già la fonte
+          h("div", { class: "row between q-next" },
+            h("span", { class: "muted small" }, ok ? "Tornerà più avanti, per non dimenticarla." : "Le risposte sbagliate tornano nei prossimi quiz, finché non le sai."),
+            h("button", { class: "btn primary", onclick: next }, i < items.length - 1 ? "Avanti →" : "Vedi il risultato", h("span", { class: "kbd", "aria-hidden": "true" }, "Invio"))));
       } else {
         card.append(h("div", { class: "callout", style: { background: "var(--surface-2)" } }, h("b", { class: "small" }, "La tua risposta"), h("p", { style: { margin: "4px 0 0", whiteSpace: "pre-wrap" } }, it.answer.trim() || "(vuota)")));
         const rv = openReview({ question: q.prompt, reference: q.modelAnswer, rubric: q.rubric, answer: it.answer, language: exam.language, referenceLabel: q.official ? (q.official.aula ? "Soluzione svolta in aula (dai tuoi appunti)" : "Soluzione ufficiale") : undefined });

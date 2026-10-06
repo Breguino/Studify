@@ -50,7 +50,7 @@ npm run build:web          # crea dist-web/: index.html (landing), app.html (ser
 node scripts/make-assets.mjs   # rigenera web/assets/ (anteprima social e icone): serve Playwright, solo se cambia il marchio
 ```
 
-**Landing** (`web/landing.html`, `web/landing.css`): pagina statica su `/` (circa 40 KB compressa, senza il codice dell'app),
+**Landing** (`web/landing.html`, `web/landing.css`): pagina statica su `/` (circa 45 KB compressa, senza il codice dell'app),
 con un'unica azione principale «Inizia gratis» → `/app?entra=registrati`. Chi ha già una sessione nel browser vede «Apri Studify».
 Se un link delle email (conferma, recupero password) arriva alla radice invece che su `/app`, la landing lo inoltra all'app.
 La fascia d'apertura indaco scuro (`--hero`, classe `.on-hero` in `web/web.css`) è condivisa con la schermata d'accesso,
@@ -156,6 +156,12 @@ Prove: `test/web.test.js` (funzione, accesso, `sample`, `db`, controlli di regis
    1 CFU = 25 ore di lavoro complessivo, lezioni comprese, quindi circa 15-18 ore di studio individuale per CFU partendo da zero.
    È una stima, non una regola (chi ha studiato durante il semestre ne usa meno), ma rende visibile quando una settimana per un
    esame da 9 CFU copre una piccola parte del lavoro. Segnala anche le finestre che si sovrappongono con altri esami.
+   Tipo di prova e livello sono scelte a pulsante; accanto, l'anteprima del piano: giorni di studio, ore al giorno e le fasi
+   (comprensione, consolidamento, simulazione, ripasso leggero) divise come nel piano vero.
+   **Il primo esame va in tre passi** (descrivi l'esame, porta i materiali, controlla il modulo), con l'indicatore in alto: finché
+   non c'è il modulo la pagina dell'esame è solo quella dei materiali; appena il modulo è pronto si apre il passo 3, con argomenti
+   in ordine di importanza e la loro fonte (pagine delle dispense, prove d'esame, domande del docente), che cosa è da verificare
+   e la prima sessione del piano. Da «Inizia oggi» in poi l'esame ha tutte le sue schede.
 2. **Porta i materiali**: carica o incolla **libro, slide, dispense, esercizi e appunti** (`.pdf`, `.docx`, `.pptx`, `.txt`, `.md`),
    oppure «Cerca online con l'AI» (ricerca web con fonti e link, che puoi leggere ed eliminare prima di usarla).
    - Ogni materiale ha un **tipo** (indovinato dal nome del file, modificabile) che cambia come l'AI lo usa: gli **appunti** dicono
@@ -326,6 +332,15 @@ Prove: `test/web.test.js` (funzione, accesso, `sample`, `db`, controlli di regis
    tutorato è segnata «detta al tutorato, non dal docente», i metodi ricavati dai suoi esercizi svolti sono «Come lo risolve il
    tutor», negli esercizi guidati e nel piano «metodo del tutor». Un PDF «Tutorato 3» senza altri indizi è un foglio di esercizi.
 14. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
+   - **Home**: l'esame con l'appello più vicino è in una fascia indaco, con il conto alla rovescia, la preparazione stimata, i
+     prossimi sette giorni (minuti di studio, giorni liberi, l'appello) e la sessione di oggi da spuntare; sotto gli altri esami,
+     ciascuno con i giorni che mancano, e il riepilogo del libretto.
+   - **Oggi** (pagina dell'esame): la sessione del giorno con l'attività da fare **adesso** in evidenza (la prima ancora da fare
+     che si può aprire), i prossimi giorni a riquadri con il colore della fase e la prossima simulazione; di lato una frase del
+     docente sull'esame (dell'argomento di adesso, se c'è), gli argomenti dove c'è più da guadagnare e le flashcard da ripassare.
+   - **Quiz**: una tacca per domanda (giusta, da rivedere, di adesso), alternative con la lettera e, dopo la risposta, «Corretta» /
+     «La tua risposta» e il perché, con la fonte se la domanda è del docente. Da tastiera: A–D (o 1–4) per rispondere, Invio per
+     andare avanti. **Flashcard**: domanda e risposta sulla stessa carta, quante ricordate e quante da rivedere, valutazione 1–4.
 
 | Sessione | Cosa fa |
 |---|---|

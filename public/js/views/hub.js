@@ -1,15 +1,17 @@
 import { go } from "../nav.js";
-import { daysLeft, dueCount, ensurePlan, flashQueue, isDone, methodsFor, setDone, taskHref } from "../domain.js";
-import { daysBetween, fmtDate, fmtDay, today } from "../dates.js";
-import { METHODS, EXAM_TYPES } from "../methods.js";
+import { daysLeft, dueCount, ensurePlan, isDone, methodsFor, statsFor, taskHref } from "../domain.js";
+import { daysBetween, fmtDate, fmtDay, fmtDayLong, today } from "../dates.js";
+import { weakTopics } from "../progress.js";
+import { nextSimulation, sessionOf } from "../today.js";
+import { taskRow } from "./tasks.js";
 import { PHASES } from "../planner.js";
 import { fmtLesson } from "../timetable.js";
-import { studyStart, windowDays } from "../workload.js";
 import { clipRich, rich, richParas } from "../math.js";
 import * as store from "../store.js";
-import { badge, emptyState, h } from "../ui.js";
+import { badge, bar, emptyState, h, pct } from "../ui.js";
 import { core } from "../core.js";
-import { materialsTab } from "./materials.js";
+import { firstMaterialsView, materialsTab } from "./materials.js";
+import { examMeta } from "./exam-meta.js";
 import { methodsTab, progressTab } from "./insights.js";
 import { dispensaTab } from "./dispensa.js";
 import { esamiTab } from "./esami.js";
@@ -35,22 +37,16 @@ const TABS = [
 
 export function hubView(exam, tab) {
   if (!TABS.some(([k]) => k === tab)) tab = "today";
-  const dl = daysLeft(exam);
-  const apHere = exam.appelli?.find((a) => a.date === exam.date);
-  const others = (exam.appelli ?? []).filter((a) => a.date !== exam.date && a.date >= today());
+  // primo esame, passo 2: finché non c'è il modulo, «Oggi» e «Materiali» sono la pagina dei materiali, senza schede
+  if (exam.onboarding && !exam.module && (tab === "today" || tab === "materials")) return firstMaterialsView(exam);
   const body = { today: todayTab, materials: materialsTab, module: moduleTab, dispensa: dispensaTab, esami: esamiTab, methods: methodsTab, ricevimento: ricevimentoTab, progress: progressTab }[tab](exam);
   return h(
     "div",
     { class: "stack", style: { gap: "0" } },
-    h("div", { class: "row between no-print" },
-      h("div", {}, h("h1", { style: { marginBottom: "2px" } }, exam.name),
-        h("div", { class: "muted" }, `${fmtDate(exam.date)}${exam.dateTentative ? " (data provvisoria)" : ""}${apHere?.time ? ` ore ${apHere.time}` : ""}${apHere?.room ? ` · ${apHere.room}` : ""} · ${dl > 0 ? `tra ${exam.dateTentative ? "circa " : ""}${dl} giorni` : dl === 0 ? "oggi" : "già passato"} · ${EXAM_TYPES[exam.type]}`,
-          exam.formatSource?.url ? h("span", {}, " (", h("a", { href: exam.formatSource.url, target: "_blank", rel: "noopener noreferrer" }, "fonte del formato"), ")") : null),
-        exam.dateTentative ? h("div", { class: "muted small" }, "Gli appelli non sono ancora usciti: quando escono ", h("a", { href: "#/import" }, "importali"), " (o cambia la data da «Modifica») e il piano si ricalcola.") : null,
-        exam.studyDays ? h("div", { class: "muted small" }, `Studio ${studyStart(exam, today()) > today() ? `dal ${fmtDate(studyStart(exam, today()))}` : "in corso"}: ${windowDays(exam, today())} giorni prima dell'esame, ${exam.hoursPerDay} h al giorno.`) : null,
-        others.length ? h("div", { class: "muted small" }, `Altri appelli: ${others.map((a) => fmtDate(a.date)).join(", ")} (cambia da «Modifica»)`) : null,
-        exam.university ? h("div", { class: "muted small" }, [exam.university, exam.degree, exam.year ? `${exam.year}° anno` : "", exam.cfu ? `${exam.cfu} CFU` : ""].filter(Boolean).join(" · ")) : null),
-      h("a", { class: "btn ghost", href: `#/exam/${exam.id}/edit` }, "Modifica")),
+    h("a", { class: "back-link no-print", href: "#/" }, "← I tuoi esami"),
+    h("div", { class: "row between hub-head no-print" },
+      h("div", { class: "hub-title" }, h("h1", {}, exam.name), examMeta(exam)),
+      h("a", { class: "btn", href: `#/exam/${exam.id}/edit` }, "Modifica")),
     h("nav", { class: "tabs no-print", "aria-label": "Sezioni" }, TABS.map(([k, t]) => h("a", { href: `#/exam/${exam.id}/${k}`, "aria-current": k === tab ? "page" : null }, t))),
     body,
   );
@@ -58,39 +54,93 @@ export function hubView(exam, tab) {
 
 /* --------------------------------- OGGI --------------------------------- */
 
-function taskRow(exam, task) {
-  const done = isDone(exam, task);
-  const href = taskHref(exam, task);
-  let meta = task.minutes ? `${task.minutes} min` : "";
-  if (task.method) meta += ` · ${METHODS[task.method].name}`;
-  if (task.kind === "flash" && exam.module) {
-    const q = flashQueue(exam);
-    meta += ` · ${q.due.length} da ripassare, ${q.fresh.length} nuove`;
-  }
-  const check = h("input", { type: "checkbox", checked: done, "aria-label": `Segna «${task.title}» come fatto` });
-  check.addEventListener("change", () => {
-    setDone(exam, task, check.checked);
-    core.rerender();
-  });
-  return h("div", { class: `task ${done ? "done" : ""}` },
-    task.kind === "rest" ? h("span", { "aria-hidden": "true" }, "🌙") : check,
-    h("div", { class: "spacer" }, h("div", { class: "t-title" }, task.title), h("div", { class: "t-meta" }, meta)),
-    href && !done ? h("a", { class: "btn primary small", href }, "Inizia") : null);
+const capital = (x) => x.charAt(0).toUpperCase() + x.slice(1);
+
+/** Una frase del docente sull'esame da tenere sott'occhio: sull'argomento di adesso, se c'è, altrimenti la prima. */
+function hintFor(exam, task) {
+  const hints = exam.module.examHints ?? [];
+  return (task?.topicId && hints.find((x) => x.topicId === task.topicId)) || hints[0] || null;
+}
+
+/** Un giorno dei prossimi: data, minuti e che cosa si fa; aperto, l'elenco delle attività. */
+function dayCell(d) {
+  const what = d.tasks.find((t) => t.kind !== "flash" && t.kind !== "rest") ?? d.tasks[0];
+  return h("details", { class: "day", "data-phase": d.phase },
+    h("summary", {},
+      h("b", {}, fmtDay(d.date), h("span", { class: "visually-hidden" }, ` (${PHASES[d.phase]})`)),
+      h("span", { class: "day-min" }, d.minutes ? `~${d.minutes} min` : "libero"),
+      what ? h("span", { class: "day-what" }, what.title) : null,
+      d.lessons?.length ? badge(`lezioni ${d.lessons.length}`) : null, d.overload ? badge("carico alto", "warn") : null),
+    h("ul", {}, d.lessons?.length ? h("li", {}, `Lezioni: ${d.lessons.map(fmtLesson).join(" · ")}`) : null, d.tasks.filter((t) => t.kind !== "flash").map((t) => h("li", {}, t.title))));
+}
+
+/** Gli argomenti dove c'è più da guadagnare, con la padronanza di ciascuno. */
+function weakCard(exam) {
+  const { stats } = statsFor(exam);
+  const weak = weakTopics(exam.module, stats, 3);
+  if (!weak.length) return null;
+  return h("section", { class: "card side-card", "aria-labelledby": "deboli" },
+    h("h2", { id: "deboli" }, "Dove c'è più da guadagnare"),
+    weak.map((t) => {
+      const sc = stats[t.id]?.score;
+      return h("div", { class: "weak-row" },
+        h("div", { class: "row between" }, h("span", {}, rich(t.title)), h("b", { class: sc == null ? "never" : "" }, sc == null ? "mai provato" : pct(sc))),
+        bar(sc ?? 0, { tone: sc == null ? "" : sc >= 0.7 ? "good" : sc >= 0.4 ? "warn" : "bad", label: `padronanza: ${t.title}` }));
+    }),
+    h("a", { class: "side-link", href: `#/exam/${exam.id}/progress` }, "Tutti i progressi →"));
 }
 
 function todayTab(exam) {
   if (!exam.module)
     return emptyState("Manca il modulo di studio", "Aggiungi i materiali e genera il modulo: da lì costruiamo il piano giorno per giorno.", h("a", { class: "btn primary", href: `#/exam/${exam.id}/materials` }, "Aggiungi materiali"));
   if (daysLeft(exam) <= 0) return h("div", { class: "callout warn" }, daysLeft(exam) === 0 ? "L'esame è oggi: in bocca al lupo! Un ultimo sguardo ai punti deboli, poi niente di nuovo." : "La data d'esame è passata. Puoi modificarla dalle impostazioni dell'esame.");
+  if (exam.onboarding) { exam.onboarding = false; store.save(); } // il piano è stato visto: il primo esame è avviato
 
   const plan = ensurePlan(exam);
   const m = methodsFor(exam);
   const waiting = plan.start && plan.start > today(); // la finestra di studio non è ancora iniziata
   const [first, ...rest] = waiting ? [null, ...plan.days] : plan.days;
   const due = dueCount(exam);
-  const tasks = first?.tasks ?? [];
-  const minutes = tasks.reduce((s, t) => s + t.minutes, 0);
+  const s = sessionOf(first, (t) => isDone(exam, t), (t) => !!taskHref(exam, t));
   const budget = exam.hoursPerDay * 60;
+  const sim = nextSimulation(plan, today());
+  const hint = hintFor(exam, s.next);
+  const recalc = h("button", { class: "btn small ghost", onclick: () => { ensurePlan(exam, true); core.rerender(); } }, "Ricalcola piano");
+
+  const session = first
+    ? h("section", { class: "card session-card", "aria-labelledby": "sessione" },
+        h("div", { class: "row between session-top" },
+          h("div", { class: "stack", style: { gap: "2px" } },
+            h("span", { class: "kicker" }, `Oggi · ${fmtDay(today())} · ${PHASES[first.phase]}`),
+            h("h2", { id: "sessione" }, s.tasks.length ? `La sessione di oggi: ${s.minutes} min` : "Oggi niente in programma")),
+          h("div", { class: "row" }, s.tasks.length ? h("span", { class: "muted small" }, `${s.doneMinutes} di ${s.minutes} min fatti · ${first.lessons?.length ? first.usable : Math.round(budget)} disponibili`) : null, recalc)),
+        s.tasks.length ? bar(s.minutes ? s.doneMinutes / s.minutes : 0, { tone: "good", label: "sessione di oggi" }) : null,
+        first.lessons?.length ? h("div", { class: "callout" }, h("b", {}, "Oggi hai lezione: "), first.lessons.map(fmtLesson).join(" · "), first.avail > 0 ? `. Tempo di studio rimasto: ~${first.avail} min.` : ". Poco tempo di studio oggi: solo un po' di flashcard.") : null,
+        first.overload ? h("div", { class: "callout warn" }, "Il carico di oggi supera il tempo che hai indicato: fai prima le attività in cima.") : null,
+        h("div", { class: "stack", style: { gap: "8px" } }, first.tasks.map((t) => taskRow(exam, t, { now: t === s.next }))),
+        s.next && s.tasks.length > 1 ? h("p", { class: "muted small", style: { margin: 0 } }, "Hai poco tempo? Comincia da «Adesso»: gli argomenti che oggi non studi tornano nel piano dei prossimi giorni.") : null,
+        !s.next && s.tasks.length ? h("div", { class: "callout good" }, h("b", {}, "Fatto per oggi."), " Domani il piano riparte da dove sei arrivato.") : null)
+    : null;
+
+  const upcoming = rest.length
+    ? h("section", { class: "stack upcoming", "aria-labelledby": "prossimi" },
+        h("div", { class: "row between" },
+          h("h2", { id: "prossimi", style: { margin: 0 } }, waiting ? `Dal ${fmtDate(plan.start)}` : "I prossimi giorni"),
+          h("div", { class: "row" }, waiting ? recalc : null, h("ul", { class: "legend", "aria-label": "Fasi del piano" }, Object.entries(PHASES).map(([k, t]) => h("li", { "data-phase": k }, t))))),
+        h("div", { class: "days" }, rest.map(dayCell)),
+        sim ? h("div", { class: "callout warn sim-next" }, h("b", {}, `${capital(fmtDayLong(sim.date))}: simulazione d'esame`),
+          h("span", {}, `tra ${sim.inDays} ${sim.inDays === 1 ? "giorno" : "giorni"} · ${sim.task.minutes} min a tempo, senza appunti${sim.task.kind === "sim" ? ", su una prova d'esame vera" : ""}`)) : null)
+    : null;
+
+  const aside = h("aside", { class: "today-side" },
+    hint ? h("section", { class: "quote-card", "aria-label": "Il docente ne parla per l'esame" },
+      h("span", { class: "q-label" }, saidByTutor(exam, hint.quote) ? "Detto al tutorato, sull'esame" : "Il docente ne parla per l'esame"),
+      h("q", {}, rich(hint.quote)),
+      h("span", { class: "q-src" }, [hint.source, whenSaid(exam, hint.quote), exam.module.topics.find((t) => t.id === hint.topicId)?.title].filter(Boolean).join(" · "))) : null,
+    weakCard(exam),
+    h("section", { class: "card side-card row between", "aria-labelledby": "flash-side" },
+      h("div", {}, h("h2", { id: "flash-side" }, "Flashcard"), h("span", { class: "muted small" }, due ? `${due} da ripassare oggi` : "Oggi in pari")),
+      h("a", { class: "btn small", href: `#/exam/${exam.id}/flash` }, due ? "Ripassa" : "Apri le flashcard")));
 
   return h("div", { class: "stack" },
     ...m.warnings.map((w) => h("div", { class: "callout warn" }, w)),
@@ -99,16 +149,7 @@ function todayTab(exam) {
       ` (tra ${daysBetween(today(), plan.start)} ${daysBetween(today(), plan.start) === 1 ? "giorno" : "giorni"}): ti sei dato ${plan.days.length} giorni prima dell'esame. `,
       due ? h("span", {}, "Nel frattempo hai ", h("a", { href: `#/exam/${exam.id}/flash` }, `${due} flashcard da ripassare`), ": bastano pochi minuti e tengono vivo quello che hai già studiato.") : "Fino ad allora nessuna attività per questo esame, salvo gli appunti nuovi da aggiungere al modulo.",
       " Per cambiare la finestra usa «Modifica».") : null,
-    h("div", { class: "row between" },
-      h("div", {}, h("h2", { style: { marginBottom: 0 } }, waiting ? "Il piano" : `Oggi · ${fmtDay(today())}`), h("span", { class: "muted small" }, first ? `${PHASES[first.phase]} · ~${minutes} min su ${first.lessons?.length ? first.usable : Math.round(budget)} disponibili` : "")),
-      h("button", { class: "btn small", onclick: () => { ensurePlan(exam, true); core.rerender(); } }, "Ricalcola piano")),
-    first?.lessons?.length ? h("div", { class: "callout" }, h("b", {}, "Oggi hai lezione: "), first.lessons.map(fmtLesson).join(" · "), first.avail > 0 ? `. Tempo di studio rimasto: ~${first.avail} min.` : ". Poco tempo di studio oggi: solo un po' di flashcard.") : null,
-    first?.overload ? h("div", { class: "callout warn" }, "Il carico di oggi supera il tempo che hai indicato: fai prima le attività in cima.") : null,
-    h("div", { class: "stack", style: { gap: "8px" } }, tasks.map((t) => taskRow(exam, t))),
-    rest.length ? h("div", {}, h("h2", { style: { marginTop: "18px" } }, waiting ? `Dal ${fmtDate(plan.start)}` : "Prossimi giorni"), h("div", { class: "days" },
-      rest.map((d) => h("details", { class: "day", "data-phase": d.phase },
-        h("summary", {}, h("b", {}, fmtDay(d.date)), badge(PHASES[d.phase], d.phase === "simulate" ? "warn" : "brand"), h("span", { class: "muted small" }, `~${d.minutes} min`), d.lessons?.length ? badge(`lezioni ${d.lessons.length}`) : null, d.overload ? badge("carico alto", "warn") : null),
-        h("ul", {}, d.lessons?.length ? h("li", {}, `Lezioni: ${d.lessons.map(fmtLesson).join(" · ")}`) : null, d.tasks.filter((t) => t.kind !== "flash").map((t) => h("li", {}, t.title))))))) : null,
+    h("div", { class: "today-layout" }, h("div", { class: "today-main stack" }, session, upcoming), aside),
   );
 }
 

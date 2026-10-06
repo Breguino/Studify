@@ -11,6 +11,7 @@ import { importView } from "./views/import.js";
 import { profileView } from "./views/profile.js";
 import { careerView } from "./views/career.js";
 import { hubView, topicView } from "./views/hub.js";
+import { readyView } from "./views/ready.js";
 import { flashView } from "./views/flash.js";
 import { explainView, quizView } from "./views/quiz.js";
 import { simView } from "./views/sim.js";
@@ -45,13 +46,25 @@ function route() {
       case "guided": return guidedView(exam, c, query);
       case "interroga": return interrogaView(exam);
       case "edit": return examFormView(exam);
+      case "pronto": return readyView(exam);
       default: return hubView(exam, b || "today");
     }
   }
   return h("div", { class: "empty" }, h("h3", {}, "Pagina non trovata"), h("a", { class: "btn", href: "#/" }, "Home"));
 }
 
+/** La voce della barra in alto della pagina aperta. */
+function markNav() {
+  const a = parse().seg[0] ?? "";
+  const cur = ["", "exam", "new", "import"].includes(a) ? "esami" : a;
+  for (const el of document.querySelectorAll(".topbar [data-nav]")) {
+    if (el.dataset.nav === cur) el.setAttribute("aria-current", "page");
+    else el.removeAttribute("aria-current");
+  }
+}
+
 function render() {
+  markNav();
   clear(main);
   try {
     main.append(route());

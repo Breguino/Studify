@@ -121,7 +121,13 @@ export function careerSummary() {
   const courses = store.state.profile?.courses ?? [];
   if (!courses.length) return null;
   const s = careerStats(courses);
-  return h("a", { class: "callout row between", href: "#/libretto", style: { textDecoration: "none", color: "inherit" } },
-    h("span", {}, h("b", {}, "Libretto: "), `${s.passed}/${s.total} esami superati · ${s.cfuPassed}/${s.cfuTotal} CFU${s.average != null ? ` · media ${num(s.average)}` : ""}`),
-    h("span", { class: "btn small" }, "Apri"));
+  const stat = (n, label) => h("span", { class: "career-stat" }, h("b", {}, n), h("span", { class: "muted" }, label));
+  return h("a", { class: "card career-summary", href: "#/libretto", "aria-label": `Libretto: ${s.passed} di ${s.total} esami superati, ${s.cfuPassed} di ${s.cfuTotal} CFU${s.average != null ? `, media ${num(s.average)}` : ""}` },
+    h("div", { class: "career-stats" },
+      h("span", { class: "kicker" }, "Libretto"),
+      stat(s.passed, `di ${s.total} esami superati`),
+      stat(s.cfuPassed, `di ${s.cfuTotal} CFU`),
+      s.average != null ? stat(num(s.average), "media") : null),
+    s.cfuTotal ? bar(s.cfuPassed / s.cfuTotal, { tone: "good", label: "CFU acquisiti" }) : null,
+    h("span", { class: "career-open" }, "Apri il libretto →"));
 }

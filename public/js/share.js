@@ -7,7 +7,7 @@ import { topicStats } from "./progress.js";
 export const SHARE_APP = "studify-esame";
 
 // i dati personali: progressi, piano, simulazioni, bozze; non partono
-const PERSONAL = ["srs", "qstats", "learned", "done", "activity", "plan", "ricevimento", "simDraft", "simulations", "dispensa"];
+const PERSONAL = ["srs", "qstats", "learned", "done", "activity", "plan", "ricevimento", "simDraft", "simulations", "dispensa", "onboarding"];
 
 /**
  * L'esame da mandare al gruppo. Con `materials: false` solo il modulo e i libri; altrimenti anche il testo dei materiali (non i PDF

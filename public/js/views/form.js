@@ -6,9 +6,10 @@ import { addDays, fmtDate, today } from "../dates.js";
 import { formatFromSyllabus, suggestExamType } from "../exam-type.js";
 import { busyMinutes, lastLessonOf, TENTATIVE_GAP_DAYS } from "../timetable.js";
 import { feasibility, HOURS_PER_CFU, overlapping, studyStart, windowDays, windowHours } from "../workload.js";
+import { PHASES, splitPhases } from "../planner.js";
 import { EXAM_TYPES, sessionAdvice } from "../methods.js";
 import * as store from "../store.js";
-import { confirmDialog, h, toast } from "../ui.js";
+import { confirmDialog, h, stepper, toast } from "../ui.js";
 
 const LEVELS = {
   1: "1 · Parto da zero",
@@ -42,6 +43,23 @@ function searchFormat({ university, degree, academicYear, name, course }) {
   return formatSearches.get(k);
 }
 
+/**
+ * Scelte a pulsante (radio vere) con `value` in lettura e scrittura, come un <select>:
+ * il resto del modulo le usa allo stesso modo (value, evento change che sale dai radio).
+ */
+function choices(name, opts, cur, cls = "") {
+  const el = h("div", { class: `choices ${cls}` }, Object.entries(opts).map(([k, t]) => {
+    const [n, label] = cls === "levels" ? t.split(" · ") : [null, t];
+    return h("label", { class: "choice" }, h("input", { type: "radio", name, value: k, checked: String(k) === String(cur) }),
+      n ? h("span", { class: "choice-text" }, h("b", {}, n), h("span", {}, label)) : h("span", {}, t));
+  }));
+  Object.defineProperty(el, "value", {
+    get: () => el.querySelector("input:checked")?.value ?? "",
+    set: (v) => { for (const r of el.querySelectorAll("input")) r.checked = r.value === String(v); },
+  });
+  return el;
+}
+
 export function examFormView(exam, prefill = {}) {
   const isNew = !exam;
   const prof = store.state.profile;
@@ -53,6 +71,10 @@ export function examFormView(exam, prefill = {}) {
   const field = (key, label, input, hint) => {
     f[key] = input;
     return h("label", {}, label, input, hint ? h("span", { class: "hint" }, hint) : null);
+  };
+  const group = (key, legend, input, hint) => {
+    f[key] = input;
+    return h("fieldset", { class: "field-group" }, h("legend", {}, legend), input, hint ? h("span", { class: "hint" }, hint) : null);
   };
   const select = (opts, cur) => h("select", {}, Object.entries(opts).map(([k, t]) => h("option", { value: k, selected: String(k) === String(cur) }, t)));
   let formatSource = exam?.formatSource ?? null;
@@ -103,7 +125,7 @@ export function examFormView(exam, prefill = {}) {
         if (!data.name) return toast("Dai un nome all'esame.", "error");
         if (!data.date || data.date <= today()) return toast("La data d'esame deve essere futura.", "error");
         if (isNew) {
-          const created = store.newExam(data);
+          const created = store.newExam({ ...data, onboarding: true }); // passi 2 e 3: materiali, poi il modulo pronto
           go(`#/exam/${created.id}/materials`);
         } else {
           Object.assign(exam, data);
@@ -113,7 +135,6 @@ export function examFormView(exam, prefill = {}) {
         }
       },
     },
-    h("h1", {}, isNew ? "Nuovo esame" : "Modifica esame"),
     where,
     h("div", { class: "cols" },
       field("name", "Insegnamento / esame", nameInput, courses.length ? "Scegli dal tuo piano di studi per precompilare CFU e tipo di prova." : null),
@@ -127,23 +148,45 @@ export function examFormView(exam, prefill = {}) {
           ? h("label", {}, "Appello", h("select", { id: "appello", onchange: (e) => { if (e.target.value) f.date.value = e.target.value; } },
               v.appelli.filter((a) => a.date >= today()).map((a) => h("option", { value: a.date, selected: a.date === v.date }, `${fmtDate(a.date)}${a.time ? ` ore ${a.time}` : ""}${a.room ? ` · ${a.room}` : ""}`))), h("span", { class: "hint" }, "Altri appelli importati: scegli quello a cui ti presenti."))
           : null),
-      h("div", { class: "stack", style: { gap: "6px" } }, field("type", "Tipo di prova", select(EXAM_TYPES, v.type)), syllabusBox),
-    ),
-    h("div", { class: "cols" },
-      field("level", "Quanto conosci già la materia?", select(LEVELS, v.level), "Non c'è una risposta giusta: serve per dosare spiegazioni e difficoltà."),
       field("cfu", "CFU (facoltativo)", h("input", { type: "number", min: 0, max: 60, value: v.cfu || "" }), "Indicano l'ampiezza del programma."),
     ),
+    group("type", "Tipo di prova", choices("exam-type", EXAM_TYPES, v.type)),
+    syllabusBox,
+    group("level", "Quanto conosci già la materia?", choices("exam-level", LEVELS, v.level, "levels"), "Non c'è una risposta giusta: serve per dosare spiegazioni e difficoltà."),
     h("div", { class: "cols" },
       field("window", "Quanto tempo ti dai per prepararlo?", select(WINDOWS, WINDOWS[v.studyDays] ? v.studyDays : 0), "Lo studio si concentra negli ultimi giorni prima dell'esame; prima non ti propongo attività."),
       field("hours", "Ore di studio al giorno", h("input", { type: "number", min: 0.5, max: 12, step: 0.5, value: v.hoursPerDay })),
     ),
-    loadBox,
-    h("div", { class: "cols" },
-      field("session", "Durata di un blocco di studio", select({ 25: "25 min", 45: "45 min", 60: "60 min", 90: "90 min" }, v.sessionMinutes), sessionAdvice(v.sessionMinutes)),
-      field("language", "Lingua del materiale", h("input", { value: v.language })),
-    ),
-    h("div", { class: "row" }, h("button", { class: "btn primary", type: "submit" }, isNew ? "Continua: aggiungi i materiali" : "Salva"), h("a", { class: "btn ghost", href: isNew ? "#/" : `#/exam/${exam.id}` }, "Annulla")),
+    h("details", { class: "more-settings" }, h("summary", {}, "Altre impostazioni"),
+      h("div", { class: "cols" },
+        field("session", "Durata di un blocco di studio", select({ 25: "25 min", 45: "45 min", 60: "60 min", 90: "90 min" }, v.sessionMinutes), sessionAdvice(v.sessionMinutes)),
+        field("language", "Lingua del materiale", h("input", { value: v.language })))),
+    h("div", { class: "row form-actions" }, h("a", { class: "btn ghost", href: isNew ? "#/" : `#/exam/${exam.id}` }, "Annulla"), h("button", { class: "btn primary", type: "submit" }, isNew ? "Continua: aggiungi i materiali" : "Salva")),
   );
+
+  /* Anteprima del piano: giorni di studio, ore, fasi (le stesse del piano vero); sotto, il carico rispetto ai CFU. */
+  const previewNum = h("b", {});
+  const previewText = h("span", {});
+  const phaseBar = h("div", { class: "phase-bar", "aria-hidden": "true" });
+  const phaseList = h("ul", { class: "phase-list" });
+  const aside = h("aside", { class: "plan-preview", "aria-labelledby": "plan-preview-title" },
+    h("span", { class: "kicker", id: "plan-preview-title" }, "Il piano, a grandi linee"),
+    h("div", { class: "plan-count" }, previewNum, previewText),
+    phaseBar, phaseList, loadBox,
+    h("p", { class: "plan-note" }, "Gli argomenti e i minuti di ogni giorno arrivano dal modulo, quando carichi i materiali."));
+  function renderPreview(days, hours) {
+    if (!days) {
+      previewNum.textContent = "";
+      previewText.textContent = "Scegli la data dell'esame per vedere il piano.";
+      return phaseBar.replaceChildren(), phaseList.replaceChildren();
+    }
+    previewNum.textContent = String(days);
+    previewText.replaceChildren(days === 1 ? "giorno di studio," : "giorni di studio,", h("br"), `${String(hours).replace(".", ",")} ${hours === 1 ? "ora" : "ore"} al giorno`);
+    const ph = splitPhases(days);
+    const parts = [["learn", ph.learn], ["consolidate", ph.consolidate], ["simulate", ph.sim], ["light", ph.light]].filter(([, n]) => n > 0);
+    phaseBar.replaceChildren(...parts.map(([k, n]) => h("span", { "data-phase": k, style: { flexGrow: String(n) } })));
+    phaseList.replaceChildren(...parts.map(([k, n]) => h("li", { "data-phase": k }, h("span", {}, PHASES[k]), h("span", {}, k === "light" && n === 1 ? "il giorno prima" : `${n} ${n === 1 ? "giorno" : "giorni"}`))));
+  }
 
   /* Tipo di prova e CFU si precompilano finché l'utente non li sceglie a mano.
      Priorità: piano di studi (dichiarato da scheda o da te) > euristica sulla materia. */
@@ -231,7 +274,7 @@ export function examFormView(exam, prefill = {}) {
   function refreshLoad() {
     const t = today();
     const draft = { id: exam?.id ?? "_new", date: f.date.value, hoursPerDay: Number(f.hours.value) || 0, studyDays: Number(f.window.value) || 0 };
-    if (!draft.date || draft.date <= t) return loadBox.replaceChildren();
+    if (!draft.date || draft.date <= t) return loadBox.replaceChildren(), renderPreview(0);
     const tt = prof?.timetable;
     const start = studyStart(draft, t);
     const days = windowDays(draft, t);
@@ -257,8 +300,9 @@ export function examFormView(exam, prefill = {}) {
     if (others.length)
       lines.push(h("div", {}, h("b", {}, "Si sovrappone a: "), others.map((o) => `${o.exam.name} (${o.days} giorni in comune, ${o.exam.hoursPerDay} h/giorno)`).join("; "),
         `. In quei giorni le ore si sommano: ${draft.hoursPerDay + others.reduce((x, o) => Math.max(x, o.exam.hoursPerDay), 0)} h o più.`));
-    loadBox.className = `callout ${fz && fz.level === "low" ? "warn" : ""}`;
+    loadBox.className = `load-box${fz && fz.level === "low" ? " warn" : ""}`;
     loadBox.replaceChildren(...lines);
+    renderPreview(days, draft.hoursPerDay);
   }
   for (const k of ["date", "hours", "cfu", "window"]) f[k].addEventListener("input", refreshLoad);
   f.window.addEventListener("change", refreshLoad);
@@ -335,6 +379,12 @@ export function examFormView(exam, prefill = {}) {
   tentative.addEventListener("change", refreshDate);
   refreshDate();
 
+  const page = h("div", { class: "stack exam-form-page" },
+    isNew ? stepper(1) : null,
+    h("div", { class: "page-intro" }, h("h1", {}, isNew ? "Che esame devi preparare?" : "Modifica esame"),
+      isNew ? h("p", { class: "lead" }, "Bastano data, tipo di prova e il tempo che hai: il piano parte da qui e si affina con i materiali.") : null),
+    h("div", { class: "form-layout" }, h("div", { class: "card form-card" }, form), aside));
+
   if (!isNew)
     form.append(
       h("hr", { style: { width: "100%", border: 0, borderTop: "1px solid var(--line)" } }),
@@ -346,5 +396,5 @@ export function examFormView(exam, prefill = {}) {
         },
       }, "Elimina esame"),
     );
-  return form;
+  return page;
 }
