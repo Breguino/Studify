@@ -13,6 +13,8 @@ npm run demo                           # AI simulata + esame demo: per provare t
 npm test
 ```
 
+Le stesse prove (più la build della pagina Claude e della versione web) girano su GitHub Actions a ogni pull request e a ogni push su `main` (`.github/workflows/test.yml`).
+
 Serve Node ≥ 20 (≥ 22.13 per eseguire i test, che leggono PDF con pdf.js). Nessun build step: il frontend è JavaScript ES modules servito così com'è; pdf.js (`pdfjs-dist`) viene servito da `node_modules` solo quando si apre un PDF.
 
 ## Versione per Claude (senza installare nulla)
