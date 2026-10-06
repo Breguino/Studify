@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Layout: a sinistra il percorso in sei passi, a destra la finestra di Studify con la schermata del passo.
+   Token: gli stessi di Studify (public/styles.css), in HSL per Tailwind; la fascia indaco è uguale nei due temi. */
+:root {
+  --bg: 228.0 29.4% 96.7%;
+  --surface: 0.0 0.0% 100.0%;
+  --surface-2: 222.9 25.9% 94.7%;
+  --text: 225.0 20.7% 11.4%;
+  --muted: 223.8 12.5% 40.8%;
+  --line: 225.0 26.1% 91.0%;
+  --line-strong: 224.0 21.7% 86.5%;
+  --brand: 244.5 57.9% 50.6%;
+  --brand-ink: 0.0 0.0% 100.0%;
+  --brand-soft: 232.9 100.0% 96.7%;
+  --good: 144.4 71.6% 26.3%;
+  --good-soft: 145.7 43.8% 93.7%;
+  --warn: 22.7 82.5% 31.4%;
+  --warn-soft: 36.4 93.3% 94.1%;
+  --bad: 4.2 76.5% 40.0%;
+  --bad-soft: 6.3 82.6% 95.5%;
+  --hero: 243.8 47.1% 20.0%;
+  --hero-ink: 0.0 0.0% 100.0%;
+  --hero-muted: 235.7 58.3% 90.6%;
+  --hero-faint: 236.0 47.4% 81.4%;
+  --hero-learn: 243.8 69.6% 78.0%;
+  --hero-warn: 33.5 88.5% 65.9%;
+  --hero-good: 145.8 53.2% 63.1%;
+  --radius: 18px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: 220.0 23.1% 7.6%;
+    --surface: 221.5 21.3% 12.0%;
+    --surface-2: 222.4 21.5% 15.5%;
+    --text: 223.6 31.4% 93.1%;
+    --muted: 222.0 17.4% 66.3%;
+    --line: 223.6 20.8% 20.8%;
+    --line-strong: 225.0 19.7% 27.8%;
+    --brand: 243.9 100.0% 75.7%;
+    --brand-ink: 228.0 23.8% 8.2%;
+    --brand-soft: 243.1 35.8% 21.4%;
+    --good: 151.3 49.8% 53.1%;
+    --good-soft: 153.0 33.3% 11.8%;
+    --warn: 33.7 74.9% 59.4%;
+    --warn-soft: 37.8 41.5% 12.7%;
+    --bad: 3.1 80.8% 67.3%;
+    --bad-soft: 2.6 31.5% 14.3%;
+    --hero: 243.8 47.1% 20.0%;
+    --hero-ink: 0.0 0.0% 100.0%;
+    --hero-muted: 235.7 58.3% 90.6%;
+    --hero-faint: 236.0 47.4% 81.4%;
+    --hero-learn: 243.8 69.6% 78.0%;
+    --hero-warn: 33.5 88.5% 65.9%;
+    --hero-good: 145.8 53.2% 63.1%;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: 220.0 23.1% 7.6%;
+  --surface: 221.5 21.3% 12.0%;
+  --surface-2: 222.4 21.5% 15.5%;
+  --text: 223.6 31.4% 93.1%;
+  --muted: 222.0 17.4% 66.3%;
+  --line: 223.6 20.8% 20.8%;
+  --line-strong: 225.0 19.7% 27.8%;
+  --brand: 243.9 100.0% 75.7%;
+  --brand-ink: 228.0 23.8% 8.2%;
+  --brand-soft: 243.1 35.8% 21.4%;
+  --good: 151.3 49.8% 53.1%;
+  --good-soft: 153.0 33.3% 11.8%;
+  --warn: 33.7 74.9% 59.4%;
+  --warn-soft: 37.8 41.5% 12.7%;
+  --bad: 3.1 80.8% 67.3%;
+  --bad-soft: 2.6 31.5% 14.3%;
+  --hero: 243.8 47.1% 20.0%;
+  --hero-ink: 0.0 0.0% 100.0%;
+  --hero-muted: 235.7 58.3% 90.6%;
+  --hero-faint: 236.0 47.4% 81.4%;
+  --hero-learn: 243.8 69.6% 78.0%;
+  --hero-warn: 33.5 88.5% 65.9%;
+  --hero-good: 145.8 53.2% 63.1%;
+  color-scheme: dark;
+}
+
+@layer base {
+  * { @apply border-line; }
+  body { @apply bg-bg text-text antialiased; font-family: "Figtree Variable", "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; line-height: 1.55; }
+  h1, h2, h3 { text-wrap: balance; }
+  :focus-visible { outline: 3px solid hsl(var(--brand) / .55); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+}

@@ -105,6 +105,8 @@ che crea `dist/harness.html`: la pagina Claude con un `window.claude` finto.
 ## 3. Framework, librerie, build
 
 - **UI**: JavaScript puro in ES modules, senza React, Vue o JSX. La versione server serve `public/` così com'è, senza build.
+  Unica eccezione, fuori dall'app: `demo/`, la demo guidata pubblicata come Artifact (React + Tailwind, con il suo
+  `package.json`). Non importarne nulla nell'app e non portare React in `public/`.
 - **Stile**: CSS puro, senza Tailwind, CSS Modules o styled-components.
 - **Librerie**:
   - KaTeX (formule);
@@ -187,6 +189,7 @@ shared/            prompts.js, normalize.js (server e browser)
 supabase/          schema.sql
 scripts/           build-artifact.mjs
 test/              node --test (+ fixtures/)
+demo/              demo guidata (Artifact a parte, React + Tailwind): non fa parte delle tre versioni
 ```
 
 Le funzionalità seguono lo schema «logica pura in `public/js/<tema>.js` (testata in `test/<tema>.test.js`) più vista in `public/js/views/`».
