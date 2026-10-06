@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studify — prepara gli esami con i tuoi materiali</title>
+<meta name="description" content="Appunti, dispense, slide, esami passati e quiz del docente diventano argomenti, flashcard, quiz e un piano di studio fino all'appello. Gratis, nel browser.">
+<meta name="theme-color" content="#4338ca">
+<!--HEAD-->
+<script>
+  // Link delle email (conferma, recupero password) arrivati qui invece che su /app: li inoltra all'app con la sessione.
+  if (/access_token=|error_code=|error=/.test(location.hash)) location.replace("/app" + location.search + location.hash);
+</script>
+<style>
+/*CSS*/
+</style>
+</head>
+<body class="landing">
+<a class="skip" href="#contenuto">Vai al contenuto</a>
+<header class="topbar">
+  <a class="logo" href="/">Studify</a>
+  <nav class="row" aria-label="Sezioni">
+    <a class="btn ghost hide-sm" href="#come">Come funziona</a>
+    <a class="btn ghost hide-sm" href="#materiali">Materiali</a>
+    <a class="btn ghost hide-sm" href="#domande">Domande</a>
+    <a class="btn ghost" href="/app?entra=accedi" data-guest>Accedi</a>
+    <a class="btn primary" href="/app?entra=registrati" data-guest>Inizia gratis</a>
+    <a class="btn primary" href="/app" data-member hidden>Apri Studify</a>
+  </nav>
+</header>
+
+<main id="contenuto">
+  <section class="hero">
+    <div class="hero-text">
+      <span class="badge brand">Per gli esami universitari</span>
+      <h1>Prepara gli esami con i&nbsp;tuoi materiali.</h1>
+      <p class="lead">Appunti, dispense del docente, slide, esami passati e quiz Moodle diventano argomenti, flashcard, quiz e un piano di studio giorno per giorno fino all'appello.</p>
+      <div class="row hero-cta">
+        <a class="btn primary big" href="/app?entra=registrati" data-guest>Inizia gratis</a>
+        <a class="btn primary big" href="/app" data-member hidden>Vai ai tuoi esami →</a>
+        <span class="small muted" data-guest>Hai già un account? <a href="/app?entra=accedi">Accedi</a></span>
+      </div>
+      <p class="small muted">Gratis, con un limite mensile di uso dell'intelligenza artificiale · Nel browser, senza installare nulla · Dati salvati nell'Unione europea</p>
+    </div>
+
+    <div class="hero-demo" aria-hidden="true">
+      <div class="card demo-exam">
+        <div class="row between"><h3>Microeconomia</h3><span class="badge warn">tra 21 g</span></div>
+        <p class="small muted">26 ott · Scritto + orale · 3 appelli</p>
+        <div class="row between small"><span class="muted">Preparazione</span><b>42%</b></div>
+        <div class="bar"><div style="width:42%"></div></div>
+        <div class="row demo-tags">
+          <span class="badge bad">il docente ne parla per l'esame</span>
+          <span class="badge good">quiz del docente</span>
+        </div>
+      </div>
+      <div class="task">
+        <input type="checkbox" checked disabled tabindex="-1">
+        <div><div class="t-title">Flashcard del giorno</div><div class="t-meta">15 min · richiamo attivo · 18 da ripassare</div></div>
+      </div>
+      <div class="card demo-quiz">
+        <span class="badge good">Quiz 2 · risposta del docente</span>
+        <p class="demo-q">Il monopolista massimizza il profitto dove:</p>
+        <div class="btn option">A. il prezzo è uguale al costo marginale</div>
+        <div class="btn option correct">B. il ricavo marginale è uguale al costo marginale</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="come" class="section">
+    <h2 class="kicker">Come funziona</h2>
+    <div class="steps">
+      <div class="card flat step">
+        <span class="step-n">1</span>
+        <h3>Carica i tuoi materiali</h3>
+        <p class="muted">PDF, Word, PowerPoint, foto degli appunti scritti a mano, trascrizioni delle lezioni, esami degli anni passati.</p>
+      </div>
+      <div class="card flat step">
+        <span class="step-n">2</span>
+        <h3>Ottieni un modulo verificato</h3>
+        <p class="muted">Argomenti, flashcard e domande ricavati dai materiali. Le frasi del docente e le soluzioni ufficiali restano come sono; ciò che non è nei materiali viene segnato.</p>
+      </div>
+      <div class="card flat step">
+        <span class="step-n">3</span>
+        <h3>Segui il piano fino all'esame</h3>
+        <p class="muted">Ogni giorno sai cosa fare e quanto tempo serve: prima lettura, ripasso, simulazioni d'esame a tempo.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="materiali" class="section">
+    <h2 class="kicker">Tutti i materiali del corso</h2>
+    <p class="section-lead">Ogni tipo di materiale ha il suo peso: la parola del docente vale più degli appunti di un collega, e Studify lo sa.</p>
+    <div class="grid materials">
+      <div class="card flat"><h3>Dispense e slide del docente</h3><p class="muted small">La fonte principale: indice, capitoli e pagine da leggere per ogni argomento.</p></div>
+      <div class="card flat"><h3>Esami degli anni passati</h3><p class="muted small">Divisi per appello: gli argomenti più chiesti e simulazioni a tempo con correzione.</p></div>
+      <div class="card flat"><h3>Esercitazioni con le soluzioni</h3><p class="muted small">Esercizi e soluzioni ufficiali entrano nel quiz così come sono, senza riscriverli.</p></div>
+      <div class="card flat"><h3>Quiz del docente su Moodle</h3><p class="muted small">Le sue domande, con la sua risposta corretta.</p></div>
+      <div class="card flat"><h3>Registrazioni e sbobine</h3><p class="muted small">Divise per lezione, con le frasi in cui il docente parla dell'esame.</p></div>
+      <div class="card flat"><h3>Appunti, tuoi e dei colleghi</h3><p class="muted small">Anche scritti a mano: le foto vengono trascritte e restano da controllare accanto all'originale.</p></div>
+      <div class="card flat"><h3>Libri consigliati</h3><p class="muted small">Quali capitoli coprono il programma e cosa manca nei tuoi materiali.</p></div>
+      <div class="card flat"><h3>Tutorati e ricevimento</h3><p class="muted small">Il metodo del tutor e le domande da fare al docente, con le sue risposte nel modulo.</p></div>
+    </div>
+  </section>
+
+  <section class="section split">
+    <div>
+      <h2 class="kicker">Metodi che funzionano</h2>
+      <h3 class="split-title">Studiare meno ore, ricordare di più.</h3>
+      <p class="muted">Il piano usa tecniche con solide prove sperimentali: <b>richiamo attivo</b> (rispondere invece di rileggere), <b>ripasso distribuito</b> (rivedere a intervalli crescenti), <b>esercizi misti</b> e <b>simulazioni d'esame</b>. Niente «stili di apprendimento»: non funzionano.</p>
+    </div>
+    <div>
+      <h2 class="kicker">I tuoi dati</h2>
+      <h3 class="split-title">Restano tuoi.</h3>
+      <ul class="checks">
+        <li>Esami e progressi salvati nell'Unione europea, visibili solo a te.</li>
+        <li>PDF e foto restano nel tuo browser: non li salviamo sui nostri server.</li>
+        <li>Il testo dei materiali va a Claude (Anthropic, Stati Uniti) solo per generare i contenuti.</li>
+        <li>Nessuna pubblicità, nessuna profilazione. Elimini l'account quando vuoi.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="domande" class="section faq">
+    <h2 class="kicker">Domande</h2>
+    <details class="card flat"><summary>Quanto costa?</summary><p class="muted">Niente. Ogni account ha un limite mensile di uso dell'intelligenza artificiale, che si rinnova il primo del mese; flashcard, quiz e piano restano disponibili anche quando il limite è raggiunto.</p></details>
+    <details class="card flat"><summary>Funziona con la mia università?</summary><p class="muted">Sì, con qualunque corso: parte dai materiali che hai tu. Puoi indicare ateneo e corso di studio, e importare il libretto e gli orari.</p></details>
+    <details class="card flat"><summary>L'intelligenza artificiale può sbagliare?</summary><p class="muted">Sì. Per questo Studify tiene separato ciò che viene dai tuoi materiali da ciò che aggiunge, cita le frasi del docente senza riscriverle e scarta le citazioni che non trova nei materiali. Controlla sempre sui materiali del corso.</p></details>
+    <details class="card flat"><summary>Posso studiare con i compagni?</summary><p class="muted">Sì: esporti un esame e lo mandi al gruppo, senza i tuoi progressi personali. Poi vi interrogate a turno con le domande del modulo.</p></details>
+    <details class="card flat"><summary>Serve installare qualcosa?</summary><p class="muted">No: funziona nel browser, su computer e telefono. Gli esami si sincronizzano tra i dispositivi.</p></details>
+  </section>
+
+  <section class="section cta-band">
+    <h2>Il prossimo appello è più vicino di quanto sembra.</h2>
+    <p>Crea l'account e carica i materiali del primo esame: in pochi minuti hai il modulo e il piano.</p>
+    <a class="btn big" href="/app?entra=registrati" data-guest>Inizia gratis</a>
+    <a class="btn big" href="/app" data-member hidden>Vai ai tuoi esami →</a>
+  </section>
+</main>
+
+<footer class="site-footer"><span>© Studify</span><a href="termini.html">Termini e condizioni</a><a href="privacy.html">Privacy</a><span>Nessun cookie: né di profilazione, né di statistica</span></footer>
+
+<script>
+  // Chi ha già una sessione in questo browser vede «Apri Studify» al posto di «Registrati».
+  try {
+    if (localStorage.getItem("studify-session")) {
+      for (const el of document.querySelectorAll("[data-guest]")) el.hidden = true;
+      for (const el of document.querySelectorAll("[data-member]")) el.hidden = false;
+    }
+  } catch { /* archivio del browser non disponibile: restano i pulsanti per gli ospiti */ }
+</script>
+</body>
+</html>

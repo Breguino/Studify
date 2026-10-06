@@ -5,7 +5,7 @@ import { clearLocalFiles } from "./backend.js";
 import { rpc } from "./claude.js";
 
 export const TERMS_VERSION = "2026-10-05";
-export const PRIVACY_VERSION = "2026-10-05";
+export const PRIVACY_VERSION = "2026-10-06";
 const MIN_PASSWORD = 8;
 
 const redirectTo = () => `${location.origin}${location.pathname}`;
@@ -24,6 +24,26 @@ export function signupProblems({ email, password, terms, privacy, adult }) {
 }
 
 /** beforeLeave({ save }): prima di uscire o eliminare l'account (salva le modifiche in sospeso, poi blocca le scritture); { undo } le riattiva. */
+/**
+ * Anti-spam leggero del modulo di registrazione: campo trappola compilato (le persone non lo vedono) o invio
+ * troppo rapido. Non ferma chi chiama direttamente l'API di Supabase: per quello serve un CAPTCHA (README).
+ */
+export const MIN_FILL_MS = 2000;
+export function looksLikeBot({ honeypot = "", elapsedMs = Infinity } = {}) {
+  return honeypot.trim() !== "" || elapsedMs < MIN_FILL_MS;
+}
+
+/**
+ * Schermata d'accesso iniziale: quella chiesta dalla landing (?entra=registrati|accedi), altrimenti «Accedi»
+ * per chi è già entrato da questo browser e «Registrati» per chi arriva la prima volta.
+ */
+export function initialMode({ search = "", returning = false } = {}) {
+  const wanted = new URLSearchParams(search).get("entra");
+  if (wanted === "registrati") return "signup";
+  if (wanted === "accedi") return "login";
+  return returning ? "login" : "signup";
+}
+
 export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
   let resolveReady;
   const ready = new Promise((r) => (resolveReady = r));
@@ -71,7 +91,10 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
       body = form;
     } else if (mode === "signup") {
       const box = (name, ...label) => h("label", { class: "check" }, h("input", { type: "checkbox", name, required: true }), h("span", {}, ...label));
+      const shownAt = Date.now();
       const form = h("form", { class: "stack", novalidate: true },
+        // campo trappola: fuori dallo schermo, saltato dalla tastiera e dai lettori di schermo; i bot lo compilano
+        h("div", { class: "hp", "aria-hidden": "true" }, h("label", {}, "Sito web", h("input", { name: "website", tabindex: "-1", autocomplete: "off" }))),
         field("Email", emailInput()),
         field("Password", pwd("new-password"), `Almeno ${MIN_PASSWORD} caratteri, con lettere e numeri.`),
         h("fieldset", { class: "consents" },
@@ -85,6 +108,10 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
         const v = { email: form.email.value.trim(), password: form.password.value, terms: form.terms.checked, privacy: form.privacy.checked, adult: form.adult.checked };
         const problems = signupProblems(v);
         if (problems.length) return say(h("ul", {}, ...problems.map((p) => h("li", {}, p))));
+        if (looksLikeBot({ honeypot: form.website.value, elapsedMs: Date.now() - shownAt })) {
+          // al bot si risponde come a una persona, senza chiamare Supabase
+          return show("login", { email: v.email, notice: `Ti abbiamo mandato un'email a ${v.email}: apri il link per attivare l'account, poi accedi. Non la trovi? Controlla anche nello spam.` });
+        }
         busy(form, true);
         try {
           const { confirm } = await auth.signUp({
@@ -229,7 +256,7 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
     } catch {
       /* come sopra */
     }
-    show(returning ? "login" : "signup");
+    show(initialMode({ search: location.search, returning }));
   }
 
   async function signOut() {

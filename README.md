@@ -45,8 +45,32 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
 Per aprire Studify ad altri studenti, con registrazione e accesso:
 
 ```
-npm run build:web          # crea dist-web/: index.html (app), termini.html, privacy.html
+npm run build:web          # crea dist-web/: index.html (landing), app.html (servita su /app), js/, termini.html, privacy.html,
+                           # icone, og.png, robots.txt, sitemap.xml, site.webmanifest
+node scripts/make-assets.mjs   # rigenera web/assets/ (anteprima social e icone): serve Playwright, solo se cambia il marchio
 ```
+
+**Landing** (`web/landing.html`, `web/landing.css`): pagina statica su `/` (circa 40 KB compressa, senza il codice dell'app),
+con un'unica azione principale «Inizia gratis» → `/app?entra=registrati`. Chi ha già una sessione nel browser vede «Apri Studify».
+Se un link delle email (conferma, recupero password) arriva alla radice invece che su `/app`, la landing lo inoltra all'app.
+
+**Lancio**
+- **Meta e anteprime**: ogni pagina ha titolo, descrizione, canonical, Open Graph e Twitter card con `og.png` (1200×630).
+  L'indirizzo pubblico viene da `STUDIFY_SITE_URL` oppure da `VERCEL_PROJECT_PRODUCTION_URL`. `/app` ha `noindex`.
+- **Icone**: `favicon.svg`, `favicon.ico`, `favicon-32.png`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `site.webmanifest`.
+- **Motori di ricerca**: `robots.txt` (esclude `/app` e `/api/`) e `sitemap.xml` con le tre pagine pubbliche.
+- **Statistiche di visita**: Vercel Web Analytics, senza cookie, con lo script servito dallo stesso dominio. Lo script è incluso solo
+  nelle build su Vercel; va attivato in *Analytics* sulla dashboard. Con `STUDIFY_ANALYTICS=off` si spegne; con
+  `STUDIFY_ANALYTICS=/percorso/script.js` si usa il percorso indicato dalla dashboard, se diverso.
+- **Niente banner dei cookie**: il sito non usa cookie, né di profilazione né di statistica, ma solo l'archiviazione tecnica del browser
+  (sessione, file caricati). Per le linee guida del Garante non serve consenso; l'informativa lo spiega.
+- **Anti-spam**: campo trappola nascosto e tempo minimo di compilazione (2 s) nel modulo di registrazione, più la conferma email
+  obbligatoria e i limiti di spesa. Non ferma chi chiama direttamente l'API di Supabase: per quello serve il CAPTCHA di Supabase
+  (*Authentication → Attack Protection*, per esempio Cloudflare Turnstile), che richiede anche una piccola modifica al modulo.
+- **Prestazioni**: nella versione web il codice è diviso in moduli con l'hash nel nome, in cache per un anno. pdf.js e KaTeX
+  si scaricano solo al primo PDF o alla prima formula. Primo caricamento dell'app: circa 420 KB compressi, contro 1,1 MB prima.
+- **Contrasto**: tutte le coppie testo/sfondo dei token superano 4,5:1 in entrambi i temi (verde scurito a `#13733a`; nel tema
+  scuro i toast usano `--brand-ink`).
 
 È la stessa app della pagina Claude, con al posto di `window.claude` un sostituto (`web/claude.js`):
 
@@ -72,10 +96,12 @@ npm run build:web          # crea dist-web/: index.html (app), termini.html, pri
 **Supabase** (schema in `supabase/schema.sql`): tabelle `docs`, `ai_usage`, `consents` con RLS; funzioni `record_ai_usage`,
 `ai_spend_this_month`, `delete_my_account`. In *Authentication → URL Configuration* vanno impostati **Site URL** e
 **Redirect URLs** con l'indirizzo Vercel, altrimenti i link delle email (conferma, recupero password) portano a `localhost`.
+Come Redirect URL conviene `https://<dominio>/**`, che comprende `/app`; se è autorizzata solo la radice, la landing inoltra comunque il link.
 Il server email predefinito di Supabase invia pochissime email l'ora: per un uso reale serve un SMTP proprio
 (*Authentication → Emails → SMTP Settings*).
 
-`vercel.json` imposta build, cartella `dist-web`, regione della funzione (Francoforte, `fra1`, accanto al database), durata massima (300 s) e intestazioni di sicurezza (CSP, niente iframe).
+`vercel.json` imposta build, cartella `dist-web`, regione della funzione (Francoforte, `fra1`, accanto al database), la rotta `/app`,
+durata massima (300 s), intestazioni di sicurezza (CSP, niente iframe) e cache lunga per `/js/`.
 Prove: `test/web.test.js` (funzione, accesso, `sample`, `db`, controlli di registrazione).
 
 ## Come funziona

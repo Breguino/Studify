@@ -5,7 +5,7 @@ import { EventEmitter } from "node:events";
 import { HttpError, claudeErrorCode, costUsd, createHandler, messageParams, readBody } from "../api/_lib.js";
 import { authError, createAuth, parseAuthHash } from "../web/auth.js";
 import { createDb, createSample, parseJsonText } from "../web/claude.js";
-import { signupProblems } from "../web/gate.js";
+import { initialMode, looksLikeBot, MIN_FILL_MS, signupProblems } from "../web/gate.js";
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const ENV = { SUPABASE_URL: "https://sb.test", SUPABASE_KEY: "pk", ANTHROPIC_API_KEY: "sk-test", USER_MONTHLY_LIMIT_USD: "3", TOTAL_MONTHLY_LIMIT_USD: "30" };
@@ -347,4 +347,19 @@ test("db: documenti sulla tabella docs (upsert, lettura, cancellazione) con il t
   assert.equal((await doc.get()).exists, false);
   const expired = createDb({ url: "u", key: "k", auth: fakeAuth, fetchFn: async () => json(401, {}) }).collection("x").doc("y");
   await assert.rejects(expired.get(), (e) => e.code === "session_expired");
+});
+
+test("schermata d'accesso: quella scelta dalla landing, altrimenti accesso per chi torna e registrazione per i nuovi", () => {
+  assert.equal(initialMode({ search: "?entra=registrati", returning: true }), "signup");
+  assert.equal(initialMode({ search: "?entra=accedi" }), "login");
+  assert.equal(initialMode({ search: "" }), "signup");
+  assert.equal(initialMode({ search: "", returning: true }), "login");
+  assert.equal(initialMode({ search: "?entra=boh", returning: true }), "login", "valore sconosciuto: si ignora");
+});
+
+test("anti-spam: campo trappola compilato o invio troppo rapido", () => {
+  assert.equal(looksLikeBot({ honeypot: "", elapsedMs: 8000 }), false, "persona: campo vuoto, qualche secondo per compilare");
+  assert.equal(looksLikeBot({ honeypot: "http://spam.example", elapsedMs: 8000 }), true);
+  assert.equal(looksLikeBot({ honeypot: "", elapsedMs: 300 }), true, "modulo inviato in 0,3 secondi");
+  assert.equal(looksLikeBot({ honeypot: "  ", elapsedMs: MIN_FILL_MS }), false, "spazi: non conta, e il limite è incluso");
 });
