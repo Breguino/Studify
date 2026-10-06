@@ -8,13 +8,14 @@ globalThis.pdfjsWorker = { WorkerMessageHandler };
 
 export const readPdf = (data, opts) => extractPages(lib, data, opts);
 
-/** Pagine come immagini JPEG (per l'AI su PDF scansionati). */
-export async function pdfImages(data, { maxPages = 6, scale = 1.5 } = {}) {
-  const bytes = (data instanceof Uint8Array ? data : new Uint8Array(data)).slice();
+/** Pagine come immagini JPEG (per l'AI su PDF scansionati o con formule): da `from` a `to`, al massimo `maxPages`. */
+export async function pdfImages(data, { maxPages = 6, scale = 1.5, from = 1, to = Infinity } = {}) {
+  const bytes = new Uint8Array(data);
   const doc = await lib.getDocument({ data: bytes, isEvalSupported: false, useWorkerFetch: false, verbosity: 0 }).promise;
   try {
     const out = [];
-    for (let i = 1; i <= Math.min(doc.numPages, maxPages); i++) {
+    const last = Math.min(doc.numPages, to, from + maxPages - 1);
+    for (let i = Math.max(1, from); i <= last; i++) {
       const page = await doc.getPage(i);
       const viewport = page.getViewport({ scale });
       const canvas = document.createElement("canvas");
@@ -23,7 +24,7 @@ export async function pdfImages(data, { maxPages = 6, scale = 1.5 } = {}) {
       await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
       out.push(await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85)));
     }
-    return { images: out, truncated: doc.numPages > maxPages, numPages: doc.numPages };
+    return { images: out, truncated: Math.min(doc.numPages, to) > last, numPages: doc.numPages };
   } finally {
     doc.destroy?.();
   }

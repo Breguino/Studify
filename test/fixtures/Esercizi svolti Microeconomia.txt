@@ -1,0 +1,21 @@
+Esercitazione 4 — esercizi svolti in aula dal prof.
+
+Esercizio 1 — Prezzo e quantità del monopolista
+Per il monopolista la curva inversa è $P = 50 - Q$ e il costo marginale è costante, $MC = 10$. Trovare quantità e prezzo.
+
+Il ricavo totale è $RT = PQ = 50Q - Q^2$, quindi il ricavo marginale è $MR = 50 - 2Q$.
+
+Condizione di ottimo: $MR = MC$, cioè $50 - 2Q = 10$, da cui $Q^* = 20$.
+
+Il prezzo si legge sulla curva inversa: $P^* = 50 - 20 = 30$.
+
+Esercizio 2 — Elasticità in un punto
+Con $Q = 100 - 2P$ calcolare l'elasticità al prezzo nel punto $P = 20$.
+
+Prima la quantità nel punto: $Q(20) = 100 - 40 = 60$.
+
+Poi la derivata: $\frac{dQ}{dP} = -2$.
+
+$$\varepsilon_P = \left|\frac{dQ}{dP}\cdot\frac{P}{Q}\right| = 2\cdot\frac{20}{60} \approx 0{,}67$$
+
+Minore di 1: domanda anelastica.

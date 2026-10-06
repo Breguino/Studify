@@ -2,14 +2,15 @@
 // da /vendor/pdfjs, nella pagina Claude è incorporata, nei test viene da node_modules).
 // Solo testo vero: i PDF scansionati (immagini) non hanno elementi di testo.
 
-const toBytes = (data) => (data instanceof Uint8Array ? data : new Uint8Array(data));
+// sempre una copia Uint8Array «pura»: pdf.js può staccare il buffer e rifiuta i Buffer di Node
+const toBytes = (data) => new Uint8Array(data);
 
 /**
  * @returns {Promise<{pages: {num:number, width:number, height:number, items:{str:string,x:number,y:number,w:number,h:number}[]}[], numPages:number, truncated:boolean}>}
  */
 export async function extractPages(lib, data, { maxPages = 60 } = {}) {
   const task = lib.getDocument({
-    data: toBytes(data).slice(), // pdf.js può "staccare" il buffer
+    data: toBytes(data),
     isEvalSupported: false, // mitiga CVE-2024-4367 (esecuzione di codice da font PDF malevoli)
     useWorkerFetch: false,
     disableFontFace: true,

@@ -1,13 +1,15 @@
 import * as api from "../api.js";
 import { core } from "../core.js";
-import { findCourse, parseCurriculumText } from "../curriculum.js";
+import { defaultTimetableSelection, findCourse, parseCurriculumTable, parseCurriculumText, yearLabel } from "../curriculum.js";
 import { addDays, fmtDate, today } from "../dates.js";
 import { BUILDERS, CANON_HEADERS, SCHEMAS, TEMPLATES, autoMap, colName, detectKind, findHeaderRow, looksLikeHeader, tableFrom } from "../importers.js";
 import { go } from "../nav.js";
 import { hasText, layoutText, pagesToRows, plainLines } from "../pdf-table.js";
+import { overlaps } from "../timetable.js";
 import { readPdf } from "../pdf-text.js";
 import * as store from "../store.js";
-import { parseDelimited, readSpreadsheet } from "../tabular.js";
+import { guessIcsKind, icsRows, isIcsText, parseIcs } from "../ics.js";
+import { decodeText, parseDelimited, readSpreadsheet } from "../tabular.js";
 import { badge, confirmDialog, h, readFileAs, toast } from "../ui.js";
 
 const MAX_FILE = 10 * 1024 * 1024;
@@ -19,7 +21,7 @@ const norm = (s) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-
 
 function load(sheets, fileName, extra = {}) {
   const sheetIdx = Math.max(0, sheets.findIndex((s) => s.rows.length > 1));
-  st = { fileName, sheets, sheetIdx, hasHeader: true, kind: null, kindAuto: null, map: {}, until: "", include: null, pdf: null, notes: [], fromAI: false, ...extra };
+  st = { fileName, sheets, sheetIdx, hasHeader: true, kind: null, kindAuto: null, map: {}, until: "", include: null, pdf: null, ics: null, notes: [], fromAI: false, meta: null, ...extra };
   setSheet(sheetIdx);
   if (extra.forceKind) { setKind(extra.forceKind); st.kindAuto = extra.forceKind; }
 }
@@ -41,6 +43,7 @@ function setSheet(i) {
 
 function setKind(kind) {
   st.kind = kind;
+  if (st.ics) st.sheets[st.sheetIdx] = { name: "Calendario (.ics)", rows: icsRows(st.ics.events, kind, CANON_HEADERS[kind]), offset: 0, headerScanned: true };
   const sh = st.sheets[st.sheetIdx];
   st.map = autoMap(kind, tableFrom(sh.rows, st.hasHeader, sh.offset).headers);
   st.include = null;
@@ -63,7 +66,8 @@ function applyExams(items) {
     const exam = it.existingId ? store.getExam(it.existingId) : null;
     if (exam) {
       exam.appelli = it.appelli;
-      if (!it.appelli.some((a) => a.date === exam.date) || exam.date < today()) exam.date = it.date;
+      if (exam.dateTentative || !it.appelli.some((a) => a.date === exam.date) || exam.date < today()) exam.date = it.date;
+      exam.dateTentative = false;
       if (!exam.cfu && it.cfu) exam.cfu = it.cfu;
       if (!exam.year && it.year) exam.year = it.year;
       exam.plan = null;
@@ -82,12 +86,14 @@ function applyExams(items) {
   return `${created} esami creati, ${updated} aggiornati.`;
 }
 
-function applyCourses(items) {
+function applyCourses(items, meta) {
   const p = store.profile();
+  if (meta?.academicYear) p.academicYear = meta.academicYear;
+  if (meta?.degreeName && !p.degree) p.degree = meta.degreeName;
   let created = 0;
   let updated = 0;
   for (const it of items) {
-    const { status, ...c } = it;
+    const { status, ...c } = it; // `imported` resta: distingue le voci da file da quelle scritte a mano
     const ex = p.courses.find((x) => norm(x.name) === norm(c.name) && (x.year || 0) === (c.year || 0));
     if (ex) {
       if (c.cfu) ex.cfu = c.cfu;
@@ -117,6 +123,21 @@ async function applyTimetable(res) {
 
 /* ----------------------------------- PDF ----------------------------------- */
 
+/* ------------------------------- calendario (.ics) ------------------------------- */
+
+function loadIcs(text, fileName) {
+  const { events, stats } = parseIcs(text);
+  if (!events.length) throw new Error("Nel calendario non ci sono eventi con data e ora (gli eventi «tutto il giorno» e quelli annullati sono ignorati).");
+  const kind = guessIcsKind(events);
+  const first = events[0].date;
+  const last = events.at(-1).date;
+  const notes = [`Calendario: ${events.length} eventi dal ${fmtDate(first)} al ${fmtDate(last)}.`];
+  if (stats.cancelled) notes.push(`${stats.cancelled} eventi annullati ignorati.`);
+  if (stats.allDay) notes.push(`${stats.allDay} eventi «tutto il giorno» ignorati.`);
+  if (stats.recurring) notes.push(`${stats.recurring} eventi ricorrenti espansi in singole date.`);
+  load([{ name: "Calendario (.ics)", rows: icsRows(events, kind, CANON_HEADERS[kind]), offset: 0 }], fileName, { ics: { events }, forceKind: kind, notes });
+}
+
 const isPdf = (f) => /\.pdf$/i.test(f.name ?? "") || f.type === "application/pdf";
 
 async function loadPdf(file) {
@@ -129,7 +150,22 @@ async function loadPdf(file) {
     return;
   }
   const { text, chars } = layoutText(pages);
-  load([{ name: `PDF (${numPages} pag.)`, rows: pagesToRows(pages), offset: 0 }], file.name, { pdf: { file, numPages, textless: false, text, chars, lines: plainLines(pages) } });
+  const pdf = { file, numPages, textless: false, text, chars, lines: plainLines(pages), rowsBlank: pagesToRows(pages, { blanks: true }) };
+  // Un piano di studi (sezioni «INSEGNAMENTI 2° ANNO», righe con CFU) si riconosce da solo, senza AI.
+  const cur = parseCurriculumTable(pdf.rowsBlank);
+  if (cur.courses.length >= 4 && cur.years.some((y) => y > 0)) {
+    loadCurriculum(cur, pdf, file.name);
+    return;
+  }
+  load([{ name: `PDF (${numPages} pag.)`, rows: pagesToRows(pages), offset: 0 }], file.name, { pdf });
+}
+
+const curriculumRows = (courses) => [CANON_HEADERS.insegnamenti, ...courses.map((c) => [c.name, String(c.year || ""), String(c.cfu || ""), c.kind === "a_scelta" ? "A scelta" : "Obbligatorio", c.group, ""])];
+
+function loadCurriculum(cur, pdf, fileName) {
+  const m = cur.meta;
+  const notes = [`Riconosciuto un piano di studi${m.degreeName ? ` («${m.degreeName}»)` : ""}${m.academicYear ? `, a.a. ${m.academicYear}` : ""}: ${cur.courses.length} voci in ${cur.years.filter(Boolean).length} anni.`];
+  load([{ name: "Piano dal PDF", rows: curriculumRows(cur.courses), offset: 0 }], fileName, { pdf, forceKind: "insegnamenti", notes, meta: m });
 }
 
 /** Il PDF (o il suo testo con le colonne allineate) → righe canoniche, lette dall'AI. */
@@ -153,12 +189,13 @@ async function aiRead(kind, redraw) {
   }
 }
 
-/** Piano di studi dal testo del PDF, senza AI: righe canoniche ricavate con la lettura rapida. */
+/** Piano di studi dal PDF, senza AI: prima come tabella (SSD | insegnamento | CFU), poi come righe di testo («Analisi – 9 CFU»). */
 function localCurriculum() {
+  const cur = parseCurriculumTable(st.pdf.rowsBlank ?? []);
+  if (cur.courses.length >= 3) return loadCurriculum(cur, st.pdf, st.pdf.file.name);
   const { courses } = parseCurriculumText(st.pdf.lines.join("\n"));
   if (!courses.length) throw new Error("Nel testo non ho riconosciuto insegnamenti con i CFU. Prova con l'AI.");
-  const rows = [CANON_HEADERS.insegnamenti, ...courses.map((c) => [c.name, String(c.year || ""), String(c.cfu || ""), c.kind === "a_scelta" ? "A scelta" : "Obbligatorio", c.group, ""])];
-  load([{ name: "Elenco dal PDF", rows, offset: 0 }], st.pdf.file.name, { pdf: st.pdf, forceKind: "insegnamenti", notes: ["Lettura rapida senza AI: controlla anni, tipo e CFU."] });
+  load([{ name: "Elenco dal PDF", rows: curriculumRows(courses), offset: 0 }], st.pdf.file.name, { pdf: st.pdf, forceKind: "insegnamenti", notes: ["Lettura rapida senza AI: controlla anni, tipo e CFU."] });
 }
 
 /* ---------------------------------- vista ---------------------------------- */
@@ -183,6 +220,7 @@ export function importView() {
     if (file.size > MAX_FILE) return toast("File troppo grande (max 10 MB).", "error");
     try {
       if (isPdf(file)) await loadPdf(file);
+      else if (/\.ics$/i.test(file.name) || file.type === "text/calendar") loadIcs(decodeText(await file.arrayBuffer()), file.name);
       else {
         const { sheets } = await readSpreadsheet(file);
         if (!sheets.some((s) => s.rows.length)) throw new Error("Il file è vuoto.");
@@ -195,11 +233,11 @@ export function importView() {
   }
 
   function build() {
-    const input = h("input", { type: "file", id: "import-file", accept: ".csv,.tsv,.txt,.xlsx,.xlsm,.pdf,text/csv,application/pdf", hidden: true });
+    const input = h("input", { type: "file", id: "import-file", accept: ".csv,.tsv,.txt,.xlsx,.xlsm,.pdf,.ics,text/csv,application/pdf,text/calendar", hidden: true });
     input.addEventListener("change", () => onFile(input.files[0]));
     const drop = h("div", { class: "file-drop", tabindex: 0, role: "button", onclick: () => input.click(), onkeydown: (e) => (e.key === "Enter" || e.key === " ") && input.click(),
       ondragover: (e) => e.preventDefault(), ondrop: (e) => { e.preventDefault(); onFile(e.dataTransfer.files[0]); } },
-      h("b", {}, "Scegli un file CSV, Excel o PDF"), h("div", { class: "small" }, "(.csv, .tsv, .xlsx, .pdf) oppure trascinalo qui. Il file resta nel tuo browser."), input);
+      h("b", {}, "Scegli un file CSV, Excel, PDF o calendario"), h("div", { class: "small" }, "(.csv, .tsv, .xlsx, .pdf, .ics) oppure trascinalo qui. Il file resta nel tuo browser."), input);
     const paste = h("textarea", { id: "import-paste", placeholder: "Oppure incolla qui le righe copiate da Excel o da una pagina web (con le intestazioni)…", style: { minHeight: "90px" } });
     paste.value = pasted;
     paste.addEventListener("input", () => (pasted = paste.value));
@@ -207,6 +245,7 @@ export function importView() {
       h("h3", {}, "1 · Il file"), drop, paste,
       h("div", { class: "row" },
         h("button", { class: "btn", onclick: () => {
+          if (isIcsText(paste.value)) { try { loadIcs(paste.value, "calendario incollato"); redraw(); } catch (e) { toast(e.message, "error"); } return; }
           const { rows, offset } = parseDelimited(paste.value);
           if (rows.length < 2) return toast("Incolla almeno l'intestazione e una riga.", "error");
           load([{ name: "Testo incollato", rows, offset }], "testo incollato");
@@ -215,8 +254,8 @@ export function importView() {
         h("span", { class: "muted small" }, "Modelli da scaricare: "),
         ...Object.entries(SCHEMAS).map(([k, s]) => h("button", { class: "btn small ghost", onclick: () => download(`modello-${k}.csv`, TEMPLATES[k]) }, s.label))));
 
-    if (!st) return [h("div", { class: "row between" }, h("h1", { style: { margin: 0 } }, "Importa da CSV, Excel o PDF"), h("a", { class: "btn ghost", href: "#/" }, "Home")),
-      h("p", { class: "muted", style: { margin: 0 } }, "Puoi importare gli appelli d'esame (date), il piano di studi (insegnamenti) e gli orari delle lezioni. Le colonne vengono riconosciute dalle intestazioni e le puoi correggere prima di importare. I PDF con tabelle semplici si leggono da soli; per orari a griglia e scansioni c'è la lettura con l'AI."), source];
+    if (!st) return [h("div", { class: "row between" }, h("h1", { style: { margin: 0 } }, "Importa da CSV, Excel, PDF o calendario"), h("a", { class: "btn ghost", href: "#/" }, "Home")),
+      h("p", { class: "muted", style: { margin: 0 } }, "Puoi importare gli appelli d'esame (date), il piano di studi (insegnamenti) e gli orari delle lezioni. Le colonne vengono riconosciute dalle intestazioni e le puoi correggere prima di importare. I PDF con tabelle semplici si leggono da soli; per orari a griglia e scansioni c'è la lettura con l'AI. Un calendario (.ics) esportato dall'ateneo o da Google Calendar si importa come orario (o come appelli)."), source];
 
     const { t, res } = compute();
     const schema = SCHEMAS[st.kind];
@@ -267,18 +306,50 @@ export function importView() {
       preview = h("div", { style: { overflowX: "auto" } }, h("table", {},
         h("thead", {}, h("tr", {}, ["Insegnamento", "Anno", "CFU", "Tipo", "Prova", ""].map((x) => h("th", {}, x)))),
         h("tbody", {}, res.items.map((c) => h("tr", {}, h("td", {}, c.name), h("td", {}, c.year || "—"), h("td", {}, c.cfu || "—"), h("td", {}, c.kind === "a_scelta" ? badge("a scelta", "warn") : c.kind), h("td", {}, c.format), h("td", {}, badge(c.status, c.status === "nuovo" ? "good" : "brand")))))));
-      action = h("button", { class: "btn primary", disabled: !res.items.length, onclick: () => done(applyCourses(res.items), "#/profile") }, `Importa ${res.items.length} ${res.items.length === 1 ? "insegnamento" : "insegnamenti"}`);
+      const sum = res.items.reduce((n, c) => n + c.cfu, 0);
+      const declared = st.meta?.declaredTotal;
+      if (declared) preview = h("div", { class: "stack" }, preview, h("div", { class: `callout ${sum === declared ? "good" : "warn"}` }, sum === declared ? `CFU letti: ${sum} su ${declared} dichiarati dal documento ✓` : `Attenzione: la somma dei CFU letti (${sum}) non coincide con il totale dichiarato dal documento (${declared}). Controlla le righe.`));
+      action = h("button", { class: "btn primary", disabled: !res.items.length, onclick: () => done(applyCourses(res.items, st.meta), "#/profile") }, `Importa ${res.items.length} ${res.items.length === 1 ? "insegnamento" : "insegnamenti"}`);
     } else {
-      st.include ??= new Set(res.courses.map((c) => c.name));
+      const prof = store.state.profile;
+      const planCourses = prof?.courses ?? [];
+      const sel = defaultTimetableSelection(res.courses.map((c) => c.name), planCourses, prof?.studentYear || 0);
+      st.include ??= sel.include;
+      const planYears = [...new Set(planCourses.map((c) => c.year).filter(Boolean))].sort();
+      const where = (name) => {
+        const c = sel.match.get(name);
+        if (!planCourses.length) return null;
+        if (!c) return badge("non nel piano", "warn");
+        return c.year ? badge(yearLabel(c.year), prof?.studentYear && c.year !== prof.studentYear ? "" : "good") : null;
+      };
+      const yearPick = planYears.length
+        ? h("label", {}, "Anno che frequenti",
+            h("select", { id: "student-year", onchange: (e) => { store.profile().studentYear = Number(e.target.value); store.save(); st.include = null; redraw(); } },
+              h("option", { value: 0 }, "Non indicato (le seleziono tutte)"),
+              planYears.map((y) => h("option", { value: y, selected: prof?.studentYear === y }, yearLabel(y)))),
+            h("span", { class: "hint" }, "Le lezioni degli insegnamenti che il piano colloca in altri anni vengono tolte dalla selezione: le tue spunte restano modificabili."))
+        : null;
       const until = h("input", { type: "date", id: "import-until", value: st.until, min: today(), onchange: (e) => (st.until = e.target.value) });
       const hasWeekly = res.items.some((l) => l.weekday);
       preview = h("div", { class: "stack" },
         h("p", { class: "muted small", style: { margin: 0 } }, "Spunta gli insegnamenti che frequenti: le loro lezioni riducono il tempo di studio dei giorni in cui cadono."),
-        h("ul", { class: "checklist" }, res.courses.map((c) => h("li", {}, h("label", {}, h("input", { type: "checkbox", checked: st.include.has(c.name), onchange: (e) => { e.target.checked ? st.include.add(c.name) : st.include.delete(c.name); redraw(); } }), h("span", {}, `${c.name} `, h("span", { class: "muted small" }, `(${c.count === 1 ? "1 lezione" : `${c.count} lezioni`})`)))))),
+        yearPick,
+        h("ul", { class: "checklist" }, res.courses.map((c) => h("li", {}, h("label", {}, h("input", { type: "checkbox", checked: st.include.has(c.name), onchange: (e) => { e.target.checked ? st.include.add(c.name) : st.include.delete(c.name); redraw(); } }), h("span", {}, `${c.name} `, h("span", { class: "muted small" }, `(${c.count === 1 ? "1 lezione" : `${c.count} lezioni`}) `), where(c.name)))))),
+        (() => {
+          const ov = overlaps(res.items.filter((l) => st.include.has(l.course)));
+          if (!ov.length) return null;
+          const days = new Set(ov.map((o) => o.date)).size;
+          const ex = ov[0];
+          return h("div", { class: "callout warn" }, h("b", {}, `Alcune lezioni si sovrappongono (${days} ${days === 1 ? "giorno" : "giorni"}). `), `Per esempio ${ex.a.course} e ${ex.b.course} il ${fmtDate(ex.date)} alle ${ex.b.start}. Se non segui tutti gli insegnamenti, togli la spunta a quelli che non frequenti: le sovrapposizioni, comunque, non vengono contate due volte.`);
+        })(),
         hasWeekly ? h("label", {}, "Le lezioni settimanali valgono fino al", until, h("span", { class: "hint" }, "Data di fine delle lezioni del semestre. Senza data le sottraggo da tutti i giorni del piano.")) : null);
       action = h("button", { class: "btn primary", disabled: !res.items.length, onclick: async () => { const msg = await applyTimetable(res); if (msg) done(msg, "#/"); } }, (() => { const n = res.items.filter((l) => st.include.has(l.course)).length; return `Importa ${n} ${n === 1 ? "lezione" : "lezioni"}`; })());
     }
 
+    const icsBox = st.ics
+      ? h("div", { class: "callout stack" }, h("ul", { style: { margin: 0 } }, st.notes.map((n) => h("li", {}, n))),
+          h("p", { class: "muted small", style: { margin: 0 } }, "Gli orari sono convertiti nell'ora di Roma (con l'ora legale). Scegli sopra se sono lezioni (orario) o appelli d'esame."))
+      : null;
     const textless = !!st.pdf?.textless && !st.fromAI;
     const pdfBox = st.pdf
       ? h("div", { class: `callout stack${textless ? " warn" : ""}` },
@@ -293,8 +364,8 @@ export function importView() {
           st.pdf.text ? h("details", {}, h("summary", { class: "small" }, "Testo estratto dal PDF"), h("pre", { style: { whiteSpace: "pre", overflow: "auto", maxHeight: "260px", font: "12px ui-monospace, monospace" } }, st.pdf.text.slice(0, 8000))) : null)
       : null;
 
-    return [h("div", { class: "row between" }, h("h1", { style: { margin: 0 } }, "Importa da CSV, Excel o PDF"), h("a", { class: "btn ghost", href: "#/" }, "Home")),
-      source, kindBox, pdfBox,
+    return [h("div", { class: "row between" }, h("h1", { style: { margin: 0 } }, "Importa da CSV, Excel, PDF o calendario"), h("a", { class: "btn ghost", href: "#/" }, "Home")),
+      source, kindBox, icsBox, pdfBox,
       ...(textless ? [] : [mapBox, h("div", { class: "card stack" }, h("h3", { style: { margin: 0 } }, "4 · Anteprima"), preview, errors, action ? h("div", {}, action) : null)])];
   }
 

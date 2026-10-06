@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { FORMATS, KINDS, LEVELS } from "../shared/normalize.js";
 
-export { normalizeCurriculum, normalizeDegrees, normalizeImportRows, normalizeModule } from "../shared/normalize.js";
+export { normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex, identityRefs, exampleChecker, normalizeAssignments, normalizeBooks, normalizeChapterLinks } from "../shared/normalize.js";
 
 // Schema del "modulo di studio" generato dall'AI. Tutti i campi sono obbligatori
 // (gli output strutturati non gestiscono bene i campi opzionali): dove un campo
@@ -21,6 +21,8 @@ export const ModuleSchema = z.object({
       commonMistakes: z.array(z.string()),
       origin: z.enum(["notes", "online", "model"]),
       sourceIds: z.array(z.string()),
+      // dagli esercizi svolti dal docente: il procedimento in passi e un esercizio svolto copiato dal materiale
+      methods: z.array(z.object({ name: z.string(), steps: z.array(z.string()), problem: z.string(), solution: z.string(), source: z.string() })),
     }),
   ),
   flashcards: z.array(
@@ -43,9 +45,14 @@ export const ModuleSchema = z.object({
       modelAnswer: z.string(),
       explanation: z.string(),
       rubric: z.array(z.string()),
+      examRefs: z.array(z.string()), // id «D12» delle domande d'esame che la domanda riproduce ([] se non viene da un elenco)
+      followUp: z.string(), // per le domande d'esame: come incalzerebbe il docente
+      method: z.string(), // per gli esercizi: il metodo del docente che si usa (name), "" se nessuno
     }),
   ),
   gaps: z.array(z.string()),
+  // frasi del docente sull'esame, copiate dai materiali (soprattutto sbobine)
+  examHints: z.array(z.object({ quote: z.string(), source: z.string(), note: z.string(), topicId: z.string() })),
 });
 
 
@@ -88,3 +95,59 @@ export const GradeSchema = z.object({
   covered: z.array(z.string()),
   missing: z.array(z.string()),
 });
+
+// Modalità d'esame di un singolo insegnamento (dalla scheda / syllabus sul sito dell'ateneo).
+export const ExamFormatSchema = z.object({
+  found: z.boolean(),
+  format: z.enum(FORMATS),
+  evidence: z.string(), // frase copiata dalla pagina
+  details: z.string(), // durata, parti, prova intermedia… in breve
+  url: z.string(),
+  academicYear: z.string(),
+  teacher: z.string(),
+  caveats: z.array(z.string()),
+});
+
+// Analisi delle prove d'esame passate (una voce per prova, esercizi collegati agli argomenti del modulo).
+export const PastExamsSchema = z.object({
+  papers: z.array(z.object({
+    id: z.string(),
+    label: z.string(),
+    year: z.string(),
+    durationMin: z.number(),
+    hasSolutions: z.boolean(),
+    items: z.array(z.object({ n: z.string(), summary: z.string(), topicIds: z.array(z.string()), kind: z.enum(["esercizio", "teoria", "test", "altro"]), points: z.number() })),
+  })),
+  structure: z.string(),
+  recurring: z.array(z.object({ pattern: z.string(), topicId: z.string(), paperIds: z.array(z.string()) })),
+  uncovered: z.array(z.string()),
+  caveats: z.array(z.string()),
+});
+
+// Correzione di una simulazione d'esame.
+export const ExamGradeSchema = z.object({
+  items: z.array(z.object({
+    n: z.string(),
+    task: z.string(),
+    maxPoints: z.number(),
+    points: z.number(),
+    verdict: z.enum(["corretto", "parziale", "errato", "non svolto"]),
+    feedback: z.string(),
+    topicId: z.string(),
+  })),
+  overall: z.string(),
+  priorities: z.array(z.string()),
+  readingIssues: z.array(z.string()),
+});
+
+// Esercizi delle esercitazioni assegnati agli argomenti (testo e soluzione ufficiali li tiene l'app).
+export const AssignSchema = z.object({
+  assign: z.array(z.object({ id: z.string(), topicId: z.string(), rubric: z.array(z.string()), note: z.string() })),
+});
+
+// Libri di testo dalla scheda dell'insegnamento, e capitoli collegati agli argomenti.
+export const BooksSchema = z.object({
+  found: z.boolean(),
+  books: z.array(z.object({ title: z.string(), authors: z.string(), edition: z.string(), publisher: z.string(), chapters: z.string(), main: z.boolean(), quote: z.string() })),
+});
+export const ChapterLinksSchema = z.object({ links: z.array(z.object({ topicId: z.string(), chapterIds: z.array(z.string()) })) });

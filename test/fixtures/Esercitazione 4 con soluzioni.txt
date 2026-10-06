@@ -1,0 +1,14 @@
+Esercitazione 4 — Monopolio (con soluzioni)
+
+Esercizio 1
+Per il monopolista la curva inversa è P = 60 - Q e il costo marginale è MC = 20. Trovare quantità e prezzo.
+Soluzione
+Ricavo marginale: $MR = 60 - 2Q$.
+
+$$MR = MC:\; 60 - 2Q = 20 \;\Rightarrow\; Q^* = 20$$
+
+Prezzo: $P^* = 60 - 20 = 40$.
+
+Esercizio 2
+Calcolare il markup del monopolista dell'esercizio 1.
+Soluzione: markup $= \frac{P - MC}{P} = \frac{20}{40} = 0{,}5$.

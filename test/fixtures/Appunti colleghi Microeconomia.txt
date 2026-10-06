@@ -1,0 +1,7 @@
+Lezione 1 - Domanda e offerta
+La curva di domanda è decrescente: se il prezzo sale la quantità domandata scende.
+Il prof ha detto: la legge della domanda all'esame la chiedo sempre.
+
+Lezione 2 - Elasticità
+Elasticità = variazione % della quantità / variazione % del prezzo.
+Se è maggiore di 1 la domanda è elastica.

@@ -9,11 +9,14 @@ import { pdfImages, readPdf } from "./pdf-text.js";
 enableInternalRouting();
 core.demoModule = demo;
 // PDF: il testo si estrae qui nel browser (nella pagina Claude non si può mandare il PDF a Claude).
+// Le pagine sono separate da «\f»: così si possono scegliere i capitoli di un libro.
 core.pdfText = async (file) => {
-  const { pages } = await readPdf(await file.arrayBuffer());
-  return hasText(pages) ? plainLines(pages).join("\n") : "";
+  const { pages, numPages } = await readPdf(await file.arrayBuffer(), { maxPages: 1000 });
+  return { text: hasText(pages) ? pages.map((p) => plainLines([p]).join("\n")).join("\f") : "", pages: numPages };
 };
 core.pdfImages = async (file) => pdfImages(await file.arrayBuffer());
+// Pagine scelte di un PDF come immagini nitide (scala 2: pedici e apici leggibili), per trascrivere le formule.
+core.pdfPageImages = (data, from, to) => pdfImages(data, { from, to, maxPages: 1000, scale: 2 });
 
 (async () => {
   try {

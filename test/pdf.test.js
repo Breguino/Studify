@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
-import { parseCurriculumText } from "../public/js/curriculum.js";
+import { defaultTimetableSelection, findCourse, parseCurriculumTable, parseCurriculumText } from "../public/js/curriculum.js";
+import { parseIcs } from "../public/js/ics.js";
 import { extractPages } from "../public/js/pdf-extract.js";
 import { clusterRows, cellsOfRow, hasText, layoutText, pagesToRows, plainLines, charWidth } from "../public/js/pdf-table.js";
 
@@ -64,4 +65,91 @@ test("pdf: raggruppamento in righe e celle su dati sintetici; PDF senza testo ri
   assert.equal(rows.length, 2);
   assert.deepEqual(cellsOfRow(rows[1].items, charWidth(items)), ["Analisi 1", "A3"], "parole vicine unite, colonna lontana separata");
   assert.equal(hasText([{ items: [] }, { items: [it("x", 0, 0)] }]), false);
+});
+
+test("piano di studi reale (Economia e analisi dei dati 2026-27): anni, CFU, attività a scelta, somma = totale dichiarato", async () => {
+  const { pages } = await read("piano-economia-analisi-dati.pdf");
+  const r = parseCurriculumTable(pagesToRows(pages, { blanks: true }));
+  assert.deepEqual(r.years, [1, 2, 3]);
+  assert.equal(r.courses.length, 24);
+  assert.deepEqual(r.meta, { degreeName: "Economia e analisi dei dati", academicYear: "2026-27", declaredTotal: 180, sum: 180 });
+  const by = (n) => r.courses.find((c) => c.name === n);
+  const y = (n) => r.courses.filter((c) => c.year === n);
+  assert.deepEqual([y(1).length, y(2).length, y(3).length], [8, 8, 8]);
+  assert.equal(y(1).reduce((s, c) => s + c.cfu, 0), 59, "«Totale 1° anno 59»");
+  assert.equal(y(2).reduce((s, c) => s + c.cfu, 0), 63, "«Totale 2° anno 63»");
+  assert.equal(y(3).reduce((s, c) => s + c.cfu, 0), 58, "«Totale 3° anno 58»");
+  assert.equal(by("Abilità informatiche").cfu, 2);
+  assert.equal(by("Diritto pubblico e transizione digitale").year, 1);
+  assert.equal(by("Coding per l’analisi dei dati").cfu, 9, "apostrofo tipografico conservato, quadrimestre «2Q» e codice SSD esclusi");
+  assert.equal(by("Business English (B2)").year, 2);
+  assert.equal(by("Statistics for Business Analytics").year, 3);
+  assert.deepEqual([by("Scelta libera dello studente").kind, by("Scelta libera dello studente").cfu, by("Scelta libera dello studente").group], ["a_scelta", 12, "Altre attività"]);
+  assert.deepEqual([by("Tirocinio").kind, by("Tirocinio").cfu], ["a_scelta", 3]);
+  assert.deepEqual([by("Prova finale").kind, by("Prova finale").cfu], ["obbligatorio", 4], "la prova finale non è a scelta");
+  assert.ok(!r.courses.some((c) => /totale|ssd|altre attivit|scelta libera dello studente \(15/i.test(c.name)), "righe di totale, intestazioni e l'alternativa «15 CFU» escluse");
+  assert.ok(r.courses.every((c) => !/^[A-Z]+-\d{2}\//.test(c.name)), "nessun codice SSD nei nomi");
+});
+
+test("orario reale + piano reale: con il 2° anno si tolgono i corsi di 1° anno, restano quelli del 2° e quelli non trovati", async () => {
+  const { pages } = await read("piano-economia-analisi-dati.pdf");
+  const plan = parseCurriculumTable(pagesToRows(pages, { blanks: true })).courses;
+  const { events } = parseIcs(readFileSync(new URL("./fixtures/calendario-lezioni.ics", import.meta.url), "utf8"));
+  const names = [...new Set(events.map((e) => e.title))];
+  assert.equal(names.length, 9);
+
+  const y2 = defaultTimetableSelection(names, plan, 2);
+  assert.deepEqual([...y2.include].sort(), ["Business english (B2)", "Economia politica II", "Matematica II", "Matematica generale", "Statistica"],
+    "«Matematica generale» non è nel piano (là è «Matematica I»): resta spuntata, meglio per eccesso che per difetto");
+  for (const n of ["Abilità informatiche", "Diritto pubblico e transizione digitale", "Fondamenti di economia aziendale", "Informatica e problem solving"]) {
+    assert.equal(y2.include.has(n), false, `${n} è del 1° anno`);
+    assert.equal(y2.match.get(n).year, 1);
+  }
+  assert.equal(y2.match.get("Matematica II").year, 2, "«Matematica II» non deve finire su «Matematica I»");
+  assert.equal(y2.match.get("Matematica generale"), null);
+
+  assert.equal(defaultTimetableSelection(names, plan, 0).include.size, 9, "anno non indicato → tutto spuntato");
+  assert.equal(defaultTimetableSelection(names, [], 2).include.size, 9, "senza piano → tutto spuntato");
+  const y1 = defaultTimetableSelection(names, plan, 1);
+  assert.ok(y1.include.has("Abilità informatiche") && !y1.include.has("Statistica"));
+});
+
+test("findCourse: un numero d'ordine diverso non è lo stesso insegnamento", () => {
+  const plan = [{ name: "Matematica I" }, { name: "Statistica" }, { name: "Economia politica I" }];
+  assert.equal(findCourse(plan, "Matematica II"), null);
+  assert.equal(findCourse(plan, "Economia politica II"), null);
+  assert.equal(findCourse(plan, "Matematica I").name, "Matematica I");
+  assert.equal(findCourse(plan, "Statistica descrittiva").name, "Statistica", "una parola in più non numerica resta un abbinamento valido");
+  assert.equal(findCourse([{ name: "Matematica I" }, { name: "Matematica II" }], "matematica ii").name, "Matematica II");
+});
+
+test("lettore di piani in tabella: SSD vecchio stile, 'N CFU' nel testo, intestazione senza anno", () => {
+  const rows = [
+    ["Corso di Laurea Magistrale in", "Scienze Statistiche"],
+    ["Insegnamenti 1° anno", "CFU"],
+    ["SECS-S/01", "Statistica avanzata", "9", "I sem."],
+    ["MAT/05", "Analisi funzionale", "6", "II sem."],
+    ["Totale 1° anno", "15"],
+    ["Insegnamenti 2° anno", "CFU"],
+    ["ING-INF/05", "Basi di dati 6 CFU"],
+    ["Insegnamento a scelta", "(9 CFU)"],
+    [],
+    ["Totale", "30"],
+  ];
+  const r = parseCurriculumTable(rows);
+  assert.equal(r.meta.degreeName, "Scienze statistiche");
+  assert.deepEqual(r.courses.map((c) => [c.year, c.name, c.cfu, c.kind]), [
+    [1, "Statistica avanzata", 9, "obbligatorio"],
+    [1, "Analisi funzionale", 6, "obbligatorio"],
+    [2, "Basi di dati", 6, "obbligatorio"],
+    [2, "Insegnamento a scelta", 9, "a_scelta"],
+  ]);
+  assert.equal(r.meta.declaredTotal, 30);
+  assert.equal(r.meta.sum, 30);
+});
+
+test("un elenco di appelli NON viene scambiato per un piano di studi (nessuna sezione per anno)", async () => {
+  const { pages } = await read("appelli.pdf");
+  const r = parseCurriculumTable(pagesToRows(pages, { blanks: true }));
+  assert.ok(!r.years.some((y) => y > 0), "senza intestazioni di anno non si attiva il riconoscimento automatico");
 });

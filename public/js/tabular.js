@@ -94,12 +94,12 @@ export function readZip(buf) {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let eocd = -1;
   for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 22 - 65535); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
-  if (eocd < 0) throw new Error("Il file non sembra un .xlsx valido.");
+  if (eocd < 0) throw new Error("Il file non sembra un documento Office valido (.xlsx, .docx, .pptx).");
   const count = dv.getUint16(eocd + 10, true);
   let p = dv.getUint32(eocd + 16, true);
   const files = new Map();
   for (let n = 0; n < count; n++) {
-    if (dv.getUint32(p, true) !== 0x02014b50) throw new Error("Archivio .xlsx danneggiato.");
+    if (dv.getUint32(p, true) !== 0x02014b50) throw new Error("Documento Office danneggiato.");
     const method = dv.getUint16(p + 10, true);
     const comp = dv.getUint32(p + 20, true);
     const size = dv.getUint32(p + 24, true);
@@ -109,22 +109,22 @@ export function readZip(buf) {
     const local = dv.getUint32(p + 42, true);
     const name = new TextDecoder().decode(bytes.subarray(p + 46, p + 46 + nameLen));
     p += 46 + nameLen + extraLen + commentLen;
-    if (comp === 0xffffffff || size === 0xffffffff) throw new Error("File Excel troppo grande o in formato non supportato.");
+    if (comp === 0xffffffff || size === 0xffffffff) throw new Error("Documento Office troppo grande o in formato non supportato.");
     files.set(name, async () => {
-      if (size > MAX_PART) throw new Error("Il foglio Excel è troppo grande: esportalo in CSV.");
+      if (size > MAX_PART) throw new Error("Una parte del documento è troppo grande (oltre 40 MB non compressi).");
       const lNameLen = dv.getUint16(local + 26, true);
       const lExtraLen = dv.getUint16(local + 28, true);
       const start = local + 30 + lNameLen + lExtraLen;
       const raw = bytes.subarray(start, start + comp);
       if (method === 0) return raw;
       if (method === 8) return inflateRaw(raw);
-      throw new Error("Compressione del file Excel non supportata.");
+      throw new Error("Compressione del documento non supportata.");
     });
   }
   return files;
 }
 
-const decodeXml = (s) =>
+export const decodeXml = (s) =>
   s.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (m, e) => {
     if (e[0] === "#") return String.fromCodePoint(e[1].toLowerCase() === "x" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10));
     return { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" }[e.toLowerCase()];

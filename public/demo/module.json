@@ -42,11 +42,11 @@
    "keyConcepts": [
     {
      "term": "Elasticità al prezzo",
-     "definition": "|Δ%Q / Δ%P|: sensibilità percentuale della quantità domandata al prezzo."
+     "definition": "$\\left|\\Delta\\%Q/\\Delta\\%P\\right|$: sensibilità percentuale della quantità domandata al prezzo."
     },
     {
      "term": "Domanda anelastica",
-     "definition": "Elasticità < 1: la quantità reagisce poco al prezzo."
+     "definition": "Elasticità $<1$: la quantità reagisce poco al prezzo."
     }
    ],
    "mustKnow": [
@@ -190,7 +190,7 @@
    "id": "c6",
    "topicId": "t2",
    "front": "Formula dell'elasticità della domanda al prezzo",
-   "back": "|Δ%Q / Δ%P| (variazione percentuale della quantità sulla variazione percentuale del prezzo).",
+   "back": "$$\\varepsilon_P=\\left|\\frac{\\Delta\\%Q}{\\Delta\\%P}\\right|$$ variazione percentuale della quantità divisa per la variazione percentuale del prezzo.",
    "type": "formula"
   },
   {
@@ -225,7 +225,7 @@
    "id": "c11",
    "topicId": "t3",
    "front": "Condizione di scelta ottima del consumatore",
-   "back": "MRS = Px/Py, cioè MUx/Px = MUy/Py: la curva di indifferenza è tangente al vincolo di bilancio.",
+   "back": "$MRS=\\dfrac{P_x}{P_y}$, cioè $\\dfrac{MU_x}{P_x}=\\dfrac{MU_y}{P_y}$: la curva di indifferenza è tangente al vincolo di bilancio.",
    "type": "formula"
   },
   {
@@ -260,7 +260,7 @@
    "id": "c16",
    "topicId": "t4",
    "front": "Regola di massimo profitto in concorrenza perfetta",
-   "back": "Produrre dove P = MC (con P = MR perché l'impresa è price taker).",
+   "back": "Produrre dove $P=MC$ (con $P=MR$ perché l'impresa è price taker).",
    "type": "formula"
   },
   {
@@ -302,7 +302,7 @@
    "id": "c22",
    "topicId": "t5",
    "front": "Regola di massimo profitto del monopolista",
-   "back": "Produrre dove MR = MC e fissare il prezzo sulla curva di domanda a quella quantità.",
+   "back": "Produrre dove $MR=MC$ e fissare il prezzo sulla curva di domanda a quella quantità.",
    "type": "formula"
   },
   {
@@ -373,23 +373,23 @@
    ],
    "correctIndex": 1,
    "modelAnswer": "",
-   "explanation": "Δ%Q = elasticità × Δ%P = 0,4 × 10% = 4% (in diminuzione). Con domanda anelastica i ricavi aumentano.",
+   "explanation": "$\\Delta\\%Q=\\varepsilon_P\\times\\Delta\\%P=0{,}4\\times 10\\%=4\\%$ (in diminuzione). Con domanda anelastica i ricavi aumentano.",
    "rubric": []
   },
   {
    "id": "q4",
    "topicId": "t2",
    "kind": "problem",
-   "prompt": "La domanda è Q = 100 − 2P. Calcola l'elasticità al prezzo nel punto P = 20 e dì se la domanda è elastica o anelastica.",
+   "prompt": "La domanda è $Q=100-2P$. Calcola l'elasticità al prezzo nel punto $P=20$ e dì se la domanda è elastica o anelastica.",
    "options": [],
    "correctIndex": -1,
-   "modelAnswer": "Q(20) = 100 − 40 = 60. dQ/dP = −2. Elasticità = |dQ/dP · P/Q| = 2 · 20/60 = 0,67 < 1, quindi la domanda è anelastica.",
-   "explanation": "L'elasticità puntuale si calcola come |dQ/dP|·P/Q.",
+   "modelAnswer": "$Q(20)=100-40=60$ e $\\dfrac{dQ}{dP}=-2$.\n\n$$\\varepsilon_P=\\left|\\frac{dQ}{dP}\\cdot\\frac{P}{Q}\\right|=2\\cdot\\frac{20}{60}\\approx 0{,}67<1$$\n\nquindi la domanda è anelastica.",
+   "explanation": "L'elasticità puntuale si calcola come $\\left|\\dfrac{dQ}{dP}\\right|\\cdot\\dfrac{P}{Q}$.",
    "rubric": [
-    "Calcola Q = 60",
-    "Usa dQ/dP = −2",
-    "Elasticità = 2·20/60 ≈ 0,67",
-    "Conclude: anelastica perché < 1"
+    "Calcola $Q(20)=60$",
+    "Usa $\\dfrac{dQ}{dP}=-2$",
+    "$\\varepsilon_P=2\\cdot\\dfrac{20}{60}\\approx 0{,}67$",
+    "Conclude: anelastica perché $\\varepsilon_P<1$"
    ]
   },
   {
@@ -476,16 +476,16 @@
    "id": "q10",
    "topicId": "t5",
    "kind": "problem",
-   "prompt": "Domanda P = 50 − Q, costo marginale costante 10. Trova quantità e prezzo del monopolista.",
+   "prompt": "Domanda $P=50-Q$, costo marginale costante $MC=10$. Trova quantità e prezzo del monopolista.",
    "options": [],
    "correctIndex": -1,
-   "modelAnswer": "MR = 50 − 2Q. MR = MC → 50 − 2Q = 10 → Q = 20. Prezzo sulla domanda: P = 50 − 20 = 30.",
-   "explanation": "Q si trova con MR = MC; P si legge sulla domanda.",
+   "modelAnswer": "Ricavo marginale: $MR=50-2Q$.\n\n$$MR=MC\\;\\Rightarrow\\;50-2Q=10\\;\\Rightarrow\\;Q^*=20$$\n\nPrezzo sulla domanda: $P^*=50-20=30$.",
+   "explanation": "$Q^*$ si trova con $MR=MC$; $P^*$ si legge sulla curva di domanda.",
    "rubric": [
-    "Ricava MR = 50 − 2Q",
-    "Pone MR = MC",
-    "Q = 20",
-    "P = 30 dalla domanda"
+    "Ricava $MR=50-2Q$",
+    "Pone $MR=MC$",
+    "$Q^*=20$",
+    "$P^*=30$ dalla domanda"
    ]
   }
  ],

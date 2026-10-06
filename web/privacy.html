@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Informativa privacy — Studify</title>
+<style>
+/*FONT*/
+:root { --bg: #f4f5f9; --surface: #fff; --text: #171a23; --muted: #5b6275; --line: #e2e5ee; --brand: #4338ca; --warn-soft: #fef3e2; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0f1218; --surface: #181c25; --text: #e8ebf3; --muted: #9aa3b8; --line: #2a3040; --brand: #8b83ff; --warn-soft: #2e2413; color-scheme: dark; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 "Figtree Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { background: var(--surface); border-bottom: 1px solid var(--line); }
+header div, main { max-width: 760px; margin: 0 auto; padding: 14px 20px; }
+header a { font-weight: 800; color: var(--text); text-decoration: none; font-size: 1.15rem; }
+main { padding: 32px 20px 64px; }
+h1 { font-size: clamp(1.7rem, 4vw, 2.2rem); line-height: 1.15; letter-spacing: -.02em; margin: 0 0 6px; }
+h2 { font-size: 1.2rem; margin: 2em 0 .4em; }
+a { color: var(--brand); }
+.meta { color: var(--muted); margin: 0 0 24px; }
+.draft { background: var(--warn-soft); border-radius: 14px; padding: 14px 16px; margin: 0 0 24px; }
+table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.table-wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<header><div><a href="./">Studify</a></div></header>
+<main>
+<h1>Informativa sul trattamento dei dati personali</h1>
+<p class="meta">Ai sensi dell'art. 13 del Regolamento (UE) 2016/679 («GDPR») · versione del 5 ottobre 2026</p>
+<p class="draft"><b>Bozza da verificare.</b> Questo testo è un modello preparato senza consulenza legale: prima di aprire Studify al pubblico va fatto rivedere da un avvocato, e vanno completate le parti tra parentesi quadre.</p>
+
+<h2>1. Titolare del trattamento</h2>
+<p><b>[NOME COGNOME]</b>, persona fisica, [INDIRIZZO], email <a href="mailto:[EMAIL DI CONTATTO]">[EMAIL DI CONTATTO]</a>. Non è stato nominato un responsabile della protezione dei dati (non obbligatorio per questo trattamento). [DA VERIFICARE]</p>
+
+<h2>2. Quali dati trattiamo</h2>
+<div class="table-wrap"><table>
+<tr><th>Dati</th><th>Dove stanno</th></tr>
+<tr><td><b>Account</b>: email, password (conservata solo in forma cifrata, non leggibile), date di registrazione e di accesso</td><td>Supabase, server nell'Unione europea (Francoforte)</td></tr>
+<tr><td><b>Consenso</b>: versione dei termini e dell'informativa accettate, data, dichiarazione di maggiore età</td><td>Supabase (UE)</td></tr>
+<tr><td><b>Dati di studio</b>: esami, date d'appello, testi dei materiali, moduli generati (argomenti, flashcard, domande), progressi, piano, libretto (esami e voti), note</td><td>Supabase (UE)</td></tr>
+<tr><td><b>File caricati</b> (PDF, foto di appunti)</td><td>Solo nel tuo browser, su questo dispositivo: non vengono salvati sui nostri server</td></tr>
+<tr><td><b>Richieste all'intelligenza artificiale</b>: il testo dei materiali e, quando lo chiedi, le immagini di alcune pagine, inviati a Claude per generare i contenuti</td><td>Transitano dal nostro server (Vercel) e sono elaborati da Anthropic (Stati Uniti)</td></tr>
+<tr><td><b>Consumo</b>: numero di richieste, token e costo stimato al mese</td><td>Supabase (UE)</td></tr>
+<tr><td><b>Dati tecnici</b>: indirizzo IP, data e ora, tipo di browser, registri di errore</td><td>Registri tecnici di Vercel e Supabase</td></tr>
+</table></div>
+<p>Non chiediamo dati particolari (salute, opinioni, ecc.): non inserirli nei materiali.</p>
+
+<h2>3. Perché e su quale base giuridica</h2>
+<ul>
+<li><b>Fornirti il servizio</b> (account, salvataggio e sincronizzazione, generazione dei contenuti): esecuzione del contratto, art. 6.1.b GDPR.</li>
+<li><b>Sicurezza, prevenzione degli abusi e limiti di spesa</b>, conservazione della prova dell'accettazione dei termini: legittimo interesse del Titolare, art. 6.1.f.</li>
+<li><b>Obblighi di legge</b> e richieste delle autorità: art. 6.1.c.</li>
+</ul>
+<p>Non usiamo i tuoi dati per pubblicità, non li vendiamo e non facciamo profilazione. Fornire l'email è necessario per creare l'account.</p>
+
+<h2>4. A chi li comunichiamo</h2>
+<p>Ai fornitori che ci permettono di far funzionare Studify, nominati responsabili del trattamento (art. 28 GDPR):</p>
+<ul>
+<li><b>Supabase Inc.</b> — database e autenticazione, con server nell'UE;</li>
+<li><b>Vercel Inc.</b> — pubblicazione del sito e della funzione che inoltra le richieste a Claude;</li>
+<li><b>Anthropic PBC</b> — elaborazione con il modello Claude. Secondo le sue condizioni commerciali, i dati inviati tramite API non sono usati per addestrare i modelli e sono conservati per un periodo limitato. [DA VERIFICARE SULLE CONDIZIONI IN VIGORE]</li>
+</ul>
+<p><b>Trasferimenti fuori dall'UE.</b> Vercel e Anthropic hanno sede negli Stati Uniti. Il trasferimento avviene sulla base del Data Privacy Framework UE-USA, per i fornitori certificati, e/o delle clausole contrattuali standard della Commissione europea. [DA VERIFICARE PER CIASCUN FORNITORE]</p>
+
+<h2>5. Per quanto tempo</h2>
+<p>Account, dati di studio, consenso e consumo: finché l'account esiste. Quando lo elimini vengono cancellati subito dal database; possono restare per un periodo limitato nelle copie di sicurezza e nei registri tecnici dei fornitori, secondo i loro tempi. [INDICARE I TEMPI]</p>
+
+<h2>6. Archiviazione nel browser</h2>
+<p>Studify non usa cookie di profilazione né strumenti di statistica. Usa solo l'archiviazione del browser strettamente necessaria: la sessione d'accesso (localStorage) e i file che carichi (IndexedDB). Per questo non serve un banner per i cookie (art. 122 del Codice privacy). All'uscita dall'account i file salvati nel browser vengono cancellati.</p>
+
+<h2>7. I tuoi diritti</h2>
+<p>Puoi chiedere in qualunque momento l'accesso ai tuoi dati, la rettifica, la cancellazione, la limitazione, l'opposizione al trattamento basato sul legittimo interesse e la portabilità. Molto puoi farlo da solo: esporti i dati da «Dati» (backup in formato JSON) ed elimini l'account dalla finestra «Account». Per tutto il resto scrivi a <a href="mailto:[EMAIL DI CONTATTO]">[EMAIL DI CONTATTO]</a>: rispondiamo entro un mese.</p>
+<p>Hai anche il diritto di presentare un reclamo al Garante per la protezione dei dati personali (<a href="https://www.garanteprivacy.it" rel="noopener">www.garanteprivacy.it</a>).</p>
+
+<h2>8. Minori</h2>
+<p>Studify è riservato a chi ha almeno 18 anni.</p>
+
+<h2>9. Sicurezza</h2>
+<p>Le comunicazioni sono cifrate (HTTPS); nel database ogni utente può leggere e modificare solo i propri dati (row level security); le password non sono mai conservate in chiaro. Nessun sistema è sicuro al cento per cento: in caso di violazione dei dati che ti riguardi, ti avviseremo come previsto dal GDPR.</p>
+
+<h2>10. Modifiche</h2>
+<p>Se questa informativa cambia in modo sostanziale te lo comunicheremo nell'app o via email. Torna ai <a href="termini.html">Termini e condizioni</a>.</p>
+</main>
+</body>
+</html>

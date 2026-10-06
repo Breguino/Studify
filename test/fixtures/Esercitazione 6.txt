@@ -1,0 +1,5 @@
+Esercitazione 6
+Esercizio 1
+Con la funzione di domanda Q = 100 - 2P calcolare l'elasticità della domanda al prezzo nel punto P = 20.
+Esercizio 2
+Un monopolista ha costo marginale MC = 10 e domanda inversa P = 50 - Q: trovare quantità e prezzo di equilibrio.

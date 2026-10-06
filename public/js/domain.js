@@ -6,6 +6,14 @@ import { readiness, topicStats } from "./progress.js";
 import { buildQueue, dailyNewLimit } from "./srs.js";
 import { busyMinutes, lessonsOn } from "./timetable.js";
 import * as store from "./store.js";
+import { studyStart, windowDays } from "./workload.js";
+import { allPapers, attemptsOf, paperMinutes } from "./past-exams.js";
+import { examQuestionStats } from "./exam-questions.js";
+import { readingByTopic } from "./books.js";
+import { methodByTutor } from "./provenance.js";
+
+/** I metodi ricavati da esercizi svolti al tutorato: nel piano «metodo del tutor». */
+const tutorMarked = (exam, methods) => methods?.map((m) => (methodByTutor(exam, m) ? { ...m, tutor: true } : m));
 import { save } from "./store.js";
 
 export const daysLeft = (exam) => daysBetween(today(), exam.date);
@@ -13,7 +21,15 @@ export const daysLeft = (exam) => daysBetween(today(), exam.date);
 export function ensurePlan(exam, force = false) {
   if (!exam.module) return null;
   const tt = store.state.profile?.timetable ?? null;
-  const stamp = `${exam.moduleBuiltAt}|${tt?.importedAt ?? ""}|${tt?.until ?? ""}`;
+  const papers = allPapers(exam);
+  const asked = examQuestionStats(exam).inQuiz.length;
+  const official = new Map();
+  const fromQuiz = new Map(); // domande dei quiz del docente (Moodle): nel piano «Quiz del docente», non «Esercitazione»
+  const fromClass = new Map(); // soluzioni dagli appunti presi in aula: nel piano «la soluzione vista in aula»
+  const inc = (m, k) => m.set(k, (m.get(k) ?? 0) + 1);
+  for (const q of exam.module.questions) if (q.official) { inc(official, q.topicId); if (q.official.quiz) inc(fromQuiz, q.topicId); if (q.official.aula) inc(fromClass, q.topicId); }
+  const reading = readingByTopic(exam);
+  const stamp = `${exam.moduleBuiltAt}|${exam.moduleUpdatedAt ?? ""}|${tt?.importedAt ?? ""}|${tt?.until ?? ""}|${exam.date}|${exam.studyDays ?? 0}|${papers.length}|${exam.pastExams?.analyzedAt ?? ""}|${asked}|${[...official.values()].reduce((a, b) => a + b, 0)}|${[...reading].map(([k, r]) => `${k}:${r.pages}`).join(",")}`;
   if (force || !exam.plan || exam.plan.builtOn !== today() || exam.plan.stamp !== stamp) {
     exam.plan = {
       ...buildPlan({
@@ -21,17 +37,45 @@ export function ensurePlan(exam, force = false) {
         examType: exam.type,
         level: exam.level,
         hoursPerDay: exam.hoursPerDay,
-        topics: exam.module.topics,
+        topics: exam.module.topics.map((t0) => (t0.methods?.length ? { ...t0, methods: tutorMarked(exam, t0.methods) } : t0)).map((t) => (official.get(t.id) || reading.get(t.id)
+          ? { ...t, officialCount: official.get(t.id) ?? 0, officialQuizOnly: !!official.get(t.id) && fromQuiz.get(t.id) === official.get(t.id), officialClassOnly: !!official.get(t.id) && fromClass.get(t.id) === official.get(t.id), readPages: reading.get(t.id)?.pages ?? 0, readLabel: reading.get(t.id)?.label ?? "" } : t)),
         learned: exam.learned,
         today: today(),
+        start: studyStart(exam, today()),
         busy: (d) => busyMinutes(tt, d),
         lessons: (d) => lessonsOn(tt, d),
       }),
       stamp,
     };
+    useRealExams(exam.plan, exam, papers, asked);
     save();
   }
   return exam.plan;
+}
+
+/**
+ * Con le prove d'esame passate, le simulazioni del piano si fanno su prove vere (finché ce ne sono di mai fatte):
+ * a tempo, con la durata della prova. Con le domande d'esame vere nel quiz (almeno 5): la simulazione orale le usa, e nei giorni
+ * di consolidamento c'è un giro sulle domande d'esame (prima le sbagliate, poi le più chieste).
+ */
+function useRealExams(plan, exam, papers, asked) {
+  let fresh = papers.filter((p) => !attemptsOf(exam, p.key).length).length;
+  for (const d of plan.days) {
+    for (const t of d.tasks) {
+      if (t.kind === "mock" && fresh > 0) {
+        Object.assign(t, { kind: "sim", title: "Simulazione con un tema d'esame vero (a tempo, senza appunti)", minutes: Math.min(240, paperMinutes(exam, "") + 20) });
+        fresh--;
+      }
+      if (t.kind === "explain" && t.mode === "oral" && asked >= 5)
+        Object.assign(t, { kind: "quiz", mode: "exam", n: 5, title: "Simulazione orale con le domande d'esame vere (5 a sorpresa)", method: "practice" });
+    }
+    if (d.phase === "consolidate" && asked >= 5)
+      d.tasks.push({ kind: "quiz", key: "examq", mode: "exam", title: "Domande d'esame vere: le sbagliate e le più chieste", minutes: 20, method: "retrieval", id: `${d.date}|quiz|examq`, date: d.date });
+  }
+  for (const d of plan.days) {
+    d.minutes = d.tasks.reduce((s, t) => s + t.minutes, 0);
+    d.overload = d.minutes > d.usable * 1.15;
+  }
 }
 
 export const isDone = (exam, task) => (task.kind === "learn" ? !!exam.learned[task.topicId] : !!exam.done[task.id]);
@@ -45,7 +89,7 @@ export function setDone(exam, task, value = true) {
 export function methodsFor(exam) {
   return recommendMethods({
     examType: exam.type,
-    daysLeft: daysLeft(exam),
+    daysLeft: windowDays(exam, today()), // i giorni che lo studente si dà, non quelli che mancano
     level: exam.level,
     hoursPerDay: exam.hoursPerDay,
     topicCount: exam.module?.topics.length ?? 0,
@@ -68,7 +112,7 @@ export function flashQueue(exam, { topicId, includeAll = false, extra = 0 } = {}
   const all = topicId ? mod.flashcards.filter((c) => c.topicId === topicId) : mod.flashcards;
   const freshPool = all.filter((c) => eligible(c));
   const newCount = freshPool.filter((c) => !exam.srs[c.id]?.due).length;
-  const limit = dailyNewLimit(newCount, Math.max(1, daysLeft(exam))) + extra;
+  const limit = dailyNewLimit(newCount, Math.max(1, windowDays(exam, today()))) + extra;
   const withNew = buildQueue(all, exam.srs, today(), { newLimit: 0, topicImportance: importance });
   const fresh = buildQueue(freshPool, exam.srs, today(), { newLimit: limit, topicImportance: importance }).fresh;
   const excluded = all.filter((c) => !eligible(c) && !exam.srs[c.id]?.due).length;
@@ -92,11 +136,17 @@ export function taskHref(exam, task) {
       return `${base}/topic/${task.topicId}?${q}`;
     case "explain":
       return `${base}/explain/${task.mode === "oral" ? "oral" : task.topicId}?${q}`;
+    case "sim":
+      return `${base}/sim?${q}`;
+    case "guided":
+      q.set("m", task.methodIndex ?? 0);
+      return `${base}/guided/${task.topicId}?${q}`;
     case "quiz":
     case "mock":
       q.set("mode", task.mode ?? "mixed");
       if (task.topicIds) q.set("topics", task.topicIds.join(","));
       if (task.questionKind) q.set("kind", task.questionKind);
+      if (task.n) q.set("n", task.n);
       return `${base}/quiz?${q}`;
     default:
       return null;

@@ -1,7 +1,11 @@
+import * as api from "../api.js";
+import { core } from "../core.js";
 import { go } from "../nav.js";
 import { coursesForYear, examDefaultsFromCourse, FORMAT_LABEL, findCourse, yearLabel } from "../curriculum.js";
 import { addDays, fmtDate, today } from "../dates.js";
-import { suggestExamType } from "../exam-type.js";
+import { formatFromSyllabus, suggestExamType } from "../exam-type.js";
+import { busyMinutes, lastLessonOf, TENTATIVE_GAP_DAYS } from "../timetable.js";
+import { feasibility, HOURS_PER_CFU, overlapping, studyStart, windowDays, windowHours } from "../workload.js";
 import { EXAM_TYPES, sessionAdvice } from "../methods.js";
 import * as store from "../store.js";
 import { confirmDialog, h, toast } from "../ui.js";
@@ -13,13 +17,36 @@ const LEVELS = {
   4: "4 · Ci sono già dentro",
   5: "5 · Mi serve solo ripassare",
 };
+const WINDOWS = { 0: "Da oggi fino all'esame", 3: "3 giorni", 5: "5 giorni", 7: "1 settimana", 10: "10 giorni", 14: "2 settimane", 21: "3 settimane", 28: "4 settimane", 42: "6 settimane", 56: "8 settimane" };
 const GENERIC_HINT = "Cambia il mix di metodi: all'orale conta spiegare, al test riconoscere.";
 
-export function examFormView(exam) {
+// Ricerche della modalità d'esame (per insegnamento): sopravvivono ai re-render e non si ripetono nella stessa sessione.
+const formatSearches = new Map();
+const key = (s) => String(s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+
+function searchFormat({ university, degree, academicYear, name, course }) {
+  const k = key(course?.name ?? name);
+  if (!formatSearches.has(k)) {
+    const job = api.runJob("/api/exam-format", { university, degree, course: course?.name ?? name, academicYear }, () => {})
+      .then((r) => {
+        if (course) {
+          if (r.found) Object.assign(course, { format: r.format, formatEvidence: r.evidence, url: r.url });
+          course.formatSearch = { at: today(), found: r.found, details: r.details, teacher: r.teacher, academicYear: r.academicYear, caveats: r.caveats };
+          store.save();
+        }
+        return r;
+      })
+      .catch((e) => { formatSearches.delete(k); throw e; });
+    formatSearches.set(k, job);
+  }
+  return formatSearches.get(k);
+}
+
+export function examFormView(exam, prefill = {}) {
   const isNew = !exam;
   const prof = store.state.profile;
   const courses = prof?.courses ?? [];
-  const v = exam ?? { name: "", date: addDays(today(), 30), type: "scritto", level: 2, hoursPerDay: 3, sessionMinutes: 25, language: "italiano", cfu: 0, year: 0 };
+  const v = exam ?? { name: prefill.name ?? "", date: addDays(today(), 30), type: "scritto", level: 2, hoursPerDay: 3, sessionMinutes: 25, language: "italiano", cfu: 0, year: prof?.studentYear || 0, dateTentative: false, studyDays: 0 };
   const university = exam ? exam.university : prof?.university ?? "";
   const degree = exam ? exam.degree : prof?.degree ?? "";
   const f = {};
@@ -40,6 +67,16 @@ export function examFormView(exam) {
   const fillCourses = (year) => courseList.replaceChildren(...coursesForYear(courses, year).map((c) => h("option", { value: c.name }, `${c.kind === "a_scelta" ? "a scelta · " : ""}${c.cfu ? `${c.cfu} CFU` : ""}`)));
   const electiveNote = h("p", { class: "muted small", style: { margin: 0 } });
   const nameInput = h("input", { required: true, value: v.name, placeholder: "es. Microeconomia", list: "courses", autocomplete: "off" });
+  const tentative = h("input", { type: "checkbox", id: "date-tentative", checked: !!v.dateTentative });
+  const loadBox = h("div", { id: "load-box" });
+  // modalità d'esame dal testo della scheda dell'insegnamento incollato (funziona anche senza ricerca web)
+  const syllabus = h("textarea", { id: "syllabus-text", placeholder: "Incolla qui la sezione «Modalità di verifica dell'apprendimento» (o tutta la scheda) dalla pagina dell'insegnamento…", style: { minHeight: "90px" } });
+  const syllabusMsg = h("span", { class: "hint", id: "syllabus-msg" });
+  const syllabusBox = h("details", { id: "syllabus-box" },
+    h("summary", { class: "small" }, "Incolla la scheda dell'insegnamento per ricavare il tipo di prova"),
+    h("div", { class: "stack", style: { gap: "6px", marginTop: "6px" } }, syllabus,
+      h("div", { class: "row" }, h("button", { type: "button", class: "btn small", onclick: () => readSyllabus() }, "Ricava il tipo di prova"), syllabusMsg)));
+  const dateNote = h("span", { class: "hint" });
 
   const form = h(
     "form",
@@ -54,10 +91,12 @@ export function examFormView(exam) {
           cfu: Math.min(60, Math.max(0, Number(f.cfu.value) || 0)),
           year: Number(f.year.value) || 0,
           date: f.date.value,
+          dateTentative: tentative.checked,
           type: f.type.value,
           level: Number(f.level.value),
           hoursPerDay: Math.min(12, Math.max(0.5, Number(f.hours.value) || 2)),
           sessionMinutes: Number(f.session.value),
+          studyDays: Number(f.window.value) || 0,
           language: f.language.value.trim() || "italiano",
           formatSource: typeTouched ? null : formatSource,
         };
@@ -83,21 +122,26 @@ export function examFormView(exam) {
     h("div", { class: "cols" },
       h("div", { class: "stack", style: { gap: "6px" } },
         field("date", "Data dell'esame", h("input", { type: "date", required: true, value: v.date, min: addDays(today(), 1) })),
+        h("label", { style: { display: "flex", gap: "8px", alignItems: "center", fontWeight: 400 } }, tentative, "Data provvisoria: gli appelli non sono ancora usciti"),
         v.appelli?.filter((a) => a.date >= today()).length > 1
           ? h("label", {}, "Appello", h("select", { id: "appello", onchange: (e) => { if (e.target.value) f.date.value = e.target.value; } },
               v.appelli.filter((a) => a.date >= today()).map((a) => h("option", { value: a.date, selected: a.date === v.date }, `${fmtDate(a.date)}${a.time ? ` ore ${a.time}` : ""}${a.room ? ` · ${a.room}` : ""}`))), h("span", { class: "hint" }, "Altri appelli importati: scegli quello a cui ti presenti."))
           : null),
-      field("type", "Tipo di prova", select(EXAM_TYPES, v.type)),
+      h("div", { class: "stack", style: { gap: "6px" } }, field("type", "Tipo di prova", select(EXAM_TYPES, v.type)), syllabusBox),
     ),
     h("div", { class: "cols" },
       field("level", "Quanto conosci già la materia?", select(LEVELS, v.level), "Non c'è una risposta giusta: serve per dosare spiegazioni e difficoltà."),
       field("cfu", "CFU (facoltativo)", h("input", { type: "number", min: 0, max: 60, value: v.cfu || "" }), "Indicano l'ampiezza del programma."),
     ),
     h("div", { class: "cols" },
+      field("window", "Quanto tempo ti dai per prepararlo?", select(WINDOWS, WINDOWS[v.studyDays] ? v.studyDays : 0), "Lo studio si concentra negli ultimi giorni prima dell'esame; prima non ti propongo attività."),
       field("hours", "Ore di studio al giorno", h("input", { type: "number", min: 0.5, max: 12, step: 0.5, value: v.hoursPerDay })),
-      field("session", "Durata di un blocco di studio", select({ 25: "25 min", 45: "45 min", 60: "60 min", 90: "90 min" }, v.sessionMinutes), sessionAdvice(v.sessionMinutes)),
     ),
-    field("language", "Lingua del materiale", h("input", { value: v.language })),
+    loadBox,
+    h("div", { class: "cols" },
+      field("session", "Durata di un blocco di studio", select({ 25: "25 min", 45: "45 min", 60: "60 min", 90: "90 min" }, v.sessionMinutes), sessionAdvice(v.sessionMinutes)),
+      field("language", "Lingua del materiale", h("input", { value: v.language })),
+    ),
     h("div", { class: "row" }, h("button", { class: "btn primary", type: "submit" }, isNew ? "Continua: aggiungi i materiali" : "Salva"), h("a", { class: "btn ghost", href: isNew ? "#/" : `#/exam/${exam.id}` }, "Annulla")),
   );
 
@@ -122,7 +166,13 @@ export function examFormView(exam) {
     if (d?.type) {
       f.type.value = d.type;
       formatSource = { text: d.evidence, url: d.url };
-      hint.replaceChildren(...[`Dal tuo piano di studi: ${FORMAT_LABEL[d.type]}${d.evidence && d.evidence !== "demo" ? ` (${d.evidence})` : ""}. `, d.url ? h("a", { href: d.url, target: "_blank", rel: "noopener noreferrer" }, "fonte") : null, d.url ? " · " : null, "Verifica con il tuo docente."].filter(Boolean));
+      const web = course.formatSearch?.found;
+      hint.replaceChildren(...[
+        web ? `Dalla scheda dell'insegnamento${course.formatSearch.source === "incollata" ? " che hai incollato" : ""}${course.formatSearch.academicYear ? ` (a.a. ${course.formatSearch.academicYear}${course.formatSearch.teacher ? `, ${course.formatSearch.teacher}` : ""})` : ""}: ${FORMAT_LABEL[d.type]}. «${d.evidence}» ` : `Dal tuo piano di studi: ${FORMAT_LABEL[d.type]}${d.evidence && d.evidence !== "demo" ? ` (${d.evidence})` : ""}. `,
+        web && course.formatSearch.details ? `${course.formatSearch.details} ` : null,
+        d.url ? h("a", { href: d.url, target: "_blank", rel: "noopener noreferrer" }, "fonte") : null, d.url ? " · " : null,
+        web ? "Le modalità cambiano tra docenti e anni: verifica." : "Verifica con il tuo docente.",
+      ].filter(Boolean));
       return;
     }
     formatSource = null;
@@ -133,6 +183,115 @@ export function examFormView(exam) {
       : "Materia non riconosciuta: ho messo «scritto + orale». Scegli quello del tuo esame.");
   }
   f.name.addEventListener("input", refresh);
+
+  /* Modalità d'esame dalla scheda dell'insegnamento sul sito dell'ateneo (solo con ricerca web: server con chiave API).
+     Parte da sola per gli insegnamenti del piano senza modalità nota, una volta sola; per gli altri c'è un bottone. */
+  const searchLine = h("span", { class: "hint", id: "format-search" });
+  hint.after(searchLine);
+  const webOk = !!core.ai?.ai && core.ai.web !== false;
+  let timer = null;
+  function refreshSearch(auto = true) {
+    clearTimeout(timer);
+    searchLine.replaceChildren();
+    const name = f.name.value.trim();
+    if (!webOk || name.length < 4) return;
+    const course = findCourse(courses, name);
+    const exact = course && key(course.name) === key(name);
+    if (course?.format && course.format !== "sconosciuto") return; // già nota (piano dal web o ricerca precedente)
+    if (!university) return searchLine.replaceChildren("Indica l'ateneo (", h("a", { href: "#/profile" }, "Imposta"), ") per cercare la modalità d'esame sulla scheda dell'insegnamento.");
+    const pending = formatSearches.get(key(course?.name ?? name));
+    const start = () => show(searchFormat({ university, degree, academicYear: prof?.academicYear ?? "", name, course }), name);
+    if (pending) return show(pending, name);
+    if (course?.formatSearch && !course.formatSearch.found)
+      return searchLine.replaceChildren(`Modalità d'esame non trovata sul sito (cercata il ${fmtDate(course.formatSearch.at)}): resta il suggerimento dalla materia, oppure incolla la scheda qui sotto. `, h("button", { type: "button", class: "btn small ghost", onclick: start }, "Cerca di nuovo"));
+    if (exact && auto) { timer = setTimeout(start, 600); return; }
+    searchLine.replaceChildren(h("button", { type: "button", class: "btn small ghost", onclick: start }, `Cerca la modalità d'esame sul sito dell'ateneo`));
+  }
+  function show(job, name) {
+    searchLine.replaceChildren(h("span", { class: "spinner" }), ` Cerco la modalità d'esame di «${name}» sulla scheda dell'insegnamento…`);
+    job.then((r) => {
+      if (key(f.name.value) !== key(name) || !form.isConnected) return;
+      if (!r.found) return refreshSearch(false);
+      searchLine.replaceChildren();
+      // scelta fatta a mano: non la tocco, ma dico cosa dice la scheda
+      if (typeTouched) return searchLine.replaceChildren(`Sulla scheda dell'insegnamento: ${FORMAT_LABEL[r.format]}. `, h("a", { href: r.url, target: "_blank", rel: "noopener noreferrer" }, "fonte"));
+      if (findCourse(courses, name)) return refresh(); // salvata nel piano: refresh mostra fonte e citazione
+      f.type.value = r.format;
+      formatSource = { text: r.evidence, url: r.url };
+      hint.replaceChildren(`Dalla scheda dell'insegnamento: ${FORMAT_LABEL[r.format]}. «${r.evidence}» `, h("a", { href: r.url, target: "_blank", rel: "noopener noreferrer" }, "fonte"), " · Le modalità cambiano tra docenti e anni: verifica.");
+    }, (e) => {
+      if (key(f.name.value) !== key(name) || !form.isConnected) return;
+      searchLine.replaceChildren(`Ricerca non riuscita: ${e.message} `, h("button", { type: "button", class: "btn small ghost", onclick: () => show(searchFormat({ university, degree, academicYear: prof?.academicYear ?? "", name, course: findCourse(courses, name) }), name) }, "Riprova"));
+    });
+  }
+  f.name.addEventListener("input", () => refreshSearch());
+
+  /* Finestra di studio e carico: ore disponibili contro l'ordine di grandezza dato dai CFU. */
+  const fmtH = (x) => `${Math.round(x)} h`;
+  function refreshLoad() {
+    const t = today();
+    const draft = { id: exam?.id ?? "_new", date: f.date.value, hoursPerDay: Number(f.hours.value) || 0, studyDays: Number(f.window.value) || 0 };
+    if (!draft.date || draft.date <= t) return loadBox.replaceChildren();
+    const tt = prof?.timetable;
+    const start = studyStart(draft, t);
+    const days = windowDays(draft, t);
+    const avail = windowHours(draft, t, (d) => busyMinutes(tt, d));
+    const cfu = Math.min(60, Math.max(0, Number(f.cfu.value) || 0));
+    const fz = feasibility({ cfu, available: avail, hoursPerDay: draft.hoursPerDay });
+    const clipped = draft.studyDays && start === t && days < draft.studyDays;
+    const lines = [
+      h("div", {}, h("b", {}, start === t ? `Studio da oggi, ${days} ${days === 1 ? "giorno" : "giorni"}` : `Studio dal ${fmtDate(start)}: ${days} giorni`),
+        ` · circa ${fmtH(avail)} disponibili${tt?.items?.length ? " (tolte le lezioni)" : ""}.`,
+        clipped ? ` Mancano solo ${days} giorni all'esame: la finestra parte da oggi.` : ""),
+    ];
+    if (fz) {
+      const pct = Math.round(fz.share * 100);
+      lines.push(h("div", {}, `Ordine di grandezza per ${cfu} CFU partendo da zero: ${fmtH(fz.low)}–${fmtH(fz.high)} di studio individuale `,
+        h("span", { class: "muted" }, `(1 CFU = ${HOURS_PER_CFU.total} ore di lavoro, lezioni comprese).`)));
+      if (fz.level !== "ok")
+        lines.push(h("div", {}, h("b", {}, fz.level === "low" ? `Il tempo copre circa il ${pct}% di quella stima. ` : `Il tempo è un po' stretto (circa ${pct}%). `),
+          `Va bene se hai già studiato durante il semestre o conosci la materia; altrimenti, a ${draft.hoursPerDay} h al giorno, servirebbero circa ${fz.daysNeeded} giorni. `,
+          "Con poco tempo il piano dà la precedenza agli argomenti più importanti e segnala quelli rimandati."));
+    } else lines.push(h("div", { class: "muted" }, "Indica i CFU per una stima del carico."));
+    const others = overlapping(draft, store.state.exams, t);
+    if (others.length)
+      lines.push(h("div", {}, h("b", {}, "Si sovrappone a: "), others.map((o) => `${o.exam.name} (${o.days} giorni in comune, ${o.exam.hoursPerDay} h/giorno)`).join("; "),
+        `. In quei giorni le ore si sommano: ${draft.hoursPerDay + others.reduce((x, o) => Math.max(x, o.exam.hoursPerDay), 0)} h o più.`));
+    loadBox.className = `callout ${fz && fz.level === "low" ? "warn" : ""}`;
+    loadBox.replaceChildren(...lines);
+  }
+  for (const k of ["date", "hours", "cfu", "window"]) f[k].addEventListener("input", refreshLoad);
+  f.window.addEventListener("change", refreshLoad);
+  f.name.addEventListener("input", () => setTimeout(refreshLoad)); // i CFU si precompilano dal piano
+  refreshLoad();
+
+  async function readSyllabus() {
+    const text = syllabus.value.trim();
+    if (text.length < 20) return syllabusMsg.replaceChildren("Incolla il testo della scheda.");
+    const name = f.name.value.trim();
+    syllabusMsg.replaceChildren(h("span", { class: "spinner" }), " Leggo la scheda…");
+    let r;
+    try {
+      r = core.ai?.ai ? await api.runJob("/api/exam-format-text", { text: text.slice(0, 40_000), course: name }, () => {}) : formatFromSyllabus(text);
+    } catch (e) {
+      return syllabusMsg.replaceChildren(`Non riuscito: ${e.message}`);
+    }
+    if (!r.found) return syllabusMsg.replaceChildren("Nel testo non trovo la modalità d'esame: incolla la sezione «Modalità di verifica dell'apprendimento».");
+    const course = findCourse(courses, name);
+    if (course) {
+      Object.assign(course, { format: r.format, formatEvidence: r.evidence, url: r.url || "" });
+      course.formatSearch = { at: today(), found: true, source: "incollata", details: r.details, teacher: r.teacher, academicYear: r.academicYear, caveats: r.caveats };
+      store.save();
+    }
+    typeTouched = false; // scelta esplicita: il tipo viene dalla scheda, con la sua citazione
+    f.type.value = r.format;
+    formatSource = { text: r.evidence, url: r.url || "" };
+    searchLine.replaceChildren();
+    hint.replaceChildren(...[`Dalla scheda che hai incollato: ${FORMAT_LABEL[r.format]}. «${r.evidence}» `, r.details ? `${r.details} ` : null,
+      r.local ? "Lettura automatica senza AI: controlla." : "Verifica che sia la scheda del tuo anno e del tuo docente."].filter(Boolean));
+    syllabusMsg.replaceChildren(`✓ Tipo di prova: ${FORMAT_LABEL[r.format]}.`);
+  }
+  if (isNew) refreshSearch();
   // L'anno filtra l'elenco; se in quell'anno ci sono attività a scelta lo ricorda (al 3° anno di solito ci sono).
   let yearTouched = !isNew;
   const refreshYear = () => {
@@ -145,8 +304,36 @@ export function examFormView(exam) {
       : "";
   };
   f.year.addEventListener("change", () => { yearTouched = true; refreshYear(); });
+  if (isNew && v.name) refresh(); // dal libretto («Prepara»): CFU e tipo di prova dal piano di studi
   refreshYear();
   if (isNew) refresh();
+
+  /* Appelli non ancora pubblicati: se dall'orario so quando finiscono le lezioni propongo una data provvisoria
+     (la data di default, fra 30 giorni, cadrebbe in pieno semestre e comprimerebbe il piano). */
+  f.date.parentElement.append(dateNote);
+  let dateTouched = !isNew;
+  const hasAppelli = !!v.appelli?.length;
+  function updateDateNote() {
+    const last = hasAppelli ? null : lastLessonOf(prof?.timetable, f.name.value);
+    const est = last && last.date >= today() ? addDays(last.date, TENTATIVE_GAP_DAYS) : null;
+    if (est && !dateTouched && f.date.value !== est) { f.date.value = est; tentative.checked = true; }
+    const after = tentative.checked ? "Quando escono gli appelli importali da «Importa»: la data provvisoria viene sostituita e il piano ricalcolato." : "";
+    if (!est) return dateNote.replaceChildren(after);
+    dateNote.replaceChildren(...[
+      `Le lezioni di ${last.course} finiscono il ${fmtDate(last.date)}. `,
+      f.date.value === est
+        ? (tentative.checked ? `Data provvisoria: una settimana dopo. ${after}` : null)
+        : h("button", { type: "button", class: "btn small ghost", onclick: () => { f.date.value = est; tentative.checked = true; dateTouched = true; refreshDate(); } }, `Usa ${fmtDate(est)} come data provvisoria`),
+    ].filter(Boolean));
+  }
+  function refreshDate() {
+    updateDateNote();
+    setTimeout(() => refreshLoad()); // la data (anche provvisoria) sposta la finestra di studio
+  }
+  f.date.addEventListener("input", () => { dateTouched = true; refreshDate(); });
+  f.name.addEventListener("input", refreshDate);
+  tentative.addEventListener("change", refreshDate);
+  refreshDate();
 
   if (!isNew)
     form.append(

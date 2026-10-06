@@ -13,10 +13,14 @@
     "demo": "STUDIFY_MOCK=1 node server/index.js",
     "test": "node --test test/*.test.js",
     "build:artifact": "node scripts/build-artifact.mjs",
-    "build:harness": "node scripts/build-artifact.mjs --harness"
+    "build:harness": "node scripts/build-artifact.mjs --harness",
+    "build:web": "node scripts/build-artifact.mjs --web"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
+    "@fontsource-variable/figtree": "^5.3.0",
+    "katex": "^0.19.0",
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.3.289",
     "zod": "^4.6.5"
   },

@@ -1,3 +1,4 @@
+import { rich, richParas } from "../math.js";
 import { today } from "../dates.js";
 import { flashQueue } from "../domain.js";
 import { GRADES, nextInterval, review } from "../srs.js";
@@ -66,7 +67,7 @@ export function flashView(exam, query) {
       h("div", { class: "session-head" }, h("a", { class: "muted", href: `#/exam/${exam.id}/today` }, "← Esci"), h("span", { class: "muted small" }, `${queue.length} rimaste · ${topic?.title ?? ""}`)),
       bar(1 - queue.length / Math.max(total0 + stats.again, 1), { label: "avanzamento sessione" }),
       h("div", { class: "flashcard", style: { marginTop: "14px" }, "aria-live": "polite" },
-        h("div", {}, h("span", { class: "side" }, "Domanda"), card.front, revealed ? h("div", { style: { marginTop: "18px" } }, h("span", { class: "side" }, "Risposta"), h("div", { class: "answer" }, card.back)) : null)),
+        h("div", {}, h("span", { class: "side" }, "Domanda"), rich(card.front), revealed ? h("div", { style: { marginTop: "18px" } }, h("span", { class: "side" }, "Risposta"), h("div", { class: "answer" }, richParas(card.back))) : null)),
       revealed
         ? h("div", { class: "grades" }, [["Di nuovo", GRADES.AGAIN, "again"], ["Difficile", GRADES.HARD, ""], ["Bene", GRADES.GOOD, "good"], ["Facile", GRADES.EASY, ""]].map(([t, g, c], i) =>
             h("button", { class: `btn ${c}`, onclick: () => grade(g) }, h("span", {}, `${t} `, h("span", { class: "kbd" }, i + 1)), h("small", {}, fmtInt(nextInterval(st, g))))))

@@ -44,6 +44,19 @@ function applyCourses(p, r, label) {
   toast(`${r.courses.length} insegnamenti letti.`, "ok");
 }
 
+// Il «change» di un campo scatta al blur, cioè quando si preme il mouse su un link o un bottone: ridisegnare subito
+// sostituirebbe quell'elemento e il clic andrebbe perso. Se un pulsante è premuto, si ridisegna dopo il clic.
+let pressing = false;
+addEventListener("pointerdown", () => (pressing = true), true);
+addEventListener("pointerup", () => setTimeout(() => (pressing = false)), true);
+function rerenderAfterClick() {
+  if (!pressing) return core.rerender();
+  let done = false;
+  const go = () => { if (!done) { done = true; setTimeout(() => core.rerender()); } };
+  addEventListener("click", go, { once: true, capture: true });
+  setTimeout(go, 600);
+}
+
 export function profileView() {
   const p = store.profile();
   const web = core.ai.web !== false;
@@ -64,7 +77,7 @@ export function profileView() {
     if (changedUni) p.degrees = null; // l'elenco dei corsi appartiene all'ateneo precedente
     store.save();
   };
-  uni.addEventListener("change", () => { commit(); core.rerender(); });
+  uni.addEventListener("change", () => { commit(); rerenderAfterClick(); });
   degree.addEventListener("change", commit);
   degree.addEventListener("blur", commit);
 
@@ -94,7 +107,7 @@ export function profileView() {
     const sel = (opts, cur, onChange, label) => h("select", { "aria-label": label, onchange: (e) => { onChange(e.target.value); store.save(); core.rerender(); } },
       Object.entries(opts).map(([k, t]) => h("option", { value: k, selected: String(k) === String(cur) }, t)));
     return h("tr", {},
-      h("td", {}, c.name, c.manual ? [" ", badge("manuale")] : null),
+      h("td", {}, c.name, c.imported ? [" ", badge("importato", "brand")] : c.manual ? [" ", badge("manuale")] : null),
       h("td", {}, c.cfu || "—"),
       h("td", {}, sel(KIND_SHORT, c.kind, (v) => (c.kind = v), `Tipo di ${c.name}`)),
       h("td", {}, sel(FORMAT_SHORT, c.format, (v) => { c.format = v; if (v !== "sconosciuto" && !c.formatEvidence) c.formatEvidence = "indicato da te"; if (v === "sconosciuto") { c.formatEvidence = ""; c.url = ""; } }, `Prova d'esame di ${c.name}`),
@@ -176,11 +189,16 @@ export function profileView() {
       h("h3", { style: { marginTop: "6px" } }, "2 · Corso di studio"), h("label", {}, "Corso di studio", degree), degreesBox),
     h("div", { class: "card stack" },
       h("h3", {}, "3 · Piano di studi per anno"),
+      h("label", {}, "Anno che frequenti",
+        h("select", { id: "student-year", onchange: (e) => { p.studentYear = Number(e.target.value); store.save(); core.rerender(); } },
+          h("option", { value: 0 }, "Non indicato"),
+          [1, 2, 3, 4, 5, 6].map((y) => h("option", { value: y, selected: p.studentYear === y }, `${y}° anno`))),
+        h("span", { class: "hint" }, "Serve per proporti gli insegnamenti giusti quando crei un esame e per scegliere in automatico le lezioni del tuo anno quando importi l'orario.")),
       provenance, searchBox, pasteBox,
       p.courses.length ? h("div", { class: "stack", style: { gap: "10px" } }, yearBlocks) : h("p", { class: "muted" }, "Nessun insegnamento ancora."),
       thirdYearNote,
       h("h3", { style: { marginBottom: 0 } }, "Aggiungi a mano"), addManual,
       p.courses.length ? h("div", {}, h("button", { class: "btn small danger", onclick: async () => { if (await confirmDialog("Rimuovere tutti gli insegnamenti del piano?", { ok: "Rimuovi", danger: true })) { p.courses = []; p.fetchedAt = null; store.save(); core.rerender(); } } }, "Svuota il piano")) : null,
       p.sources?.length ? h("details", {}, h("summary", {}, `Fonti consultate (${p.sources.length})`), h("ul", { class: "source-list" }, p.sources.map((s) => h("li", {}, h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer" }, s.title || s.url))))) : null),
-    h("div", { class: "row" }, h("a", { class: "btn primary", href: "#/new", onclick: commit }, "Aggiungi un esame"), h("a", { class: "btn", href: "#/import" }, "Importa piano da CSV / Excel"), h("a", { class: "btn ghost", href: "#/" }, "Home")));
+    h("div", { class: "row" }, h("a", { class: "btn primary", href: "#/new", onclick: commit }, "Aggiungi un esame"), p.courses.length ? h("a", { class: "btn", href: "#/libretto", onclick: commit }, "Libretto: esami superati e da superare") : null, h("a", { class: "btn", href: "#/import" }, "Importa piano da CSV / Excel"), h("a", { class: "btn ghost", href: "#/" }, "Home")));
 }

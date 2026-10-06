@@ -1,16 +1,25 @@
 // Sostituisce public/js/api.js nella versione pubblicata come pagina Claude: stessa interfaccia,
 // ma le chiamate vanno a Claude (capability `sample`) invece che al server.
-import { generateModule, generateNotes, getSample, gradeAnswer, importRows, parseCurriculum } from "./generate.js";
+import { analyzePastExams, assignExercises, extractBooks, linkChapters, gradeExam, examFormatFromText, extendModule, transcribePages, writeDispensa, generateModule, generateNotes, getSample, gradeAnswer, importRows, parseCurriculum } from "./generate.js";
 
 export async function status() {
   const sample = await getSample();
   return sample
-    ? { ai: true, label: "Claude", model: "Claude (tuo account)", web: false, pdf: false, artifact: true }
+    ? { ai: true, label: "Claude", model: window.claude?.web ? "Claude (credito Studify)" : "Claude (tuo account)", web: false, pdf: false, artifact: true }
     : { ai: false, label: "Modalità base", web: false, pdf: false, artifact: true };
 }
 
 export async function runJob(path, body, onProgress = () => {}) {
   if (path === "/api/module") return generateModule(body, onProgress);
+  if (path === "/api/module-extend") return extendModule(body, onProgress);
+  if (path === "/api/exam-format-text") return examFormatFromText(body, onProgress);
+  if (path === "/api/transcribe") return { pages: await transcribePages(body, onProgress) }; // stessa forma del server
+  if (path === "/api/dispensa") return writeDispensa(body, onProgress);
+  if (path === "/api/past-exams") return analyzePastExams(body, onProgress);
+  if (path === "/api/grade-exam") return gradeExam(body, onProgress);
+  if (path === "/api/assign-exercises") return assignExercises(body, onProgress);
+  if (path === "/api/books-from-text") return extractBooks(body, onProgress);
+  if (path === "/api/link-chapters") return linkChapters(body, onProgress);
   if (path === "/api/research") return generateNotes(body, onProgress);
   if (path === "/api/parse-curriculum") return parseCurriculum(body, onProgress);
   if (path === "/api/import-rows") return importRows(body, onProgress);

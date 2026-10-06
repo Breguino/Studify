@@ -236,7 +236,7 @@ export function buildCourses(data, map, ctx = {}, firstRow = 2) {
     const existing = (ctx.courses ?? []).find((c) => norm(c.name) === norm(name) && (c.year || 0) === year);
     items.push({
       name, year, cfu: parseNum(cell(row, map, "cfu")), kind, group, format,
-      formatEvidence: format === "sconosciuto" ? "" : "importato da file", url: "", manual: true,
+      formatEvidence: format === "sconosciuto" ? "" : "importato da file", url: "", manual: true, imported: true,
       status: existing ? "aggiornato" : "nuovo",
     });
   });

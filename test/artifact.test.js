@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { explain, generateModule, generateNotes, gradeAnswer, parseCurriculum } from "../artifact/generate.js";
+import { analyzePastExams, assignExercises, gradeExam, examFormatFromText, explain, extendModule, generateModule, transcribePages, writeDispensa, generateNotes, gradeAnswer, parseCurriculum } from "../artifact/generate.js";
 import { decodeState, encodeState, split } from "../artifact/backend.js";
 
 const demo = JSON.parse(readFileSync(new URL("../public/demo/module.json", import.meta.url), "utf8"));
@@ -134,4 +134,227 @@ test("pagina Claude: importazione da PDF — testo, scansione con immagini, limi
   assert.match(seen.p, /immagini allegate/);
   await assert.rejects(importRows({ kind: "esami", text: "", images: blobs, today: "2026-10-01" }, () => {}, mk({})), /scansione.*non può leggere immagini/);
   await assert.rejects(importRows({ kind: "esami", text: "x".repeat(210_000) }, () => {}, mk({})), /troppo lungo/);
+});
+
+test("pagina Claude: aggiornamento a due passi — argomenti nuovi/approfonditi, carte senza doppioni", async () => {
+  const calls = [];
+  const sample = async () => ({ text: "" });
+  sample.json = async (prompt) => {
+    calls.push(prompt);
+    if (prompt.includes("<argomento>")) {
+      const t = JSON.parse(prompt.split("<argomento>")[1].split("</argomento>")[0]);
+      return { flashcards: [{ front: `Carta su ${t.title}`, back: "r", type: "definizione" }], questions: [] };
+    }
+    return { gaps: ["lacuna aggiornata"], topics: [
+      { id: "t1", title: "titolo cambiato dal modello", summary: "aggiornato", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "e" },
+      { id: "x7", title: "Esternalità", summary: "s", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "e" },
+      { id: "x8", title: "" },
+    ] };
+  };
+  const existing = { topics: [{ id: "t1", title: "Domanda e offerta", summary: "s", keyConcepts: ["equilibrio"] }], flashcards: [{ topicId: "t1", front: "Che cos'è l'equilibrio?" }], questions: [], gaps: ["vecchia"] };
+  const r = await extendModule({ exam, materials: [{ kind: "notes", title: "L5", text: "appunti nuovi" }], research: null, existing }, () => {}, sample);
+  assert.match(calls[0], /<modulo_esistente>[\s\S]*Che cos'è l'equilibrio\?/);
+  assert.match(calls[0], /Materiali NUOVI[\s\S]*titolo="L5"/);
+  assert.equal(calls.length, 3, "un passo 1 + due argomenti (quello senza titolo scartato)");
+  const deepen = calls.find((c) => c.includes('"title":"Domanda e offerta"'));
+  assert.match(deepen, /<carte_esistenti>\n- Che cos'è l'equilibrio\?/);
+  assert.match(deepen, /2-5 flashcard/);
+  assert.match(calls.find((c) => c.includes('"title":"Esternalità"')), /6-9 flashcard/);
+  assert.deepEqual(r.delta.topics.map((t) => [t.id, t.title]), [["t1", "Domanda e offerta"], ["n1", "Esternalità"]]);
+  assert.deepEqual(r.delta.flashcards.map((c) => c.topicId), ["t1", "n1"]);
+  assert.deepEqual(r.delta.gaps, ["lacuna aggiornata"]);
+  await assert.rejects(extendModule({ exam, materials: [{ kind: "pdf", title: "p", data: "x" }], research: null, existing }, () => {}, sample), /PDF non sono supportati/);
+});
+
+test("pagina Claude: tipo di prova dalla scheda incollata, citazione verificata", async () => {
+  const prompts = [];
+  const sample = async () => ({ text: "" });
+  let reply = { found: true, format: "misto", evidence: "prova scritta e prova orale obbligatoria", details: "", url: "", academicYear: "2026-27", teacher: "Rossi", caveats: [] };
+  sample.json = async (p) => { prompts.push(p); return reply; };
+  const text = "Modalità d'esame: l'esame prevede una prova scritta e prova orale obbligatoria.";
+  const r = await examFormatFromText({ text, course: "Economia politica II" }, () => {}, sample);
+  assert.match(prompts[0], /<scheda_insegnamento>\nModalità d'esame/);
+  assert.match(prompts[0], /Insegnamento: Economia politica II/);
+  assert.deepEqual([r.found, r.format, r.teacher], [true, "misto", "Rossi"]);
+  reply = { ...reply, evidence: "esame solo orale" };
+  assert.equal((await examFormatFromText({ text, course: "x" }, () => {}, sample)).format, "sconosciuto");
+});
+
+test("pagina Claude: gli esercizi passano dal passo 1 al passo 2 dell'argomento", async () => {
+  const prompts = [];
+  const sample = async () => ({ text: "" });
+  sample.json = async (p) => {
+    prompts.push(p);
+    if (p.includes("<argomento>")) return { flashcards: [{ front: "f", back: "b", type: "definizione" }], questions: [] };
+    return { title: "T", overview: "O", gaps: [], topics: [
+      { title: "Media", summary: "s", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "e", exercises: "Es. 3: calcola la media di 2, 4, 6. Soluzione: 4" },
+      { title: "Varianza", summary: "s", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "e", exercises: "" } ] };
+  };
+  const mod = await generateModule({ exam: { ...exam, type: "problemi" }, materials: [{ kind: "notes", role: "esercizi", title: "Eserciziario", text: "Es. 3: calcola la media di 2, 4, 6." }], research: null }, () => {}, sample);
+  assert.match(prompts[0], /<esercizi titolo="Eserciziario">/);
+  assert.match(prompts[0], /"exercises": string/);
+  const media = prompts.find((p) => p.includes('"title":"Media"'));
+  assert.match(media, /<esercizi_dai_materiali>\nEs\. 3: calcola la media/);
+  assert.match(media, /Non farne flashcard/);
+  assert.ok(!prompts.find((p) => p.includes('"title":"Varianza"')).includes("<esercizi_dai_materiali>"));
+  assert.ok(!("exercises" in mod.topics[0]) && !("excerpt" in mod.topics[0]), "estratti ed esercizi non finiscono nel modulo");
+});
+
+test("pagina Claude: trascrizione delle pagine a gruppi di 3, con immagini e marcatori di pagina", async () => {
+  const calls = [];
+  const sample = async (prompt, opts) => {
+    calls.push({ prompt, n: opts.images.length });
+    const from = Number(prompt.match(/(?:le pagine da|la pagina) (\d+)/)[1]);
+    if (from === 11) return { text: "" }; // una richiesta che non restituisce nulla
+    return { text: opts.images.map((_, k) => `=== PAGINA ${from + k} ===\nTesto $x_{${from + k}}$`).join("\n") };
+  };
+  sample.json = async () => ({});
+  sample.limits = async () => ({ images: { maxCount: 8 } });
+  const images = Array.from({ length: 7 }, () => new Blob(["x"]));
+  const progress = [];
+  const out = await transcribePages({ images, firstPage: 5, title: "Libro" }, (c, l) => progress.push(l), sample);
+  assert.deepEqual(calls.map((c) => c.n), [3, 3, 1]);
+  assert.ok(!calls[0].prompt.includes("SCRITTI A MANO"), "PDF stampato: niente regole per la scrittura a mano");
+  assert.match(calls[0].prompt, /le pagine da 5 a 7 di «Libro»/);
+  assert.match(calls[0].prompt, /LaTeX compatibile con KaTeX/);
+  assert.match(calls[2].prompt, /la pagina 11/);
+  assert.deepEqual(out, ["Testo $x_{5}$", "Testo $x_{6}$", "Testo $x_{7}$", "Testo $x_{8}$", "Testo $x_{9}$", "Testo $x_{10}$", null]);
+  assert.ok(progress.some((l) => /7\/7/.test(l)));
+  const noImages = async () => ({ text: "" });
+  noImages.limits = async () => ({});
+  await assert.rejects(transcribePages({ images, firstPage: 1 }, () => {}, noImages), /non può leggere le immagini/);
+});
+
+test("pagina Claude: appunti a mano con le regole per la scrittura", async () => {
+  const prompts = [];
+  const sample = async (prompt, opts) => { prompts.push(prompt); return { text: `=== PAGINA 1 ===\nlusso[?] $x$` }; };
+  sample.limits = async () => ({ images: { maxCount: 8 } });
+  const out = await transcribePages({ images: [new Blob(["x"])], firstPage: 1, title: "Quaderno", handwritten: true }, () => {}, sample);
+  assert.match(prompts[0], /SCRITTI A MANO/);
+  assert.deepEqual(out, ["lusso[?] $x$"]);
+  const none = async () => ({ text: "" });
+  none.limits = async () => ({});
+  await assert.rejects(transcribePages({ images: [new Blob(["x"])], firstPage: 1, handwritten: true }, () => {}, none), /appunti a mano non si possono trascrivere/);
+});
+
+test("pagina Claude: indicazioni sull'esame dalle sbobine, collegate all'argomento, inventate scartate", async () => {
+  const sample = async () => ({ text: "" });
+  sample.json = async (prompt) => {
+    if (prompt.includes("<argomento>")) return { flashcards: [{ front: "f", back: "b", type: "definizione" }], questions: [] };
+    return { title: "T", overview: "O", gaps: [], topics: [{ id: "x1", title: "Media", summary: "s" }, { id: "x2", title: "Varianza", summary: "s" }],
+      examHints: [{ quote: "la varianza all'esame la chiedo sempre", source: "Lez. 2", note: "", topicId: "x2" }, { quote: "Non chiedo mai il boxplot, l'ho detto chiaramente.", source: "?", note: "", topicId: "x1" }] };
+  };
+  const mod = await generateModule({ exam, materials: [{ kind: "notes", role: "sbobine", unit: "lezioni", title: "Sbobine", text: "Lezione 2. Ragazzi, la varianza all'esame la chiedo sempre." }], research: null }, () => {}, sample);
+  assert.deepEqual(mod.examHints.map((x) => [x.topicId, x.verified]), [["t2", true]]);
+});
+
+test("pagina Claude: dispensa un capitolo per volta, parziali, capitolo troppo lungo segnalato", async () => {
+  const prompts = [];
+  const sample = async (prompt) => {
+    prompts.push(prompt);
+    const t = prompt.match(/Scrivi ora il capitolo «([^»]+)»/)[1];
+    return { text: `### Spiegazione\nSu ${t} $x^2$\n=== SOLUZIONI ===\n1. ok`, truncated: t === "B" };
+  };
+  const labels = [];
+  const partials = [];
+  const r = await writeDispensa({ exam, materials: [{ kind: "notes", role: "appunti", title: "L1", text: "appunti su A e B" }], research: null,
+    outline: [{ title: "A" }, { title: "B" }], topics: [{ id: "t1", title: "A", importance: 2 }, { id: "t2", title: "B", importance: 2 }], length: "sintetica", solutions: true },
+    (c, l, p) => { if (l) labels.push(l); if (p) partials.push(p.chapters.length); }, sample);
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[0], /DISPENSA UNICA[\s\S]*<appunti_studente titolo="L1">[\s\S]*circa 350-550 parole/);
+  assert.deepEqual(r.chapters.map((c) => [c.title, c.solutions]), [["A", "1. ok"], ["B", "1. ok"]]);
+  assert.match(r.chapters[1].body, /interrotto perché troppo lungo/);
+  assert.ok(labels.some((l) => /capitolo 2\/2: B/.test(l)));
+  assert.deepEqual(partials.at(-1), 2);
+});
+
+test("pagina Claude: analisi delle prove passate e correzione di una simulazione", async () => {
+  const prompts = [];
+  const sample = async () => ({ text: "", truncated: false });
+  sample.json = async (prompt) => {
+    prompts.push(prompt);
+    if (prompt.includes("PROVE D'ESAME PASSATE"))
+      return { papers: [{ id: "P1", label: "Appello", year: "2024", durationMin: 90, hasSolutions: false, items: [{ n: "1", summary: "Elasticità", topicIds: ["t1", "t9"], kind: "esercizio", points: 10 }] }, { id: "P3", items: [] }],
+        structure: "S", recurring: [], uncovered: [], caveats: [] };
+    return { items: [{ n: "1", task: "E", maxPoints: 10, points: 6, verdict: "parziale", feedback: "\fcirc", topicId: "t1" }], overall: "", priorities: [], readingIssues: [] };
+  };
+  const topics = [{ id: "t1", title: "Elasticità" }];
+  const a = await analyzePastExams({ exam, topics, papers: [{ id: "P1", label: "Appello", text: "1. Calcola" }] }, () => {}, sample);
+  assert.match(prompts[0], /PROVE D'ESAME PASSATE[\s\S]*Rispondi SOLO con un oggetto JSON[\s\S]*t1: Elasticità[\s\S]*<prova id="P1" titolo="Appello">\n1\. Calcola\n<\/prova>/);
+  assert.match(prompts[0], /ogni backslash del LaTeX va scritto doppio/);
+  assert.deepEqual(Object.keys(a.papers), ["P1"]);
+  assert.deepEqual(a.papers.P1.items[0].topicIds, ["t1"]);
+  const g = await gradeExam({ exam, topics, paper: { label: "Appello", text: "1. Calcola", durationMin: 90 }, answer: "1. ok", minutes: 80 }, () => {}, sample);
+  assert.match(prompts[1], /CORREGGE LA PROVA[\s\S]*<svolgimento>\n1\. ok\n<\/svolgimento>/);
+  assert.equal(g.items[0].points, 6);
+  assert.equal(g.items[0].feedback, "\\fcirc", "\\f riparato");
+  await assert.rejects(analyzePastExams({ exam, topics, papers: [{ id: "P1", label: "x", text: "x".repeat(210_000) }] }, () => {}, sample), /troppo lunghe/);
+});
+
+test("pagina Claude: le domande d'esame diventano domande del quiz a gruppi di 8, con id controllati", async () => {
+  const prompts = [];
+  const lines = Array.from({ length: 11 }, (_, i) => `D${i + 1}. Domanda d'esame numero ${i + 1} sull'elasticità?`).join("\n");
+  const sample = async () => ({ text: "", truncated: false });
+  sample.json = async (prompt) => {
+    prompts.push(prompt);
+    if (prompt.includes("DOMANDE D'ESAME DA PREPARARE")) {
+      const ids = [...prompt.split("<domande_esame_argomento>")[1].matchAll(/^(D\d+)\. /gm)].map((m) => m[1]);
+      return { questions: ids.map((id) => ({ kind: "open", prompt: `Domanda ${id}`, options: [], correctIndex: -1, modelAnswer: "m", explanation: "", rubric: ["r"], followUp: "f", examRefs: [id, "D99"] })) };
+    }
+    if (prompt.includes("<argomento>")) return { flashcards: [{ front: "F?", back: "B", type: "definizione" }], questions: [] };
+    return { title: "T", overview: "O", gaps: [], topics: [
+      { id: "a", title: "Elasticità", importance: 2, difficulty: 2, summary: "s", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "e", examQuestionIds: Array.from({ length: 10 }, (_, i) => `D${i + 1}`) },
+      { id: "b", title: "Monopolio", importance: 2, difficulty: 2, summary: "s", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "e", examQuestionIds: ["D3"] }] };
+  };
+  const mod = await generateModule({ exam, materials: [{ kind: "notes", role: "domande", title: "Domande", text: lines }], research: null }, () => {}, sample);
+  const step3 = prompts.filter((p) => p.includes("DOMANDE D'ESAME DA PREPARARE"));
+  assert.equal(step3.length, 2, "10 domande dello stesso argomento: 8 + 2");
+  assert.match(prompts[0], /"examQuestionIds"/, "il passo 1 assegna le domande agli argomenti");
+  assert.ok(!step3.some((p) => /D3\. /.test(p) && p.includes('"title":"Monopolio"')), "una domanda va in un solo argomento");
+  const exq = mod.questions.filter((q) => q.examRefs);
+  assert.equal(exq.length, 10);
+  assert.ok(exq.every((q) => q.examRefs.length === 1 && q.followUp === "f" && q.topicId === "t1"), "id inventati scartati");
+  assert.match(mod.gaps.at(-1), /^1 domanda d'esame non è entrata nel quiz/, "D11 senza argomento: segnalata");
+});
+
+test("pagina Claude: metodi del docente ricavati per argomento, poi gli esercizi li seguono", async () => {
+  const prompts = [];
+  const text = "Esercizio 1 — Monopolio\nDomanda P = 50 - Q, costo marginale costante MC = 10. Trovare quantità e prezzo del monopolista.\n\nMR = 50 - 2Q; Q = 20; P = 30.";
+  const sample = async () => ({ text: "", truncated: false });
+  sample.json = async (prompt) => {
+    prompts.push(prompt);
+    if (prompt.includes("METODI DEL DOCENTE DA RICAVARE"))
+      return { methods: [{ name: "Equilibrio del monopolista", steps: ["MR", "MR=MC", "Prezzo"], problem: "Domanda $P=50-Q$, costo marginale costante $MC=10$. Trovare quantità e prezzo del monopolista.", solution: "$Q=20$", source: "Es. 1" }] };
+    if (prompt.includes("<argomento>"))
+      return { flashcards: [{ front: "F?", back: "B", type: "definizione" }], questions: [{ kind: "problem", prompt: "P=80-Q, MC=20?", options: [], correctIndex: -1, modelAnswer: "a\n\nb\n\nc", explanation: "", rubric: ["r"], method: "Equilibrio del monopolista" }] };
+    return { title: "T", overview: "O", gaps: [], topics: [
+      { id: "a", title: "Monopolio", importance: 2, difficulty: 2, summary: "s", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "e", methodNames: ["Equilibrio del monopolista"] },
+      { id: "b", title: "Domanda", importance: 2, difficulty: 2, summary: "s", keyConcepts: [], mustKnow: [], commonMistakes: [], origin: "notes", excerpt: "e", methodNames: [] }] };
+  };
+  const mod = await generateModule({ exam, materials: [{ kind: "notes", role: "svolti", title: "Esercitazione 4", text }], research: null }, () => {}, sample);
+  const mp = prompts.filter((p) => p.includes("METODI DEL DOCENTE DA RICAVARE"));
+  assert.equal(mp.length, 1, "solo per l'argomento con esercizi svolti");
+  assert.match(mp[0], /<esercizi_svolti titolo="Esercitazione 4">\nEsercizio 1/);
+  assert.match(prompts[0], /"methodNames"/);
+  const step2 = prompts.find((p) => p.includes("<argomento>") && p.includes('"title":"Monopolio"') && !p.includes("METODI DEL DOCENTE"));
+  assert.match(step2, /<metodi_del_docente>\n### Equilibrio del monopolista\nPassaggi:\n1\. MR/);
+  assert.match(step2, /"method": string/);
+  assert.deepEqual(mod.topics[0].methods.map((m) => m.verified), [true]);
+  assert.equal(mod.questions.find((q) => q.topicId === "t1").method, "Equilibrio del monopolista");
+  assert.ok(!mod.questions.some((q) => q.topicId === "t2" && q.method), "un argomento senza metodi non ne ha");
+});
+
+test("pagina Claude: esercizi delle esercitazioni assegnati agli argomenti, 15 per richiesta", async () => {
+  const prompts = [];
+  const sample = async () => ({ text: "", truncated: false });
+  sample.json = async (prompt) => {
+    prompts.push(prompt);
+    const ids = [...prompt.matchAll(/<esercizio id="(E\d+)"/g)].map((m) => m[1]);
+    return { assign: [...ids.map((id) => ({ id, topicId: "t1", rubric: ["r"], note: "" })), { id: "E99", topicId: "t1", rubric: [], note: "" }] };
+  };
+  const exercises = Array.from({ length: 20 }, (_, i) => ({ id: `E${i + 1}`, label: `es. ${i + 1}`, text: `Esercizio ${i + 1}`, solution: "x" }));
+  const r = await assignExercises({ exam, topics: [{ id: "t1", title: "Monopolio" }], exercises }, () => {}, sample);
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[0], /ESERCIZI DA ASSEGNARE[\s\S]*Rispondi SOLO con un oggetto JSON/);
+  assert.equal(r.assign.length, 20, "id inventati scartati");
 });

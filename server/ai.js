@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { CURRICULUM_RULES, EXAM_TYPE_LABEL, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, where } from "../shared/prompts.js";
-import { CurriculumSchema, DegreesSchema, GradeSchema, ImportRowsSchema, ModuleSchema, normalizeCurriculum, normalizeDegrees, normalizeImportRows, normalizeModule } from "./schema.js";
+import { ASSIGN_RULES, assignPrompt, BOOKS_RULES, CHAPTERS_RULES, chaptersPrompt, CURRICULUM_RULES, EXAM_FORMAT_RULES, EXAM_GRADE_RULES, EXAM_TYPE_LABEL, EXTEND_RULES, PAST_EXAMS_RULES, examGradePrompt, pastExamsPrompt, practiceTasks, GRADE_RULES, IMPORT_HEADERS, IMPORT_RULES, MODULE_INTRO, MODULE_PRINCIPLES, QUESTION_MIX, SAFETY_RULES, examContext, materialText, moduleDigest, parseTranscription, transcribePrompt, where, DISPENSA_SYSTEM, chapterPrompt, splitChapter, pdfTitle } from "../shared/prompts.js";
+import { AssignSchema, BooksSchema, ChapterLinksSchema, CurriculumSchema, DegreesSchema, ExamFormatSchema, ExamGradeSchema, GradeSchema, ImportRowsSchema, ModuleSchema, PastExamsSchema, normalizeCurriculum, normalizeDegrees, normalizeExamFormat, normalizeExamGrade, normalizeImportRows, normalizeModule, normalizePastExams, quoteChecker, repairLatex, identityRefs, exampleChecker, normalizeAssignments, normalizeBooks, normalizeChapterLinks } from "./schema.js";
 
 export const MODEL = process.env.STUDIFY_MODEL || "claude-opus-5-5";
 
@@ -146,6 +146,68 @@ url = pagina da cui proviene, scelta SOLO tra gli URL elencati, altrimenti "". f
 }
 
 /* -------------------------------------------------------------------------- */
+/* Modalità d'esame di un insegnamento                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Cerca la scheda dell'insegnamento (syllabus) sul sito dell'ateneo e ne estrae la modalità d'esame,
+ * con la frase letta e l'URL. Non la deduce dalla materia: se non la trova lo dice.
+ */
+export async function examFormat({ university, degree, course, academicYear }, onProgress = () => {}) {
+  const system = `Sei un assistente che consulta i siti ufficiali delle università italiane.
+${SAFETY_RULES}
+Riporta solo ciò che leggi nelle pagine trovate; non dedurre la modalità d'esame dal nome della materia.`;
+  const prompt = `Trova la scheda ufficiale dell'insegnamento "${course}"${degree ? ` del corso di studio "${degree}"` : ""} presso "${university}"
+(syllabus / programma dell'insegnamento${academicYear ? `, anno accademico ${academicYear} o il più recente disponibile` : ", anno accademico più recente"}).
+Riporta TESTUALMENTE la parte sulla modalità d'esame (di solito «Modalità di verifica dell'apprendimento», «Modalità d'esame»,
+«Assessment methods»): scritto, orale, test, esercizi, prove intermedie, durata, se l'orale è obbligatorio o facoltativo.
+Indica l'URL della pagina, l'anno accademico e il docente. Se ci sono più docenti o canali con modalità diverse, elencali.
+Se non trovi la scheda o la modalità non è indicata, dillo chiaramente.`;
+  const found = await webResearch({ system, prompt, maxUses: 6 }, onProgress);
+
+  const msg = await client().messages.create({
+    model: MODEL,
+    max_tokens: 4000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "low", format: zodOutputFormat(ExamFormatSchema) },
+    system: `Estrai dati strutturati dal testo di una ricerca. ${SAFETY_RULES}
+${EXAM_FORMAT_RULES}
+url = pagina da cui proviene, scelta SOLO tra gli URL elencati, altrimenti "". found = false se non hai trovato la modalità.`,
+    messages: [{ role: "user", content: `<ricerca>\n${found.notes}\n</ricerca>\n<url_validi>\n${[...found.seenUrls].join("\n")}\n</url_validi>` }],
+  });
+  assertUsable(msg);
+  let raw;
+  try {
+    raw = ExamFormatSchema.parse(JSON.parse(textOf(msg.content)));
+  } catch {
+    throw new Error("Non sono riuscito a interpretare la scheda trovata.");
+  }
+  return normalizeExamFormat(raw, { seenUrls: found.seenUrls });
+}
+
+/** La stessa estrazione dal testo della scheda incollato dallo studente (niente web): la citazione deve essere nel testo. */
+export async function examFormatFromText({ text, course }) {
+  const msg = await client().messages.create({
+    model: MODEL,
+    max_tokens: 4000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "low", format: zodOutputFormat(ExamFormatSchema) },
+    system: `Estrai la modalità d'esame dalla scheda di un insegnamento incollata dallo studente. ${SAFETY_RULES}
+${EXAM_FORMAT_RULES}
+url = "" salvo che l'indirizzo della pagina compaia nel testo. found = false se il testo non indica la modalità d'esame.`,
+    messages: [{ role: "user", content: `Insegnamento: ${course || "(non indicato)"}\n<scheda_insegnamento>\n${text}\n</scheda_insegnamento>` }],
+  });
+  assertUsable(msg);
+  let raw;
+  try {
+    raw = ExamFormatSchema.parse(JSON.parse(textOf(msg.content)));
+  } catch {
+    throw new Error("Non sono riuscito a interpretare la scheda.");
+  }
+  return normalizeExamFormat(raw, { sourceText: text });
+}
+
+/* -------------------------------------------------------------------------- */
 /* Corsi di studio di un ateneo                                               */
 /* -------------------------------------------------------------------------- */
 
@@ -246,32 +308,39 @@ ${SAFETY_RULES}
 
 ${MODULE_PRINCIPLES}`;
 
-function buildUserContent({ exam, materials, research: res }) {
+const fullTask = (exam, type) => `Produci il modulo di studio completo.
+- Argomenti: tra 5 e 15, in base all'ampiezza dei materiali.
+- Flashcard: circa 6-10 per argomento (mai meno di 4).
+- Domande: circa 3-6 per argomento; mix per questo tipo di prova: ${QUESTION_MIX[type]}.
+- Calibra difficoltà e spiegazioni sul livello ${exam.level}/5: più scaffolding e esempi se basso, più sfumature e casi limite se alto.`;
+
+const extendTask = (exam, type) => `${EXTEND_RULES}
+- Argomento nuovo: circa 6-10 flashcard e 3-6 domande. Argomento approfondito: 2-6 flashcard e 1-3 domande, solo sui contenuti nuovi.
+- Mix delle domande per questo tipo di prova: ${QUESTION_MIX[type]}.
+- Calibra difficoltà e spiegazioni sul livello ${exam.level}/5.`;
+
+function buildUserContent({ exam, materials, research: res, existing }, task = fullTask) {
   const content = [];
+  const docs = [];
   for (const m of materials) {
-    if (m.kind === "pdf" && m.data)
-      content.push({
-        type: "document",
-        title: m.title,
-        source: { type: "base64", media_type: "application/pdf", data: m.data },
-      });
+    if (m.kind === "pdf" && m.data) {
+      const title = pdfTitle(m);
+      docs.push(title);
+      content.push({ type: "document", title, source: { type: "base64", media_type: "application/pdf", data: m.data } });
+    }
   }
-  const parts = [];
+  const parts = existing ? [moduleDigest(existing), "Materiali NUOVI da integrare nel modulo (anche i PDF allegati sono nuovi):"] : [];
+  if (docs.length) parts.push(`Documenti PDF allegati (tipo — titolo):\n${docs.map((d) => `- ${d}`).join("\n")}`);
   for (const m of materials) {
-    if (m.kind !== "pdf" && m.text) parts.push(`<appunti_studente titolo="${m.title.replace(/"/g, "'")}">\n${m.text}\n</appunti_studente>`);
+    if (m.kind !== "pdf" && m.text) parts.push(materialText(m));
   }
   if (res?.notes) {
     parts.push(`<ricerca_online>\n${res.notes}\n</ricerca_online>`);
     parts.push(`<fonti_online>\n${res.sources.map((s) => `${s.id}: ${s.title} — ${s.url}`).join("\n")}\n</fonti_online>`);
   }
   const type = exam.type in EXAM_TYPE_LABEL ? exam.type : "misto";
-  parts.push(`${examContext(exam)}
-
-Produci il modulo di studio completo.
-- Argomenti: tra 5 e 15, in base all'ampiezza dei materiali.
-- Flashcard: circa 6-10 per argomento (mai meno di 4).
-- Domande: circa 3-6 per argomento; mix per questo tipo di prova: ${QUESTION_MIX[type]}.
-- Calibra difficoltà e spiegazioni sul livello ${exam.level}/5: più scaffolding e esempi se basso, più sfumature e casi limite se alto.`);
+  const extra = practiceTasks(materials.map((m) => m.role));
+  parts.push(`${examContext(exam)}\n\n${task(exam, type)}${extra ? `\n${extra}` : ""}`);
   content.push({ type: "text", text: parts.join("\n\n") });
   return content;
 }
@@ -296,9 +365,266 @@ export async function buildModule(input, onProgress = () => {}) {
   } catch {
     throw new Error("L'AI ha restituito un modulo in formato non valido. Riprova.");
   }
-  const mod = normalizeModule(parsed, sources);
+  const text = [...input.materials.map((m) => m.text ?? ""), input.research?.notes ?? ""].join("\n");
+  const hasPdf = input.materials.some((m) => m.kind === "pdf" && m.data);
+  const mod = normalizeModule(parsed, sources, { checkQuote: quoteChecker(text, { hasPdf }), examRefs: identityRefs(input.materials), checkExample: exampleChecker(text, { hasPdf }) });
   if (mod.topics.length === 0) throw new Error("Il modulo generato non contiene argomenti: i materiali sono sufficienti?");
   return mod;
+}
+
+/**
+ * Aggiorna un modulo con materiali nuovi: il modello vede il modulo esistente (compatto) e restituisce, nello stesso
+ * formato, solo argomenti nuovi / approfonditi e le carte e domande nuove. La fusione (id stabili) la fa il browser.
+ * @returns {Promise<{delta: object, sources: object[]}>}
+ */
+export async function extendModule(input, onProgress = () => {}) {
+  const sources = input.research?.sources ?? [];
+  const stream = client().messages.stream({
+    model: MODEL,
+    max_tokens: 64000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "high", format: zodOutputFormat(ModuleSchema) },
+    system: MODULE_SYSTEM,
+    messages: [{ role: "user", content: buildUserContent(input, extendTask) }],
+  });
+  stream.on("text", (d) => onProgress(d.length));
+  const msg = await stream.finalMessage();
+  assertUsable(msg);
+  try {
+    return { delta: ModuleSchema.parse(JSON.parse(textOf(msg.content))), sources };
+  } catch {
+    throw new Error("L'AI ha restituito un aggiornamento in formato non valido. Riprova.");
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Trascrizione di pagine fotografate (appunti a mano, scansioni)             */
+/* -------------------------------------------------------------------------- */
+
+const TRANSCRIBE_PER_CALL = 3; // una pagina fitta trascritta è lunga: poche immagini per richiesta
+
+/**
+ * Immagini di pagine → testo di ciascuna pagina (formule in LaTeX). `images` = [{data: base64, mediaType}].
+ * @returns {Promise<{pages: (string|null)[]}>}
+ */
+export async function transcribe({ images, firstPage = 1, title = "", handwritten = false }, onProgress = () => {}) {
+  const pages = [];
+  for (let k = 0; k < images.length; k += TRANSCRIBE_PER_CALL) {
+    const group = images.slice(k, k + TRANSCRIBE_PER_CALL);
+    const from = firstPage + k;
+    const stream = client().messages.stream({
+      model: MODEL,
+      max_tokens: 32000,
+      thinking: { type: "adaptive" },
+      output_config: { effort: "medium" },
+      messages: [{
+        role: "user",
+        content: [
+          ...group.map((img) => ({ type: "image", source: { type: "base64", media_type: img.mediaType, data: img.data } })),
+          { type: "text", text: transcribePrompt({ from, count: group.length, title, handwritten }) },
+        ],
+      }],
+    });
+    stream.on("text", (d) => onProgress(d.length));
+    const msg = await stream.finalMessage();
+    assertUsable(msg);
+    pages.push(...parseTranscription(textOf(msg.content), from, group.length));
+  }
+  if (pages.every((p) => p == null)) throw new Error("Claude non ha restituito la trascrizione delle pagine. Riprova con meno foto.");
+  return { pages };
+}
+
+/**
+ * Pagine di un PDF (le sole pagine scelte, estratte nel browser) → testo di ciascuna pagina, formule in LaTeX: Claude legge il PDF
+ * direttamente. Serve per le esercitazioni in PDF, i cui esercizi e soluzioni l'app usa così come sono.
+ */
+export async function transcribePdf({ data, firstPage = 1, count, title = "" }, onProgress = () => {}) {
+  const stream = client().messages.stream({
+    model: MODEL,
+    max_tokens: 32000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "medium" },
+    messages: [{ role: "user", content: [
+      { type: "document", title, source: { type: "base64", media_type: "application/pdf", data } },
+      { type: "text", text: transcribePrompt({ from: firstPage, count, title, pdf: true }) },
+    ] }],
+  });
+  stream.on("text", (d) => onProgress(d.length));
+  const msg = await stream.finalMessage();
+  assertUsable(msg);
+  const pages = parseTranscription(textOf(msg.content), firstPage, count);
+  if (pages.every((p) => p == null)) throw new Error("Claude non ha restituito la trascrizione del PDF. Riprova con meno pagine.");
+  return { pages };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Esercitazioni: esercizi con soluzione ufficiale assegnati agli argomenti   */
+/* -------------------------------------------------------------------------- */
+
+/** @returns {Promise<{assign: {id, topicId, rubric, note}[]}>} */
+export async function assignExercises({ exam, topics, exercises }) {
+  const msg = await client().messages.create({
+    model: MODEL,
+    max_tokens: 16000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "low", format: zodOutputFormat(AssignSchema) },
+    system: ASSIGN_RULES,
+    messages: [{ role: "user", content: assignPrompt({ exam, topics, exercises }) }],
+  });
+  assertUsable(msg);
+  let raw;
+  try {
+    raw = AssignSchema.parse(JSON.parse(textOf(msg.content)));
+  } catch {
+    throw new Error("L'assegnazione degli esercizi è arrivata in un formato non valido. Riprova.");
+  }
+  const m = normalizeAssignments(raw, { ids: exercises.map((e) => e.id), topicIds: topics.map((t) => t.id) });
+  return { assign: [...m].map(([id, a]) => ({ id, ...a })) };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Libri consigliati: dalla scheda dell'insegnamento, capitoli e argomenti    */
+/* -------------------------------------------------------------------------- */
+
+export async function extractBooks({ text }) {
+  const msg = await client().messages.create({
+    model: MODEL, max_tokens: 8000, thinking: { type: "adaptive" },
+    output_config: { effort: "low", format: zodOutputFormat(BooksSchema) },
+    system: BOOKS_RULES,
+    messages: [{ role: "user", content: `<scheda_insegnamento>\n${text}\n</scheda_insegnamento>` }],
+  });
+  assertUsable(msg);
+  let raw;
+  try { raw = BooksSchema.parse(JSON.parse(textOf(msg.content))); } catch { throw new Error("Non sono riuscito a leggere i libri dalla scheda. Riprova."); }
+  return normalizeBooks(raw, { sourceText: text });
+}
+
+/** @returns {Promise<{links: {topicId: string, chapterIds: string[]}[]}>} */
+export async function linkChapters({ exam, topics, chapters }) {
+  const msg = await client().messages.create({
+    model: MODEL, max_tokens: 8000, thinking: { type: "adaptive" },
+    output_config: { effort: "low", format: zodOutputFormat(ChapterLinksSchema) },
+    system: CHAPTERS_RULES,
+    messages: [{ role: "user", content: chaptersPrompt({ exam, topics, chapters }) }],
+  });
+  assertUsable(msg);
+  let raw;
+  try { raw = ChapterLinksSchema.parse(JSON.parse(textOf(msg.content))); } catch { throw new Error("Il collegamento dei capitoli è arrivato in un formato non valido. Riprova."); }
+  const m = normalizeChapterLinks(raw, { chapterIds: chapters.map((c) => c.id), topicIds: topics.map((t) => t.id) });
+  return { links: [...m].map(([topicId, chapterIds]) => ({ topicId, chapterIds })) };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Dispensa: un documento da studiare, un capitolo per argomento              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * I materiali come prefisso fisso della richiesta (PDF + testo), con il punto di cache alla fine: ogni capitolo
+ * rimanda gli stessi materiali, che dal secondo in poi vengono letti dalla cache.
+ */
+function materialsPrefix({ materials, research }) {
+  const blocks = [];
+  for (const m of materials) {
+    if (m.kind === "pdf" && m.data)
+      blocks.push({ type: "document", title: pdfTitle(m), source: { type: "base64", media_type: "application/pdf", data: m.data } });
+  }
+  const parts = materials.filter((m) => m.kind !== "pdf" && m.text).map(materialText);
+  if (research?.notes) parts.push(`<ricerca_online>\n${research.notes}\n</ricerca_online>`);
+  if (parts.length) blocks.push({ type: "text", text: `Materiali dello studente:\n\n${parts.join("\n\n")}` });
+  if (blocks.length) blocks.at(-1).cache_control = { type: "ephemeral" };
+  return blocks;
+}
+
+/**
+ * Scrive i capitoli della dispensa (uno per argomento), in ordine; `onPartial` riceve i capitoli già pronti.
+ * Un capitolo che non riesce non ferma gli altri: resta con `error`.
+ * @returns {Promise<{chapters: {topicId:string, title:string, body:string, solutions:string, error?:string}[]}>}
+ */
+export async function writeDispensa({ exam, materials, research, outline, topics, length, solutions }, onProgress = () => {}, onPartial = () => {}) {
+  const prefix = materialsPrefix({ materials, research });
+  const chapters = [];
+  for (const [k, topic] of topics.entries()) {
+    try {
+      const stream = client().messages.stream({
+        model: MODEL,
+        max_tokens: 16000,
+        thinking: { type: "adaptive" },
+        output_config: { effort: "medium" },
+        system: DISPENSA_SYSTEM,
+        messages: [{ role: "user", content: [...prefix, { type: "text", text: chapterPrompt({ exam, topic, outline, hints: topic.hints ?? [], examQuestions: topic.examQuestions ?? [], length, solutions }) }] }],
+      });
+      stream.on("text", (d) => onProgress(d.length));
+      const msg = await stream.finalMessage();
+      assertUsable(msg);
+      chapters.push({ topicId: topic.id, title: topic.title, ...splitChapter(textOf(msg.content)) });
+    } catch (e) {
+      chapters.push({ topicId: topic.id, title: topic.title, body: "", solutions: "", error: friendlyError(e) });
+    }
+    onPartial({ chapters: [...chapters], done: k + 1, total: topics.length });
+  }
+  if (chapters.every((c) => c.error)) throw new Error(chapters[0]?.error || "Non sono riuscito a scrivere la dispensa.");
+  return { chapters };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Esami degli anni passati: analisi e correzione delle simulazioni           */
+/* -------------------------------------------------------------------------- */
+
+const pdfBlock = (title, data) => ({ type: "document", title, source: { type: "base64", media_type: "application/pdf", data } });
+
+/**
+ * Le prove passate collegate agli argomenti del modulo. `papers` = [{id: "P1", label, text}] o, per i PDF, [{id, label, data}].
+ * @returns {Promise<object>} vedi normalizePastExams (prove per id)
+ */
+export async function analyzePastExams({ exam, topics, papers }, onProgress = () => {}) {
+  const content = papers.filter((p) => p.data).map((p) => pdfBlock(`${p.id} — ${p.label}`, p.data));
+  content.push({ type: "text", text: pastExamsPrompt({ exam, topics, papers: papers.map((p) => ({ ...p, text: p.data ? null : p.text })) }) });
+  const stream = client().messages.stream({
+    model: MODEL,
+    max_tokens: 32000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "medium", format: zodOutputFormat(PastExamsSchema) },
+    system: PAST_EXAMS_RULES,
+    messages: [{ role: "user", content }],
+  });
+  stream.on("text", (d) => onProgress(d.length));
+  const msg = await stream.finalMessage();
+  assertUsable(msg);
+  let raw;
+  try {
+    raw = PastExamsSchema.parse(JSON.parse(textOf(msg.content)));
+  } catch {
+    throw new Error("L'analisi delle prove è arrivata in un formato non valido. Riprova.");
+  }
+  const out = normalizePastExams(raw, { paperIds: papers.map((p) => p.id), topicIds: topics.map((t) => t.id) });
+  if (!Object.keys(out.papers).length) throw new Error("Claude non ha riconosciuto le prove: controlla che i materiali «Esami passati» contengano i testi delle prove.");
+  return out;
+}
+
+/** Correzione di una prova svolta a tempo (testo della prova o PDF, svolgimento come testo). */
+export async function gradeExam({ exam, topics, paper, answer, minutes }, onProgress = () => {}) {
+  const content = paper.data ? [pdfBlock(paper.label, paper.data)] : [];
+  content.push({ type: "text", text: examGradePrompt({ exam, topics, paper: { ...paper, text: paper.data ? null : paper.text }, answer, minutes }) });
+  const stream = client().messages.stream({
+    model: MODEL,
+    max_tokens: 32000,
+    thinking: { type: "adaptive" },
+    output_config: { effort: "high", format: zodOutputFormat(ExamGradeSchema) },
+    system: EXAM_GRADE_RULES,
+    messages: [{ role: "user", content }],
+  });
+  stream.on("text", (d) => onProgress(d.length));
+  const msg = await stream.finalMessage();
+  assertUsable(msg);
+  let raw;
+  try {
+    raw = ExamGradeSchema.parse(JSON.parse(textOf(msg.content)));
+  } catch {
+    throw new Error("La correzione è arrivata in un formato non valido. Riprova.");
+  }
+  const out = normalizeExamGrade(raw, { topicIds: topics.map((t) => t.id) });
+  if (!out.items.length) throw new Error("Claude non è riuscito a correggere la prova. Riprova.");
+  return out;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -324,5 +650,5 @@ export async function gradeAnswer({ question, reference, rubric = [], answer, la
   });
   assertUsable(msg);
   const g = GradeSchema.parse(JSON.parse(textOf(msg.content)));
-  return { ...g, score: Math.min(1, Math.max(0, g.score)) };
+  return { ...g, score: Math.min(1, Math.max(0, g.score)), feedback: repairLatex(g.feedback), covered: g.covered.map(repairLatex), missing: g.missing.map(repairLatex) };
 }

@@ -87,5 +87,5 @@ test("readSpreadsheet: .xlsx, CSV, .xls rifiutato con istruzioni, zip non valido
   const c = await readSpreadsheet({ name: "a.csv", arrayBuffer: async () => Buffer.from("A;B\n1;2").buffer.slice(0) });
   assert.equal(c.sheets[0].rows.length >= 1, true);
   await assert.rejects(readSpreadsheet({ name: "vecchio.xls", arrayBuffer: async () => new ArrayBuffer(10) }), /\.xlsx oppure CSV/);
-  await assert.rejects(readXlsx(new Uint8Array(100).buffer), /non sembra un \.xlsx/);
+  await assert.rejects(readXlsx(new Uint8Array(100).buffer), /non sembra un documento Office valido/);
 });

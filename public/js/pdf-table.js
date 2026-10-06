@@ -58,9 +58,12 @@ function collect(pages) {
   return all;
 }
 
-/** Righe di tabella di tutto il documento. Toglie i numeri di pagina e le intestazioni ripetute a ogni pagina. */
-export function pagesToRows(pages) {
-  return collect(pages).map((r) => r.cells);
+/**
+ * Righe di tabella di tutto il documento. Toglie i numeri di pagina e le intestazioni ripetute a ogni pagina.
+ * Con `blanks: true` uno spazio verticale insolitamente grande diventa una riga vuota ([]), utile a chiudere i gruppi.
+ */
+export function pagesToRows(pages, { blanks = false } = {}) {
+  return collect(pages).flatMap((r) => [...(blanks && r.blankBefore ? [[]] : []), r.cells]);
 }
 
 /** Righe come testo semplice (celle separate da due spazi). Uno spazio verticale grande diventa una riga vuota. */

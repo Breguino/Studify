@@ -1,0 +1,29 @@
+# Prove a ogni push su main e su ogni pull request: test unitari e build delle tre versioni.
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # i test leggono PDF con pdf.js: serve Node ≥ 22.13
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Build (pagina Claude e versione web)
+        run: npm run build:artifact && npm run build:web
