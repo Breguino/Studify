@@ -112,7 +112,7 @@ export function quizView(exam, query) {
   }
 
   const head = () => h("div", { class: "session-head" },
-    h("a", { class: "muted", href: `#/exam/${exam.id}/today` }, "← Esci"),
+    h("a", { class: "btn ghost small back", href: `#/exam/${exam.id}/today` }, "← Esci"),
     h("div", { class: "row" }, mock ? badge(phase === "review" ? "correzione" : "simulazione", "warn") : null, mock && phase === "answer" ? clock : null,
       h("span", { class: "muted small" }, `${i + 1}/${items.length} · ${mod.topics.find((t) => t.id === items[i].q.topicId)?.title ?? ""}`)));
 
@@ -248,7 +248,7 @@ export function explainView(exam, tid, query) {
       h("p", { class: "muted", style: { margin: 0 } }, oral ? "Immagina di essere all'orale: il docente ti chiede questo argomento. Spiegalo in modo chiaro, senza appunti, in 2-3 minuti." : "Spiega l'argomento con parole tue, come se lo insegnassi a un compagno. Niente appunti: se ti blocchi, quel punto è da ripassare."),
       ta, h("div", {}, h("button", { class: "btn primary", onclick: () => review(t, ta.value) }, "Ho finito: controlla")));
     root.replaceChildren(
-      h("div", { class: "session-head" }, h("a", { class: "muted", href: `#/exam/${exam.id}/today` }, "← Esci"), h("span", { class: "muted small" }, oral ? `Argomento ${i + 1}/${topics.length}` : "Spiegazione")),
+      h("div", { class: "session-head" }, h("a", { class: "btn ghost small back", href: `#/exam/${exam.id}/today` }, "← Esci"), h("span", { class: "muted small" }, oral ? `Argomento ${i + 1}/${topics.length}` : "Spiegazione")),
       card);
     setTimeout(() => ta.focus());
   }
@@ -259,7 +259,7 @@ export function explainView(exam, tid, query) {
     const rv = openReview({ question: `Spiega: ${t.title}`, reference, rubric: points, answer, language: exam.language });
     const last = i === topics.length - 1;
     root.replaceChildren(
-      h("div", { class: "session-head" }, h("a", { class: "muted", href: `#/exam/${exam.id}/today` }, "← Esci"), h("span", { class: "muted small" }, t.title)),
+      h("div", { class: "session-head" }, h("a", { class: "btn ghost small back", href: `#/exam/${exam.id}/today` }, "← Esci"), h("span", { class: "muted small" }, t.title)),
       h("div", { class: "card stack" }, h("h2", { style: { margin: 0 } }, "Confronta con i punti chiave"),
         answer.trim() ? h("div", { class: "callout", style: { background: "var(--surface-2)" } }, h("b", { class: "small" }, "La tua spiegazione"), h("p", { style: { margin: "4px 0 0", whiteSpace: "pre-wrap" } }, answer)) : null,
         rv.el,

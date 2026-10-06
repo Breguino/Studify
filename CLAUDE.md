@@ -41,7 +41,8 @@ Non c'è un sistema di trasformazione (niente Style Dictionary, JSON di token o 
 - Nel CSS usa sempre `var(--token)`, mai esadecimali sparsi. Eccezioni già presenti: `mark.uncertain` e i colori di stampa.
 - Un token nuovo va aggiunto nei **tre** blocchi (chiaro più i due scuri), altrimenti il tema scuro si rompe.
 - **Tipografia**: Figtree variabile (300–900).
-  - Titoli: `h1` `clamp(1.7rem, 4vw, 2.25rem)` peso 800, `letter-spacing: -.02em`; `h2` 1.3rem/800; `h3` 1.08rem/700.
+  - Titoli: `h1` `clamp(1.8rem, 4.2vw, 2.5rem)` peso 800, `letter-spacing: -.03em`; `h2` 1.3rem/800; `h3` 1.08rem/700;
+    tutti con `text-wrap: balance`.
   - Corpo: 16px, `line-height: 1.55`. Testo piccolo: `.small` (.88rem).
 - **Spaziatura**: non ci sono token di spaziatura. I valori ricorrenti sono 4/6/8/10/14/16/20/24 px (`gap`, `padding`).
   Il contenuto è largo al massimo 1120px (`main`), con 24px di margine (16px sul telefono).
@@ -140,7 +141,7 @@ che crea `dist/harness.html`: la pagina Claude con un `window.claude` finto.
 | Carattere Unicode `←` | «← Esci», «← Indietro» |
 | Carattere Unicode `✓` | esame superato: `badge("✓ 28", "good")` |
 | Carattere Unicode `✕` | pulsante di chiusura, sempre con `aria-label="Chiudi"` |
-| CSS `.logo::before` | quadrato del marchio (24px, raggio 7, `--brand`) |
+| CSS `.logo::before` | marchio: quadrato 26px, raggio 8, `--brand`, con il triangolo del token `--logo-glyph` (SVG in data URI); su fondo indaco scuro (`.on-hero`, `web/web.css`) diventa bianco con il triangolo scuro |
 | CSS `li::before` | pallini degli elenchi nella schermata d'accesso |
 
 Se un disegno Figma introduce icone vere, usa SVG in linea con `stroke="currentColor"`, così seguono il colore del testo

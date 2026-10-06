@@ -53,6 +53,9 @@ node scripts/make-assets.mjs   # rigenera web/assets/ (anteprima social e icone)
 **Landing** (`web/landing.html`, `web/landing.css`): pagina statica su `/` (circa 40 KB compressa, senza il codice dell'app),
 con un'unica azione principale «Inizia gratis» → `/app?entra=registrati`. Chi ha già una sessione nel browser vede «Apri Studify».
 Se un link delle email (conferma, recupero password) arriva alla radice invece che su `/app`, la landing lo inoltra all'app.
+La fascia d'apertura indaco scuro (`--hero`, classe `.on-hero` in `web/web.css`) è condivisa con la schermata d'accesso,
+così il passaggio dalla landing alla registrazione resta nello stesso stile; il marchio (quadrato con il triangolo) è lo stesso
+in app, landing, pagine legali e icone.
 
 **Lancio**
 - **Meta e anteprime**: ogni pagina ha titolo, descrizione, canonical, Open Graph e Twitter card con `og.png` (1200×630).
@@ -76,7 +79,7 @@ Se un link delle email (conferma, recupero password) arriva alla radice invece c
 
 | | Come funziona |
 |---|---|
-| Accesso | Supabase Auth: registrazione con conferma dell'email, accesso, password dimenticata, cambio password, uscita, eliminazione dell'account (`web/auth.js`, `web/gate.js`). |
+| Accesso | Supabase Auth: registrazione con conferma dell'email, accesso, password dimenticata, cambio password, uscita, eliminazione dell'account (`web/auth.js`, `web/gate.js`). La schermata è divisa in due: a sinistra il pannello indaco con la presentazione, a destra il modulo; sul telefono il pannello si riduce a intestazione. |
 | Consenso | Alla registrazione sono obbligatorie tre caselle: Termini, Informativa privacy (compreso l'invio dei materiali a Claude negli USA), maggiore età. Versione e data finiscono nei metadati dell'account e nella tabella `consents`. |
 | Dati | Tabella `docs` su Supabase (progetto `studify`, Francoforte), con row level security: ognuno legge e scrive solo le proprie righe. Stesso formato a blocchi della pagina Claude. I file (PDF, foto) restano nel browser (IndexedDB) e si cancellano all'uscita. |
 | Claude | Funzione Vercel `api/claude.js`: verifica il token Supabase, controlla il credito del mese, chiama Claude con la **chiave del gestore** in streaming e registra token e costo (`ai_usage`). Risponde con righe JSON (NDJSON). |

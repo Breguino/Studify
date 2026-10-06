@@ -176,7 +176,7 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
 
     overlay = h("div", { class: "auth-gate", role: "dialog", "aria-modal": "true", "aria-labelledby": "auth-title" },
       h("div", { class: "auth-wrap" },
-        h("section", { class: "auth-pitch" },
+        h("section", { class: "auth-pitch on-hero" },
           h("div", { class: "logo auth-logo" }, "Studify"),
           h("h1", {}, "Prepara gli esami con i tuoi materiali."),
           h("p", {}, "Appunti, dispense, slide, esami passati e quiz del docente diventano argomenti, flashcard, quiz e un piano di studio giorno per giorno fino all'appello."),

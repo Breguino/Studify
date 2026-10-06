@@ -38,7 +38,7 @@ export function groupCard(exam) {
 }
 
 /** Pulsante in home: importa l'esame di un compagno. */
-export function importGroupButton() {
+export function importGroupButton(cls = "btn") {
   const input = h("input", { type: "file", accept: ".json,application/json", hidden: true, onchange: async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -52,7 +52,7 @@ export function importGroupButton() {
     }
     input.value = "";
   } });
-  return [h("button", { class: "btn", onclick: () => input.click() }, "Importa un esame dal gruppo"), input];
+  return [h("button", { class: cls, onclick: () => input.click() }, "Importa un esame dal gruppo"), input];
 }
 
 let round = null; // { examId, items, i, show, ok, review }
