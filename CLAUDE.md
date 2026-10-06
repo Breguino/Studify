@@ -36,6 +36,7 @@ Non c'è un sistema di trasformazione (niente Style Dictionary, JSON di token o 
 | `#15803D` → `#13733A` / `#E8F6EE` | `--good` / `--good-soft` | corretto, superato, materiale ufficiale (scurito per il contrasto: 5,3:1 sul fondo verde) |
 | `#92400E` / `#FEF3E2` | `--warn` / `--warn-soft` | scadenze vicine, avvisi |
 | `#B42318` / `#FDECEA` | `--bad` / `--bad-soft` | errori, «il docente ne parla per l'esame» |
+| `#1E1B4B` (+ `#D9DBF5`, `#B9BCE6`) | `--hero`, `--hero-ink`, `--hero-muted`, `--hero-faint` | fascia indaco scuro, **uguale nei due temi**; fasi su quel fondo: `--hero-learn`, `--hero-warn`, `--hero-good` |
 
 **Regole**
 - Nel CSS usa sempre `var(--token)`, mai esadecimali sparsi. Eccezioni già presenti: `mark.uncertain` e i colori di stampa.
@@ -60,7 +61,7 @@ h("a", { class: "card", href: `#/exam/${e.id}` }, h("h3", {}, e.name), badge("tr
 h("button", { class: "btn primary", onclick: () => save() }, "Salva");
 ```
 
-Altri helper di `ui.js`:
+Altri helper di `ui.js` (anche `icon(nome)`, icone SVG a tratto, e `stepper(n)`):
 - `toast(msg, "ok"|"error")`
 - `bar(valore, { label, tone })`
 - `badge(testo, tone)`
@@ -84,7 +85,11 @@ Altri helper di `ui.js`:
 | `.option` | `.correct`, `.wrong` | risposte del quiz |
 | `.flashcard`, `.grades` | | ripasso |
 | `.modal-backdrop` + `.modal` | | finestre di dialogo |
-| `.empty`, `.file-drop` | | stati vuoti, caricamento file |
+| `.empty`, `.file-drop` | `.file-drop.big` | stati vuoti, caricamento file |
+| `.next-exam`, `.plan-preview` | | fascia indaco (`--hero`): prossimo appello in home, anteprima del piano, modulo pronto |
+| `.stepper` (`stepper(n)` in `ui.js`) | `li.done`, `li.current` | i tre passi del primo esame |
+| `.choices` + `.choice` | `.levels` | scelte a pulsante (radio vere) |
+| `.side-card`, `.quote-card` | | colonna laterale («Oggi», materiali) |
 | layout | `.row`, `.row.between`, `.stack`, `.grid`, `.cols`, `.spacer`, `.form` | flex/grid |
 | testo | `.muted`, `.small`, `.kbd` | |
 
@@ -133,7 +138,7 @@ che crea `dist/harness.html`: la pagina Claude con un `window.claude` finto.
 
 ## 5. Icone
 
-**Non c'è un sistema di icone**: niente icon font, sprite SVG o librerie.
+**Niente icon font, sprite o librerie**: pochi caratteri Unicode e un piccolo insieme di icone SVG a tratto (`icon()` in `ui.js`).
 
 | Glifo o tecnica | Uso |
 |---|---|
@@ -144,8 +149,9 @@ che crea `dist/harness.html`: la pagina Claude con un `window.claude` finto.
 | CSS `.logo::before` | marchio: quadrato 26px, raggio 8, `--brand`, con il triangolo del token `--logo-glyph` (SVG in data URI); su fondo indaco scuro (`.on-hero`, `web/web.css`) diventa bianco con il triangolo scuro |
 | CSS `li::before` | pallini degli elenchi nella schermata d'accesso |
 
-Se un disegno Figma introduce icone vere, usa SVG in linea con `stroke="currentColor"`, così seguono il colore del testo
-e il tema scuro. Nota che `h()` crea elementi HTML, non SVG: per gli SVG serve un helper con `document.createElementNS`.
+Le icone vere sono SVG in linea con `stroke="currentColor"`, così seguono il colore del testo e il tema scuro: `icon(nome, misura)`
+in `ui.js` (upload, check, plus, file, image, mic, web), costruite con `document.createElementNS` perché `h()` crea solo elementi HTML.
+Un'icona nuova è un tracciato in più nell'elenco `ICONS`.
 I pulsanti con solo l'icona hanno sempre un `aria-label` in italiano.
 
 ## 6. Stile

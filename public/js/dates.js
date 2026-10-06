@@ -32,3 +32,16 @@ export function fmtDay(iso) {
   const [, m, d] = iso.split("-").map(Number);
   return `${GIORNI[dow]} ${d} ${MESI[m - 1]}`;
 }
+
+const MESI_LUNGHI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
+const GIORNI_LUNGHI = ["domenica", "lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato"];
+
+/** «lunedì 6 ottobre» */
+export function fmtDayLong(iso) {
+  const dow = new Date(toUTC(iso)).getUTCDay();
+  const [, m, d] = iso.split("-").map(Number);
+  return `${GIORNI_LUNGHI[dow]} ${d} ${MESI_LUNGHI[m - 1]}`;
+}
+
+/** «lun» */
+export const weekdayShort = (iso) => GIORNI[new Date(toUTC(iso)).getUTCDay()];

@@ -63,15 +63,23 @@ export function flashView(exam, query) {
     const card = queue[0];
     const topic = mod.topics.find((t) => t.id === card.topicId);
     const st = exam.srs[card.id];
+    const total = total0 + stats.again;
     root.replaceChildren(
-      h("div", { class: "session-head" }, h("a", { class: "btn ghost small back", href: `#/exam/${exam.id}/today` }, "← Esci"), h("span", { class: "muted small" }, `${queue.length} rimaste · ${topic?.title ?? ""}`)),
-      bar(1 - queue.length / Math.max(total0 + stats.again, 1), { label: "avanzamento sessione" }),
-      h("div", { class: "flashcard", style: { marginTop: "14px" }, "aria-live": "polite" },
-        h("div", {}, h("span", { class: "side" }, "Domanda"), rich(card.front), revealed ? h("div", { style: { marginTop: "18px" } }, h("span", { class: "side" }, "Risposta"), h("div", { class: "answer" }, richParas(card.back))) : null)),
+      h("div", { class: "session-head" }, h("a", { class: "btn ghost small back", href: `#/exam/${exam.id}/today` }, "← Esci"),
+        h("b", { class: "session-title" }, query.get("topic") ? `Flashcard: ${topic?.title ?? ""}` : "Flashcard del giorno"),
+        h("span", { class: "muted small" }, `${queue.length} rimaste`)),
+      bar(1 - queue.length / Math.max(total, 1), { label: "avanzamento sessione" }),
+      h("div", { class: "row between fc-progress" },
+        h("span", {}, `${Math.min(stats.reviewed + 1, total)} di ${total}${topic ? ` · ${topic.title}` : ""}`),
+        stats.reviewed ? h("span", {}, `${stats.reviewed - stats.again} ricordate · ${stats.again} da rivedere`) : null),
+      h("section", { class: `flashcard${revealed ? " revealed" : ""}`, "aria-live": "polite" },
+        h("div", { class: "fc-side" }, h("span", { class: "side" }, "Domanda"), h("div", { class: "fc-front" }, rich(card.front))),
+        revealed ? h("div", { class: "fc-side fc-back" }, h("span", { class: "side" }, "Risposta"), h("div", { class: "answer" }, richParas(card.back))) : null),
       revealed
-        ? h("div", { class: "grades" }, [["Di nuovo", GRADES.AGAIN, "again"], ["Difficile", GRADES.HARD, ""], ["Bene", GRADES.GOOD, "good"], ["Facile", GRADES.EASY, ""]].map(([t, g, c], i) =>
-            h("button", { class: `btn ${c}`, onclick: () => grade(g) }, h("span", {}, `${t} `, h("span", { class: "kbd" }, i + 1)), h("small", {}, fmtInt(nextInterval(st, g))))))
-        : h("div", { style: { marginTop: "14px", textAlign: "center" } }, h("button", { class: "btn primary", onclick: () => { revealed = true; render(); } }, "Mostra risposta ", h("span", { class: "kbd" }, "spazio")),
+        ? h("div", { class: "fc-grade" }, h("p", { class: "muted" }, "Quanto bene te la ricordavi?"),
+            h("div", { class: "grades" }, [["Di nuovo", GRADES.AGAIN, "again"], ["Difficile", GRADES.HARD, ""], ["Bene", GRADES.GOOD, "good"], ["Facile", GRADES.EASY, ""]].map(([t, g, c], i) =>
+              h("button", { class: `btn ${c}`, onclick: () => grade(g) }, h("span", {}, `${t} `, h("span", { class: "kbd" }, i + 1)), h("small", {}, fmtInt(nextInterval(st, g)))))))
+        : h("div", { class: "fc-reveal" }, h("button", { class: "btn primary", onclick: () => { revealed = true; render(); } }, "Mostra risposta ", h("span", { class: "kbd" }, "spazio")),
             h("p", { class: "muted small" }, "Prima prova a rispondere mentalmente (o ad alta voce): è lo sforzo di ricordare che consolida.")),
     );
   }
