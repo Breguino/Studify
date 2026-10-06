@@ -467,6 +467,7 @@ public/js/        logica pura (testata): dates, methods, srs, planner, progress,
                   stato/UI: store (IndexedDB), domain, api, ui, views/*
 public/demo/      modulo demo (Microeconomia)
 test/             node --test: logica pura + client AI con SDK simulato
+demo/             demo guidata (pagina a parte, React + Tailwind): non fa parte dell'app, vedi demo/README.md
 ```
 
 ## Idee per dopo
