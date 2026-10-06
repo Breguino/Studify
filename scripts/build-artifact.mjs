@@ -2,7 +2,7 @@
 // Con --harness crea anche dist/harness.html: la stessa pagina con un `window.claude` finto in memoria,
 // per provarla in un browser normale (non è un artefatto da pubblicare).
 import { build } from "esbuild";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -27,18 +27,26 @@ const swap = {
 };
 
 const entries = web ? [join(ROOT, "web/entry.js")] : harness ? [join(ROOT, "artifact/fake-claude.js"), join(ROOT, "artifact/entry.js")] : [join(ROOT, "artifact/entry.js")];
-const out = await build({
-  stdin: { contents: entries.map((e) => `import ${JSON.stringify(e)};`).join("\n"), resolveDir: ROOT },
+const common = {
   bundle: true,
-  format: "iife",
   minify: true,
   target: "es2020",
-  write: false,
   plugins: [swap],
   legalComments: "none",
   define: { __SUPABASE_URL__: JSON.stringify(SUPABASE_URL), __SUPABASE_KEY__: JSON.stringify(SUPABASE_KEY) },
-});
-const js = out.outputFiles[0].text.replace(/<\/script/gi, "<\\/script");
+};
+let js = "";
+let webEntry = "";
+if (web) {
+  // Versione web: moduli ES divisi in file con l'hash nel nome (cache lunga). pdf.js e KaTeX si scaricano solo quando servono.
+  const JS_DIR = join(ROOT, "dist-web/js");
+  await rm(JS_DIR, { recursive: true, force: true });
+  const res = await build({ ...common, entryPoints: { app: entries[0] }, format: "esm", splitting: true, outdir: JS_DIR, entryNames: "[name]-[hash]", chunkNames: "c-[hash]", metafile: true });
+  webEntry = `/js/${Object.entries(res.metafile.outputs).find(([, o]) => o.entryPoint).at(0).split("/").pop()}`;
+} else {
+  const out = await build({ ...common, stdin: { contents: entries.map((e) => `import ${JSON.stringify(e)};`).join("\n"), resolveDir: ROOT }, format: "iife", write: false });
+  js = out.outputFiles[0].text.replace(/<\/script/gi, "<\\/script");
+}
 // CSS di KaTeX con i font WOFF2 incorporati (la pagina non può caricare font o fogli di stile esterni).
 const KATEX = join(ROOT, "node_modules/katex/dist");
 let katexCss = await readFile(join(KATEX, "katex.min.css"), "utf8");
@@ -52,15 +60,63 @@ const figtreeCss = font("figtree-latin-ext-wght-normal.woff2", "U+0100-02BA,U+02
 const webCss = web ? `\n${await readFile(join(ROOT, "web/web.css"), "utf8")}` : "";
 const css = `${figtreeCss}\n${await readFile(join(ROOT, "public/styles.css"), "utf8")}${webCss}\n${katexCss}`;
 const tpl = await readFile(join(ROOT, web ? "web/template.html" : "artifact/template.html"), "utf8");
-const body = tpl.replace("/*CSS*/", () => css).replace("/*JS*/", () => js);
+const body = web
+  ? tpl.replace("/*CSS*/", () => css).replace(/<script>\s*\/\*JS\*\/\s*<\/script>/, () => `<script type="module" src="${webEntry}"></script>`)
+  : tpl.replace("/*CSS*/", () => css).replace("/*JS*/", () => js);
 
 if (web) {
   const OUT = join(ROOT, "dist-web");
   await mkdir(OUT, { recursive: true });
-  await writeFile(join(OUT, "index.html"), body);
+  // indirizzo pubblico per anteprime social, sitemap e canonical (Vercel lo fornisce durante la build)
+  const SITE = (process.env.STUDIFY_SITE_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "https://studify-beta-dun.vercel.app")).replace(/\/$/, "");
+  // Statistiche di visita: Vercel Web Analytics (senza cookie, script dallo stesso dominio). Solo nelle build su Vercel;
+  // STUDIFY_ANALYTICS=off le spegne, STUDIFY_ANALYTICS=/percorso/script.js usa il percorso mostrato nella dashboard.
+  const A = process.env.STUDIFY_ANALYTICS ?? (process.env.VERCEL ? "/_vercel/insights/script.js" : "off");
+  const analytics = A === "off" ? [] : [
+    "<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>",
+    `<script defer src="${A}"></script>`,
+  ];
+  const esc = (t) => t.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  const head = ({ path, title, description }) => [
+    '<link rel="icon" href="/favicon.svg" type="image/svg+xml">',
+    '<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">',
+    '<link rel="apple-touch-icon" href="/apple-touch-icon.png">',
+    '<link rel="manifest" href="/site.webmanifest">',
+    `<link rel="canonical" href="${SITE}${path}">`,
+    '<meta property="og:type" content="website">',
+    '<meta property="og:locale" content="it_IT">',
+    '<meta property="og:site_name" content="Studify">',
+    `<meta property="og:title" content="${esc(title)}">`,
+    `<meta property="og:description" content="${esc(description)}">`,
+    `<meta property="og:url" content="${SITE}${path}">`,
+    `<meta property="og:image" content="${SITE}/og.png">`,
+    '<meta property="og:image:width" content="1200">',
+    '<meta property="og:image:height" content="630">',
+    '<meta property="og:image:alt" content="Studify: prepara gli esami con i tuoi materiali. Una scheda d\'esame con la preparazione al 42% e una domanda di quiz.">',
+    '<meta name="twitter:card" content="summary_large_image">',
+    ...analytics,
+  ].join("\n");
+  const PAGES = {
+    "/": { title: "Studify — prepara gli esami con i tuoi materiali", description: "Appunti, dispense, slide, esami passati e quiz del docente diventano argomenti, flashcard, quiz e un piano di studio fino all'appello. Gratis, nel browser." },
+    "/app": { title: "Studify — i tuoi esami", description: "Accedi a Studify per studiare con i tuoi materiali del corso." },
+    "/termini.html": { title: "Termini e condizioni — Studify", description: "Termini e condizioni d'uso di Studify." },
+    "/privacy.html": { title: "Informativa privacy — Studify", description: "Informativa privacy di Studify (art. 13 GDPR)." },
+  };
+  const withHead = (html, path) => html.replace("<!--HEAD-->", () => head({ path, ...PAGES[path] }));
+  // immagini statiche (scripts/make-assets.mjs) e file per i motori di ricerca
+  for (const f of ["og.png", "favicon.svg", "favicon.ico", "favicon-32.png", "apple-touch-icon.png", "icon-192.png", "icon-512.png"]) await writeFile(join(OUT, f), readFileSync(join(ROOT, "web/assets", f)));
+  await writeFile(join(OUT, "site.webmanifest"), JSON.stringify({ name: "Studify", short_name: "Studify", lang: "it", start_url: "/app", display: "standalone", background_color: "#f4f5f9", theme_color: "#4338ca", icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }, { src: "/icon-512.png", sizes: "512x512", type: "image/png" }] }, null, 2));
+  await writeFile(join(OUT, "robots.txt"), `User-agent: *\nAllow: /\nDisallow: /app\nDisallow: /api/\n\nSitemap: ${SITE}/sitemap.xml\n`);
+  const today = new Date().toISOString().slice(0, 10);
+  await writeFile(join(OUT, "sitemap.xml"), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${["/", "/termini.html", "/privacy.html"].map((p) => `  <url><loc>${SITE}${p}</loc><lastmod>${today}</lastmod></url>`).join("\n")}\n</urlset>\n`);
+  await writeFile(join(OUT, "app.html"), withHead(body, "/app")); // servita su /app (vercel.json)
+  // landing su /: statica e leggera (niente JS dell'app né KaTeX), con i token e le classi di styles.css
+  const landingCss = `${figtreeCss}\n${await readFile(join(ROOT, "public/styles.css"), "utf8")}\n${await readFile(join(ROOT, "web/web.css"), "utf8")}\n${await readFile(join(ROOT, "web/landing.css"), "utf8")}`;
+  const landing = (await readFile(join(ROOT, "web/landing.html"), "utf8")).replace("/*CSS*/", () => landingCss);
+  await writeFile(join(OUT, "index.html"), withHead(landing, "/"));
   // pagine legali: autonome, stesso stile essenziale
-  for (const page of ["termini.html", "privacy.html"]) await writeFile(join(OUT, page), (await readFile(join(ROOT, "web", page), "utf8")).replace("/*FONT*/", () => figtreeCss));
-  console.log("dist-web/index.html", (body.length / 1024).toFixed(0), "KB");
+  for (const page of ["termini.html", "privacy.html"]) await writeFile(join(OUT, page), withHead((await readFile(join(ROOT, "web", page), "utf8")).replace("/*FONT*/", () => figtreeCss), `/${page}`));
+  console.log("dist-web/app.html", (body.length / 1024).toFixed(0), "KB · index.html (landing)", (landing.length / 1024).toFixed(0), "KB");
   process.exit(0);
 }
 await mkdir(join(ROOT, "dist"), { recursive: true });

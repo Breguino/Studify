@@ -14,7 +14,7 @@ Non c'è un sistema di trasformazione (niente Style Dictionary, JSON di token o 
 :root {
   --bg: #f4f5f9; --surface: #ffffff; --surface-2: #eef0f5; --text: #171a23; --muted: #5b6275;
   --line: #e2e5ee; --line-strong: #d5d9e4; --brand: #4338ca; --brand-ink: #ffffff; --brand-soft: #eef0ff;
-  --good: #15803d; --good-soft: #e8f6ee; --warn: #92400e; --warn-soft: #fef3e2; --bad: #b42318; --bad-soft: #fdecea;
+  --good: #13733a; --good-soft: #e8f6ee; --warn: #92400e; --warn-soft: #fef3e2; --bad: #b42318; --bad-soft: #fdecea;
   --radius: 18px; --shadow: 0 1px 2px rgba(20, 24, 40, .05), 0 6px 20px rgba(20, 24, 40, .05);
   --font: "Figtree Variable", "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
@@ -33,7 +33,7 @@ Non c'è un sistema di trasformazione (niente Style Dictionary, JSON di token o 
 | `#D5D9E4` / `#C9CEDB` | `--line-strong` | bordi di pulsanti e campi, bordi tratteggiati |
 | `#4338CA` | `--brand` | accento: pulsanti primari, link, tab attiva |
 | `#EEF0FF` | `--brand-soft` | sfondo dell'elemento attivo |
-| `#15803D` / `#E8F6EE` | `--good` / `--good-soft` | corretto, superato, materiale ufficiale |
+| `#15803D` → `#13733A` / `#E8F6EE` | `--good` / `--good-soft` | corretto, superato, materiale ufficiale (scurito per il contrasto: 5,3:1 sul fondo verde) |
 | `#92400E` / `#FEF3E2` | `--warn` / `--warn-soft` | scadenze vicine, avvisi |
 | `#B42318` / `#FDECEA` | `--bad` / `--bad-soft` | errori, «il docente ne parla per l'esame» |
 

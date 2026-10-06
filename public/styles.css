@@ -2,7 +2,7 @@
   color-scheme: light;
   --bg: #f4f5f9; --surface: #ffffff; --surface-2: #eef0f5; --text: #171a23; --muted: #5b6275;
   --line: #e2e5ee; --line-strong: #d5d9e4; --brand: #4338ca; --brand-ink: #ffffff; --brand-soft: #eef0ff;
-  --good: #15803d; --good-soft: #e8f6ee; --warn: #92400e; --warn-soft: #fef3e2; --bad: #b42318; --bad-soft: #fdecea;
+  --good: #13733a; --good-soft: #e8f6ee; --warn: #92400e; --warn-soft: #fef3e2; --bad: #b42318; --bad-soft: #fdecea;
   --radius: 18px; --shadow: 0 1px 2px rgba(20, 24, 40, .05), 0 6px 20px rgba(20, 24, 40, .05);
   --font: "Figtree Variable", "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
@@ -135,7 +135,7 @@ table { width: 100%; border-collapse: collapse; } th, td { text-align: left; pad
 
 #toasts { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); display: grid; gap: 8px; z-index: 20; width: min(92vw, 460px); }
 .toast { padding: 11px 16px; border-radius: 12px; background: var(--text); color: var(--bg); box-shadow: var(--shadow); font-weight: 500; }
-.toast.error { background: var(--bad); color: #fff; } .toast.ok { background: var(--good); color: #fff; }
+.toast.error { background: var(--bad); color: var(--brand-ink); } .toast.ok { background: var(--good); color: var(--brand-ink); } /* brand-ink: bianco nel tema chiaro, scuro nel tema scuro (contrasto ≥ 4,5) */
 .spinner { width: 16px; height: 16px; border: 2.5px solid var(--line); border-top-color: var(--brand); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } .bar > div { transition: none; } }
@@ -214,7 +214,7 @@ mark.uncertain { background: #fde68a; color: #1b1f2a; border-radius: 3px; paddin
 .sim-head { position: sticky; top: 56px; z-index: 4; background: var(--bg); padding: 8px 0; margin-bottom: 0; }
 .sim-timer { font-variant-numeric: tabular-nums; font-weight: 700; padding: 4px 12px; border-radius: 999px; background: var(--surface-2); white-space: nowrap; }
 .sim-timer.soon { background: var(--warn-soft); color: var(--warn); }
-.sim-timer.late { background: var(--bad); color: #fff; }
+.sim-timer.late { background: var(--bad); color: var(--brand-ink); }
 .paper-box { overflow-x: auto; overflow-wrap: anywhere; }
 .paper-box table { border-collapse: collapse; } .paper-box th, .paper-box td { border: 1px solid var(--line); padding: 4px 8px; }
 .paper-pdf { width: 100%; height: 75vh; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
