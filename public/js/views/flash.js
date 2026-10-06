@@ -64,7 +64,7 @@ export function flashView(exam, query) {
     const topic = mod.topics.find((t) => t.id === card.topicId);
     const st = exam.srs[card.id];
     root.replaceChildren(
-      h("div", { class: "session-head" }, h("a", { class: "muted", href: `#/exam/${exam.id}/today` }, "← Esci"), h("span", { class: "muted small" }, `${queue.length} rimaste · ${topic?.title ?? ""}`)),
+      h("div", { class: "session-head" }, h("a", { class: "btn ghost small back", href: `#/exam/${exam.id}/today` }, "← Esci"), h("span", { class: "muted small" }, `${queue.length} rimaste · ${topic?.title ?? ""}`)),
       bar(1 - queue.length / Math.max(total0 + stats.again, 1), { label: "avanzamento sessione" }),
       h("div", { class: "flashcard", style: { marginTop: "14px" }, "aria-live": "polite" },
         h("div", {}, h("span", { class: "side" }, "Domanda"), rich(card.front), revealed ? h("div", { style: { marginTop: "18px" } }, h("span", { class: "side" }, "Risposta"), h("div", { class: "answer" }, richParas(card.back))) : null)),

@@ -41,14 +41,16 @@ function examCard(exam) {
   const due = dueCount(exam);
   return h(
     "a",
-    { class: "card stack", href: `#/exam/${exam.id}` },
+    { class: "card stack exam-card", href: `#/exam/${exam.id}` },
     h("div", { class: "row between" }, h("h3", {}, exam.name), badge(dl > 0 ? `tra ${exam.dateTentative ? "~" : ""}${dl} g` : dl === 0 ? "oggi" : "passato", dl <= 3 && dl >= 0 ? "bad" : dl <= 10 ? "warn" : "")),
     h("div", { class: "muted small" }, `${fmtDate(exam.date)}${exam.dateTentative ? " (provvisoria)" : ""}${exam.appelli?.find((a) => a.date === exam.date)?.time ? ` ore ${exam.appelli.find((a) => a.date === exam.date).time}` : ""} · ${EXAM_TYPES[exam.type]}${exam.appelli?.length > 1 ? ` · ${exam.appelli.length} appelli` : ""}`),
     exam.module
       ? h(
           "div",
           { class: "stack", style: { gap: "8px" } },
-          h("div", { class: "progress-line" }, h("span", { class: "small muted" }, "Preparazione"), bar(ready ?? 0, { label: "preparazione stimata" }), h("b", { class: "small" }, pct(ready))),
+          ready == null
+            ? h("div", { class: "small muted" }, "Preparazione: si misura con quiz e flashcard")
+            : h("div", { class: "progress-line" }, h("span", { class: "small muted" }, "Preparazione"), bar(ready, { label: "preparazione stimata" }), h("b", { class: "small" }, pct(ready))),
           h("div", { class: "small muted" }, waiting ? `Studio dal ${fmtDate(plan.start)} (${plan.days.length} giorni)` : todayTasks.length ? `Oggi: ${doneCount}/${todayTasks.length} attività` : "Oggi: nessuna attività", due ? ` · ${due} flashcard da ripassare` : ""),
         )
       : badge("Modulo da creare", "warn"),
@@ -60,7 +62,7 @@ export function homeView() {
   return h(
     "div",
     { class: "stack" },
-    h("div", { class: "row between" }, h("h1", {}, "I tuoi esami"), h("div", { class: "row" }, h("a", { class: "btn", href: "#/import" }, "Importa CSV / Excel"), ...importGroupButton(), h("a", { class: "btn primary", href: "#/new" }, "+ Nuovo esame"))),
+    h("div", { class: "row between page-head" }, h("h1", {}, "I tuoi esami"), h("div", { class: "row" }, h("a", { class: "btn ghost", href: "#/import" }, "Importa CSV / Excel"), ...importGroupButton("btn ghost"), h("a", { class: "btn primary", href: "#/new" }, "+ Nuovo esame"))),
     careerSummary(),
     exams.length
       ? h("div", { class: "grid" }, exams.map(examCard))

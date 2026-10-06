@@ -1,6 +1,5 @@
 /* Solo landing della versione web: si appoggia ai token e alle classi di public/styles.css.
-   La fascia d'apertura è indaco scuro in entrambi i temi (variabili locali, non token globali). */
-.landing { --hero: #1e1b4b; --hero-muted: #d9dbf5; --hero-faint: #b9bce6; }
+   La fascia d'apertura è indaco scuro in entrambi i temi (--hero e .on-hero in web/web.css). */
 html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 .landing main { max-width: none; padding: 0; }
@@ -10,13 +9,10 @@ html { scroll-behavior: smooth; }
 /* apertura scura */
 .hero-band { background: var(--hero); color: #fff; }
 .hero-band .topbar { background: var(--hero); border-bottom: 1px solid rgba(255, 255, 255, .08); }
-.hero-band .logo { color: #fff; }
-.hero-band .logo::before { background: #fff; }
 .hero-band .btn.ghost { color: var(--hero-muted); }
 .hero-band .btn.ghost:hover { background: rgba(255, 255, 255, .1); color: #fff; }
 .hero-band .btn.primary { background: #fff; border-color: #fff; color: var(--hero); }
 .hero-band .btn.primary:hover { filter: none; background: #eef0ff; }
-.hero-band :focus-visible { outline-color: #fff; }
 .hero { display: flex; flex-wrap: wrap; align-items: center; gap: 56px; padding-top: 64px; padding-bottom: 96px; }
 .hero-text { flex: 1 1 460px; min-width: 0; display: grid; gap: 22px; }
 .hero h1 { font-size: clamp(2.4rem, 6vw, 4.25rem); line-height: 1.02; font-weight: 900; letter-spacing: -.04em; margin: 0; }
