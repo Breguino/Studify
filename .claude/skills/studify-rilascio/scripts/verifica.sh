@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
 # Prove automatiche e build di Studify, nell'ordine del controllo «test» di GitHub più la pagina Claude di prova.
-# Uso: bash .claude/skills/studify-rilascio/scripts/verifica.sh [demo]
-#   demo → anche la demo guidata (pnpm check e pnpm build in demo/)
+# Uso: bash .claude/skills/studify-rilascio/scripts/verifica.sh [demo|solo-demo]
+#   demo      → anche la demo guidata (pnpm check e pnpm build in demo/)
+#   solo-demo → soltanto la demo guidata (per modifiche che toccano solo demo/)
 # Si ferma al primo errore. Non sostituisce la prova nel browser.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
+
+if [ "${1:-}" = "solo-demo" ]; then
+  printf '\n== Demo guidata (demo/)\n'
+  (cd demo && pnpm check && pnpm build | tail -1)
+  printf '\n== Tutto a posto. Resta da fare a mano: prova nel browser della demo (computer e 390px, tema scuro).\n'
+  exit 0
+fi
 
 passo() { printf '\n== %s\n' "$1"; }
 

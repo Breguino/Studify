@@ -33,7 +33,8 @@ Esegui lo script della skill, che fa le prove automatiche e le build nell'ordine
 
 ```bash
 bash .claude/skills/studify-rilascio/scripts/verifica.sh        # tutto
-bash .claude/skills/studify-rilascio/scripts/verifica.sh demo   # anche la demo guidata
+bash .claude/skills/studify-rilascio/scripts/verifica.sh demo        # anche la demo guidata
+bash .claude/skills/studify-rilascio/scripts/verifica.sh solo-demo   # solo la demo (modifica che tocca solo demo/)
 ```
 
 Lo script **non sostituisce** la prova nel browser. Per ogni schermata toccata aprila davvero, sul computer e a 390px,
@@ -57,9 +58,12 @@ Una prova che fallisce una volta e passa alla seconda non è «a posto»: riferi
 ## 3. Documentazione
 
 **Pagine legali** (`web/privacy.html`, `web/termini.html`): se cambia il *contenuto* (che dati, per quanto, chi li riceve,
-quali regole), aggiorna anche la data della versione nella pagina e `PRIVACY_VERSION` o `TERMS_VERSION` in `web/gate.js`:
-sono salvati con il consenso di ogni utente, e la versione nuova fa riaccettare chi è già registrato. Per un refuso o una
-correzione di forma **non** toccarli (sarebbe un fastidio senza ragione) e di' all'utente che li hai lasciati invariati.
+quali regole), aggiorna la data della versione nella pagina e `PRIVACY_VERSION` o `TERMS_VERSION` in `web/gate.js`.
+Sappi che cosa fa davvero: la versione viene **solo registrata alla registrazione** (metadati e tabella `consents`), così
+si sa che cosa ha accettato chi si iscrive da ora in poi. **Non** fa riaccettare chi è già iscritto: nel codice non c'è
+nessun confronto tra versione accettata e versione attuale. Quindi, per un cambio di sostanza, di' all'utente che gli
+iscritti vanno avvisati (l'informativa lo promette) e proponi, se serve, una richiesta di riaccettazione nell'app.
+Per un refuso o una correzione di forma non toccare data e versione, e di' che le hai lasciate invariate.
 Se non è chiaro se una modifica è di sostanza, chiedilo: è una scelta legale, non tecnica.
 
 
@@ -69,8 +73,10 @@ Se non è chiaro se una modifica è di sostanza, chiedilo: è una scelta legale,
 
 ## 4. Commit e push
 
-- Branch: quello indicato dalla sessione. Se la PR precedente su quel branch è già stata unita, riparti da `main`:
-  `git fetch origin main && git checkout -B <branch> origin/main` (mai impilare commit su storia già unita).
+- Branch: quello indicato dalla sessione. Se la PR precedente su quel branch è già stata unita, controlla con
+  `git log --oneline origin/main..HEAD` se il branch ha commit **non ancora uniti**:
+  - nessuno → riparti da `main`: `git fetch origin main && git checkout -B <branch> origin/main`;
+  - qualcuno → tienili (ripartire da `main` li cancellerebbe) e di' all'utente che la prossima PR li conterrà.
 - Messaggio in italiano: titolo che dice che cosa cambia per chi usa Studify, poi un elenco breve.
   Chiudi con le righe di attribuzione indicate dal sistema per quella sessione. Mai il nome o l'identificativo del modello.
 - `git push -u origin <branch>`, **sempre con il nome del branch**. Dopo `git checkout -B <branch> origin/main` il branch
