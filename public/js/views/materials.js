@@ -499,7 +499,8 @@ async function generate(exam) {
 
 /** Primo esame: appena il modulo è pronto, se sei ancora su questo esame, si passa al passo 3 (il modulo da controllare). */
 function toReady(exam) {
-  if (exam.onboarding && currentHash().startsWith(`#/exam/${exam.id}`)) go(`#/exam/${exam.id}/pronto`);
+  const [a, id] = currentHash().replace(/^#\/?/, "").split("?")[0].split("/");
+  if (exam.onboarding && a === "exam" && decodeURIComponent(id ?? "") === exam.id) go(`#/exam/${exam.id}/pronto`);
 }
 
 function resetProgress(exam, mod) {

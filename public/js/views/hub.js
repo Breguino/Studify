@@ -8,10 +8,11 @@ import { PHASES } from "../planner.js";
 import { fmtLesson } from "../timetable.js";
 import { clipRich, rich, richParas } from "../math.js";
 import * as store from "../store.js";
-import { badge, bar, emptyState, h, pct } from "../ui.js";
+import { badge, bar, capital, emptyState, h, pct } from "../ui.js";
 import { core } from "../core.js";
 import { firstMaterialsView, materialsTab } from "./materials.js";
 import { examMeta } from "./exam-meta.js";
+import { readyView } from "./ready.js";
 import { methodsTab, progressTab } from "./insights.js";
 import { dispensaTab } from "./dispensa.js";
 import { esamiTab } from "./esami.js";
@@ -39,6 +40,8 @@ export function hubView(exam, tab) {
   if (!TABS.some(([k]) => k === tab)) tab = "today";
   // primo esame, passo 2: finché non c'è il modulo, «Oggi» e «Materiali» sono la pagina dei materiali, senza schede
   if (exam.onboarding && !exam.module && (tab === "today" || tab === "materials")) return firstMaterialsView(exam);
+  // passo 3: se la generazione è finita mentre eri altrove, la prima volta «Oggi» mostra il modulo pronto da controllare
+  if (exam.onboarding && exam.module && tab === "today") return readyView(exam);
   const body = { today: todayTab, materials: materialsTab, module: moduleTab, dispensa: dispensaTab, esami: esamiTab, methods: methodsTab, ricevimento: ricevimentoTab, progress: progressTab }[tab](exam);
   return h(
     "div",
@@ -53,8 +56,6 @@ export function hubView(exam, tab) {
 }
 
 /* --------------------------------- OGGI --------------------------------- */
-
-const capital = (x) => x.charAt(0).toUpperCase() + x.slice(1);
 
 /** Una frase del docente sull'esame da tenere sott'occhio: sull'argomento di adesso, se c'è, altrimenti la prima. */
 function hintFor(exam, task) {
@@ -94,7 +95,6 @@ function todayTab(exam) {
   if (!exam.module)
     return emptyState("Manca il modulo di studio", "Aggiungi i materiali e genera il modulo: da lì costruiamo il piano giorno per giorno.", h("a", { class: "btn primary", href: `#/exam/${exam.id}/materials` }, "Aggiungi materiali"));
   if (daysLeft(exam) <= 0) return h("div", { class: "callout warn" }, daysLeft(exam) === 0 ? "L'esame è oggi: in bocca al lupo! Un ultimo sguardo ai punti deboli, poi niente di nuovo." : "La data d'esame è passata. Puoi modificarla dalle impostazioni dell'esame.");
-  if (exam.onboarding) { exam.onboarding = false; store.save(); } // il piano è stato visto: il primo esame è avviato
 
   const plan = ensurePlan(exam);
   const m = methodsFor(exam);

@@ -67,3 +67,8 @@ test("date per esteso", () => {
   assert.equal(fmtDayLong("2026-11-01"), "domenica 1 novembre");
   assert.equal(weekdayShort("2026-10-05"), "lun");
 });
+
+test("deadlineTone: rosso entro 3 giorni, arancio entro 10", async () => {
+  const { deadlineTone } = await import("../public/js/today.js");
+  assert.deepEqual([0, 3, 4, 10, 11, -1].map(deadlineTone), ["bad", "bad", "warn", "warn", "", ""]);
+});

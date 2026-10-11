@@ -161,7 +161,8 @@ Prove: `test/web.test.js` (funzione, accesso, `sample`, `db`, controlli di regis
    **Il primo esame va in tre passi** (descrivi l'esame, porta i materiali, controlla il modulo), con l'indicatore in alto: finché
    non c'è il modulo la pagina dell'esame è solo quella dei materiali; appena il modulo è pronto si apre il passo 3, con argomenti
    in ordine di importanza e la loro fonte (pagine delle dispense, prove d'esame, domande del docente), che cosa è da verificare
-   e la prima sessione del piano. Da «Inizia oggi» in poi l'esame ha tutte le sue schede.
+   e la prima sessione del piano. Il passo 3 si vede una volta (anche se la generazione finisce mentre sei su un'altra pagina:
+   compare alla prima apertura di «Oggi»); poi l'esame ha tutte le sue schede.
 2. **Porta i materiali**: carica o incolla **libro, slide, dispense, esercizi e appunti** (`.pdf`, `.docx`, `.pptx`, `.txt`, `.md`),
    oppure «Cerca online con l'AI» (ricerca web con fonti e link, che puoi leggere ed eliminare prima di usarla).
    - Ogni materiale ha un **tipo** (indovinato dal nome del file, modificabile) che cambia come l'AI lo usa: gli **appunti** dicono

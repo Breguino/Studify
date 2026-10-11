@@ -4,12 +4,13 @@ import { fmtDate, today } from "../dates.js";
 import { EXAM_TYPES } from "../methods.js";
 import { studyStart, windowDays } from "../workload.js";
 import { badge, h } from "../ui.js";
+import { deadlineTone } from "../today.js";
 
 export function examMeta(exam) {
   const dl = daysLeft(exam);
   const apHere = exam.appelli?.find((a) => a.date === exam.date);
   const others = (exam.appelli ?? []).filter((a) => a.date !== exam.date && a.date >= today());
-  const tone = dl >= 0 && dl <= 3 ? "bad" : dl >= 0 && dl <= 10 ? "warn" : "";
+  const tone = deadlineTone(dl);
   return [
     h("div", { class: "row hub-meta" },
       h("span", { class: "muted" }, `${fmtDate(exam.date)}${exam.dateTentative ? " (data provvisoria)" : ""}${apHere?.time ? ` ore ${apHere.time}` : ""}${apHere?.room ? ` · ${apHere.room}` : ""} · ${EXAM_TYPES[exam.type]}${exam.cfu ? ` · ${exam.cfu} CFU` : ""}`,
