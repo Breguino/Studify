@@ -32,6 +32,8 @@ difetto vero che le prove hanno trovato. Leggilo quando una prova nel browser fa
 
 ## Pubblicazione
 
+- Un `git push` senza nome del branch, dopo aver ricreato il branch da `origin/main`, va su `main`.
+  Indica sempre `origin <branch>`.
 - `expectedHeadSha` del merge vuole lo SHA completo (40 caratteri).
 - La pagina Claude si ripubblica sullo **stesso** indirizzo; un percorso di file diverso crea un artifact nuovo.
 - La demo e la pagina Claude sono private finché l'utente non le condivide: se l'utente vuole mandarle ad altri, diglielo.

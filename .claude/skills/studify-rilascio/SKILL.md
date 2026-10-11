@@ -56,6 +56,13 @@ Una prova che fallisce una volta e passa alla seconda non è «a posto»: riferi
 
 ## 3. Documentazione
 
+**Pagine legali** (`web/privacy.html`, `web/termini.html`): se cambia il *contenuto* (che dati, per quanto, chi li riceve,
+quali regole), aggiorna anche la data della versione nella pagina e `PRIVACY_VERSION` o `TERMS_VERSION` in `web/gate.js`:
+sono salvati con il consenso di ogni utente, e la versione nuova fa riaccettare chi è già registrato. Per un refuso o una
+correzione di forma **non** toccarli (sarebbe un fastidio senza ragione) e di' all'utente che li hai lasciati invariati.
+Se non è chiaro se una modifica è di sostanza, chiedilo: è una scelta legale, non tecnica.
+
+
 - `README.md`: comportamento visibile all'utente (cosa fa una schermata, un comando nuovo).
 - `CLAUDE.md`: regole per chi scrive codice (classi nuove, helper nuovi in `ui.js`, eccezioni alle regole di stile).
 - Aggiornali nello **stesso** commit della modifica, non in un commit successivo «docs».
@@ -66,7 +73,10 @@ Una prova che fallisce una volta e passa alla seconda non è «a posto»: riferi
   `git fetch origin main && git checkout -B <branch> origin/main` (mai impilare commit su storia già unita).
 - Messaggio in italiano: titolo che dice che cosa cambia per chi usa Studify, poi un elenco breve.
   Chiudi con le righe di attribuzione indicate dal sistema per quella sessione. Mai il nome o l'identificativo del modello.
-- `git push -u origin <branch>`. Se fallisce per la rete, riprova fino a 4 volte (2, 4, 8, 16 secondi).
+- `git push -u origin <branch>`, **sempre con il nome del branch**. Dopo `git checkout -B <branch> origin/main` il branch
+  locale ha `main` come destinazione predefinita: un `git push` nudo scriverebbe direttamente su `main`, saltando la PR,
+  e Vercel pubblicherebbe il sito. Il `-u` corregge anche la destinazione predefinita per i push successivi.
+  Se il push fallisce per la rete, riprova fino a 4 volte (2, 4, 8, 16 secondi).
 - Mai `--force`, mai riscrivere la storia di `main`, mai `pkill` (ferma i processi con il loro PID).
 
 ## 5. PR e merge (solo se l'utente lo chiede)
