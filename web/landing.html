@@ -43,28 +43,46 @@
       <p class="hero-note">Gratis, con un limite mensile di uso dell'AI · Nel browser · Dati nell'Unione europea</p>
     </div>
 
-    <div class="countdown" aria-hidden="true">
+    <section class="countdown" id="hero-plan" aria-labelledby="hp-title">
       <div class="cd-top">
         <div>
-          <span class="cd-exam">Microeconomia · scritto + orale</span>
-          <div class="cd-days"><span class="cd-num">21</span><span>giorni all'appello</span></div>
+          <h2 class="cd-exam" id="hp-title">Il piano di un esame d'esempio: Microeconomia</h2>
+          <div class="cd-days" aria-hidden="true"><span class="cd-num" data-hp="days">21</span><span>giorni all'appello</span></div>
         </div>
-        <span class="badge warn">26 ottobre</span>
+        <span class="badge warn" data-hp="date">fra 3 settimane</span>
       </div>
-      <div class="cd-week">
-        <span class="cd-day today"><small>lun</small><b>oggi</b></span>
-        <span class="cd-day"><small>mar</small><b>70′</b></span>
-        <span class="cd-day"><small>mer</small><b>75′</b></span>
-        <span class="cd-day"><small>gio</small><b>70′</b></span>
-        <span class="cd-day"><small>ven</small><b>70′</b></span>
-        <span class="cd-day exam"><small>sab</small><b>prova</b></span>
+      <div class="cd-controls" data-hp="controls" hidden>
+        <label class="cd-range"><span>Esame tra <output data-hp="days-out">21 giorni</output></span>
+          <input type="range" min="5" max="60" value="21" data-hp="days-in"></label>
+        <fieldset class="cd-hours">
+          <legend>Ore al giorno</legend>
+          <div class="choices">
+            <label class="choice"><input type="radio" name="hp-hours" value="1"><span>1</span></label>
+            <label class="choice"><input type="radio" name="hp-hours" value="1.5"><span>1,5</span></label>
+            <label class="choice"><input type="radio" name="hp-hours" value="2" checked><span>2</span></label>
+            <label class="choice"><input type="radio" name="hp-hours" value="3"><span>3</span></label>
+          </div>
+        </fieldset>
       </div>
-      <div class="cd-today">
-        <span class="cd-label">Oggi · 50 minuti</span>
-        <div class="cd-task"><b>Flashcard del giorno</b><span>15′ · 18 carte</span></div>
-        <div class="cd-task"><b>Monopolio: prima lettura</b><span>35′ · dispensa p. 41</span></div>
+      <div class="cd-phases" data-hp="phases" aria-hidden="true"></div>
+      <div class="cd-week" data-hp="week" aria-hidden="true">
+        <span class="cd-day today"><small>oggi</small><b>50′</b></span>
+        <span class="cd-day"><small>+1</small><b>70′</b></span>
+        <span class="cd-day"><small>+2</small><b>75′</b></span>
+        <span class="cd-day"><small>+3</small><b>70′</b></span>
+        <span class="cd-day"><small>+4</small><b>70′</b></span>
+        <span class="cd-day"><small>+5</small><b>70′</b></span>
       </div>
-    </div>
+      <div class="cd-today" aria-hidden="true">
+        <span class="cd-label" data-hp="today-label">Oggi · 50 minuti</span>
+        <div data-hp="tasks" class="cd-tasks">
+          <div class="cd-task"><b>Flashcard del giorno</b><span>15′</span></div>
+          <div class="cd-task"><b>Studia: Domanda, offerta ed equilibrio</b><span>35′</span></div>
+        </div>
+      </div>
+      <p class="visually-hidden" aria-live="polite" data-hp="summary"></p>
+      <p class="cd-note">Calcolato come nell'app, con gli argomenti dell'esame d'esempio. Con i tuoi materiali, gli argomenti sono i tuoi.</p>
+    </section>
   </section>
 </div>
 
@@ -200,5 +218,25 @@
     watched.forEach((el) => io.observe(el));
   })();
 </script>
+<script>
+  // Entrata delle sezioni allo scorrimento (CSS in landing.css): si marcano i blocchi sotto la prima schermata,
+  // e ciascuno compare quando entra in vista. Chi ha chiesto meno movimento li vede subito.
+  (() => {
+    if (!("IntersectionObserver" in window) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const groups = [".section > .kicker, .section > .section-title, .section > .section-lead", ".steps > *", ".methods > *", ".split > *", ".faq > details", ".cta-band"];
+    const els = [];
+    for (const sel of groups) document.querySelectorAll(sel).forEach((el, i) => { el.style.setProperty("--i", String(Math.min(i, 5))); els.push(el); });
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+    }, { rootMargin: "0px 0px -8% 0px" });
+    for (const el of els) {
+      if (el.getBoundingClientRect().top < innerHeight) continue; // già in vista: resta com'è
+      el.dataset.reveal = "";
+      io.observe(el);
+    }
+    document.documentElement.classList.add("reveal");
+  })();
+</script>
+<script>/*HERO_PLAN*/</script>
 </body>
 </html>

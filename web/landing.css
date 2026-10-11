@@ -38,6 +38,28 @@ html { scroll-behavior: smooth; }
 .cd-label { font-size: .82rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .cd-task { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); }
 .cd-task span { color: var(--muted); white-space: nowrap; }
+h2.cd-exam { margin: 0; line-height: 1.3; }
+.cd-num { font-variant-numeric: tabular-nums; }
+/* scheda interattiva (web/landing-plan.js): senza JavaScript restano i valori d'esempio, senza comandi */
+.cd-controls { display: grid; gap: 14px; padding: 16px; border-radius: 16px; background: var(--surface-2); }
+.cd-range { display: grid; gap: 6px; font-weight: 600; font-size: .95rem; }
+.cd-range output { font-weight: 800; color: var(--brand); }
+.cd-range input { width: 100%; min-height: 44px; padding: 0; border: 0; background: none; box-shadow: none; accent-color: var(--brand); cursor: pointer; }
+.cd-hours { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 8px; }
+.cd-hours legend { padding: 0; margin-bottom: 8px; font-weight: 600; font-size: .95rem; }
+.cd-hours .choices { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.cd-hours .choice { justify-content: center; padding: 0 8px; }
+.cd-phases { display: grid; gap: 10px; }
+.cd-phases .phase-bar span { transition: flex-grow .35s ease; }
+.cd-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .85rem; color: var(--muted); }
+.cd-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.cd-legend li::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--phase); }
+.cd-legend b { color: var(--text); font-variant-numeric: tabular-nums; }
+.cd-day[data-phase] { box-shadow: inset 0 -3px 0 var(--phase); }
+.cd-day b { font-variant-numeric: tabular-nums; }
+.cd-tasks { display: grid; gap: 10px; }
+.cd-task b { min-width: 0; overflow-wrap: anywhere; }
+.cd-note { margin: 0; font-size: .85rem; color: var(--muted); }
 
 /* materiali */
 .chips-band { background: var(--surface); border-bottom: 1px solid var(--line); }
@@ -134,3 +156,11 @@ html { scroll-behavior: smooth; }
   .sticky-cta:not([hidden]) { animation: sticky-in .2s ease-out; }
 }
 @keyframes sticky-in { from { transform: translateY(100%); } }
+
+/* Entrata allo scorrimento: solo con JavaScript (html.reveal, script in landing.html) e se non hai chiesto meno movimento.
+   Senza, tutto è visibile da subito; in stampa pure. */
+@media (prefers-reduced-motion: no-preference) {
+  html.reveal [data-reveal] { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s cubic-bezier(.2, .7, .2, 1); transition-delay: calc(var(--i, 0) * 70ms); }
+  html.reveal [data-reveal].in { opacity: 1; transform: none; }
+}
+@media print { html.reveal [data-reveal] { opacity: 1 !important; transform: none !important; } }

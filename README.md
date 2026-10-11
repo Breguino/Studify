@@ -52,6 +52,11 @@ node scripts/make-assets.mjs   # rigenera web/assets/ (anteprima social e icone)
 
 **Landing** (`web/landing.html`, `web/landing.css`): pagina statica su `/` (circa 45 KB compressa, senza il codice dell'app),
 con un'unica azione principale «Inizia gratis» → `/app?entra=registrati`. Chi ha già una sessione nel browser vede «Apri Studify».
+La scheda in cima è un **piano vero**: scegli fra quanti giorni c'è l'esame (5–60) e quante ore al giorno, e vedi le fasi,
+i prossimi giorni con le date di oggi e la sessione di oggi. Li calcola `buildPlan`, lo stesso dell'app, con gli argomenti
+dell'esame demo (`web/landing-plan.js`, provato in `test/landing.test.js`; la build lo incorpora nella pagina, circa 3 KB compressi).
+Senza JavaScript restano i valori d'esempio, senza comandi. Scorrendo, le sezioni entrano con una breve dissolvenza; chi ha chiesto
+meno movimento le vede subito, e ciò che è già in vista all'apertura non si nasconde mai.
 Sul telefono (sotto 680px), quando i pulsanti in cima escono dallo schermo, compare lo stesso invito fisso in basso; sparisce
 davanti all'invito finale e al piè di pagina, per non coprirli.
 Se un link delle email (conferma, recupero password) arriva alla radice invece che su `/app`, la landing lo inoltra all'app.
