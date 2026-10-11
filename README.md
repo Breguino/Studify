@@ -91,7 +91,7 @@ in app, landing, pagine legali e icone.
 | Dati | Tabella `docs` su Supabase (progetto `studify`, Francoforte), con row level security: ognuno legge e scrive solo le proprie righe. Stesso formato a blocchi della pagina Claude. I file (PDF, foto) restano nel browser (IndexedDB) e si cancellano all'uscita. |
 | Claude | Funzione Vercel `api/claude.js`: verifica il token Supabase, controlla il credito del mese, chiama Claude con la **chiave del gestore** in streaming e registra token e costo (`ai_usage`). Risponde con righe JSON (NDJSON). |
 | Limiti di spesa | Per utente (`USER_MONTHLY_LIMIT_USD`, predefinito 3 $) e complessivo (`TOTAL_MONTHLY_LIMIT_USD`, predefinito 30 $) al mese. |
-| Pagine legali | `web/termini.html`, `web/privacy.html`: **bozze con segnaposto** ([NOME COGNOME], [INDIRIZZO], [EMAIL DI CONTATTO], [DA VERIFICARE]) da far rivedere a un legale prima dell'apertura al pubblico. |
+| Pagine legali | `web/termini.html`, `web/privacy.html`: **bozze con segnaposto** ([INDIRIZZO], [DA VERIFICARE]; titolare Angelo Bregu, info.studify@gmail.com) da far rivedere a un legale prima dell'apertura al pubblico. |
 
 **Variabili d'ambiente su Vercel**
 
