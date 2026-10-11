@@ -122,3 +122,15 @@ html { scroll-behavior: smooth; }
   .cta-band { padding: 32px 22px; }
   .cta-band .btn { flex: 1 1 100%; }
 }
+
+/* Telefono: invito fisso in basso (compare quando i pulsanti in cima escono dallo schermo; script in landing.html) */
+.sticky-cta { display: none; }
+@media (max-width: 680px) {
+  .sticky-cta:not([hidden]) { display: flex; position: fixed; inset: auto 0 0; z-index: 20; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--surface) 92%, transparent); border-top: 1px solid var(--line); backdrop-filter: blur(8px); }
+  .sticky-cta .btn { flex: 1; }
+  .sticky-cta .btn[hidden] { display: none; }
+}
+@media (max-width: 680px) and (prefers-reduced-motion: no-preference) {
+  .sticky-cta:not([hidden]) { animation: sticky-in .2s ease-out; }
+}
+@keyframes sticky-in { from { transform: translateY(100%); } }

@@ -45,13 +45,15 @@ I moduli `public/js/api.js` e `public/js/backend.js` vengono sostituiti da `arti
 Per aprire Studify ad altri studenti, con registrazione e accesso:
 
 ```
-npm run build:web          # crea dist-web/: index.html (landing), app.html (servita su /app), js/, termini.html, privacy.html,
+npm run build:web          # crea dist-web/: index.html (landing), app.html (servita su /app), js/, termini.html, privacy.html, 404.html,
                            # icone, og.png, robots.txt, sitemap.xml, site.webmanifest
 node scripts/make-assets.mjs   # rigenera web/assets/ (anteprima social e icone): serve Playwright, solo se cambia il marchio
 ```
 
 **Landing** (`web/landing.html`, `web/landing.css`): pagina statica su `/` (circa 45 KB compressa, senza il codice dell'app),
 con un'unica azione principale «Inizia gratis» → `/app?entra=registrati`. Chi ha già una sessione nel browser vede «Apri Studify».
+Sul telefono (sotto 680px), quando i pulsanti in cima escono dallo schermo, compare lo stesso invito fisso in basso; sparisce
+davanti all'invito finale e al piè di pagina, per non coprirli.
 Se un link delle email (conferma, recupero password) arriva alla radice invece che su `/app`, la landing lo inoltra all'app.
 La fascia d'apertura indaco scuro (`--hero`, classe `.on-hero` in `web/web.css`) è condivisa con la schermata d'accesso,
 così il passaggio dalla landing alla registrazione resta nello stesso stile; il marchio (quadrato con il triangolo) è lo stesso
@@ -62,6 +64,11 @@ in app, landing, pagine legali e icone.
   L'indirizzo pubblico viene da `STUDIFY_SITE_URL` oppure da `VERCEL_PROJECT_PRODUCTION_URL`. `/app` ha `noindex`.
 - **Icone**: `favicon.svg`, `favicon.ico`, `favicon-32.png`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `site.webmanifest`.
 - **Motori di ricerca**: `robots.txt` (esclude `/app` e `/api/`) e `sitemap.xml` con le tre pagine pubbliche.
+- **Pagina 404** (`web/404.html`, `noindex`): Vercel la serve per ogni indirizzo che non esiste, con i link all'app e alla home.
+- **Moduli d'accesso**: i campi sbagliati diventano rossi (`aria-invalid`, collegati al messaggio d'errore) e il cursore va sul primo;
+  durante l'invio il modulo è bloccato e il pulsante dice che cosa sta succedendo («Accesso in corso…», «Creazione dell'account…»).
+  Dopo la registrazione il messaggio «Ti abbiamo mandato un'email…» fa da pagina di ringraziamento, e alla conferma l'app saluta
+  con «Email confermata: benvenuto in Studify!».
 - **Statistiche di visita**: Vercel Web Analytics, senza cookie, con lo script servito dallo stesso dominio. Lo script è incluso solo
   nelle build su Vercel; va attivato in *Analytics* sulla dashboard. Con `STUDIFY_ANALYTICS=off` si spegne; con
   `STUDIFY_ANALYTICS=/percorso/script.js` si usa il percorso indicato dalla dashboard, se diverso.

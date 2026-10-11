@@ -163,6 +163,10 @@ textarea { min-height: 130px; resize: vertical; }
 input[type=range] { padding: 0; }
 input[type=checkbox], input[type=radio] { width: auto; min-height: 0; accent-color: var(--brand); }
 input:focus, select:focus, textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 18%, transparent); outline: none; }
+/* campi sbagliati nei moduli (aria-invalid): bordo e anello rossi; caselle con la scritta in rosso */
+input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--bad); box-shadow: 0 0 0 3px var(--bad-soft); }
+label.check:has(input[aria-invalid="true"]) > span { color: var(--bad); }
+form[aria-busy="true"] { cursor: progress; }
 ::selection { background: color-mix(in srgb, var(--brand) 24%, transparent); }
 .form { display: grid; gap: 16px; max-width: 640px; }
 .cols { align-items: start; display: grid; gap: 14px; grid-template-columns: 1fr 1fr; } @media (max-width: 560px) { .cols { grid-template-columns: 1fr; } }

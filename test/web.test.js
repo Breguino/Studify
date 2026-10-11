@@ -5,7 +5,7 @@ import { EventEmitter } from "node:events";
 import { HttpError, claudeErrorCode, costUsd, createHandler, messageParams, readBody } from "../api/_lib.js";
 import { authError, createAuth, parseAuthHash } from "../web/auth.js";
 import { createDb, createSample, parseJsonText } from "../web/claude.js";
-import { initialMode, looksLikeBot, MIN_FILL_MS, signupProblems } from "../web/gate.js";
+import { initialMode, looksLikeBot, MIN_FILL_MS, signupInvalid, signupProblems } from "../web/gate.js";
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const ENV = { SUPABASE_URL: "https://sb.test", SUPABASE_KEY: "pk", ANTHROPIC_API_KEY: "sk-test", USER_MONTHLY_LIMIT_USD: "3", TOTAL_MONTHLY_LIMIT_USD: "30" };
@@ -362,4 +362,13 @@ test("anti-spam: campo trappola compilato o invio troppo rapido", () => {
   assert.equal(looksLikeBot({ honeypot: "http://spam.example", elapsedMs: 8000 }), true);
   assert.equal(looksLikeBot({ honeypot: "", elapsedMs: 300 }), true, "modulo inviato in 0,3 secondi");
   assert.equal(looksLikeBot({ honeypot: "  ", elapsedMs: MIN_FILL_MS }), false, "spazi: non conta, e il limite è incluso");
+});
+
+test("modulo di registrazione: campi da segnare in rosso, nell'ordine del modulo", () => {
+  const ok = { email: "a@b.it", password: "password1", terms: true, privacy: true, adult: true };
+  assert.deepEqual(signupInvalid(ok), []);
+  assert.deepEqual(signupInvalid({ ...ok, email: "a@b", adult: false }), ["email", "adult"]);
+  assert.deepEqual(signupInvalid({ ...ok, password: "solamentelettere" }), ["password"]);
+  assert.deepEqual(signupInvalid({}), ["email", "password", "terms", "privacy", "adult"]);
+  for (const v of [ok, { ...ok, email: "" }, { ...ok, password: "corta1", terms: false }, {}]) assert.equal(signupInvalid(v).length, signupProblems(v).length, "un campo per ogni errore");
 });

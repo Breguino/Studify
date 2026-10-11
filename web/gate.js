@@ -23,6 +23,17 @@ export function signupProblems({ email, password, terms, privacy, adult }) {
   return out;
 }
 
+/** I campi del modulo di registrazione da segnare come sbagliati, nell'ordine in cui compaiono (puro, testato). */
+export function signupInvalid({ email, password, terms, privacy, adult }) {
+  return [
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email ?? "") && "email",
+    ((password ?? "").length < MIN_PASSWORD || !/[a-zA-Z]/.test(password) || !/\d/.test(password)) && "password",
+    !terms && "terms",
+    !privacy && "privacy",
+    !adult && "adult",
+  ].filter(Boolean);
+}
+
 /** beforeLeave({ save }): prima di uscire o eliminare l'account (salva le modifiche in sospeso, poi blocca le scritture); { undo } le riattiva. */
 /**
  * Anti-spam leggero del modulo di registrazione: campo trappola compilato (le persone non lo vedono) o invio
@@ -62,12 +73,23 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
 
   function show(mode = "login", { notice = "", email = "" } = {}) {
     overlay?.remove();
-    const status = h("div", { class: "auth-status", role: "status", "aria-live": "polite" });
+    const status = h("div", { class: "auth-status", id: "auth-status", role: "status", "aria-live": "polite" });
     const say = (msg, kind = "bad") => {
       status.replaceChildren(msg ? h("div", { class: `callout ${kind}` }, msg) : "");
     };
-    const busy = (form, on) => {
+    /** Campi sbagliati: bordo rosso, collegati al messaggio d'errore, e il cursore sul primo. */
+    const markInvalid = (form, names = []) => {
+      for (const el of form.querySelectorAll("[aria-invalid]")) { el.removeAttribute("aria-invalid"); el.removeAttribute("aria-describedby"); }
+      for (const n of names) { const el = form.elements[n]; if (el) { el.setAttribute("aria-invalid", "true"); el.setAttribute("aria-describedby", "auth-status"); } }
+      form.elements[names[0]]?.focus();
+    };
+    /** In attesa: tutto bloccato e il pulsante dice che cosa sta succedendo. */
+    const busy = (form, on, label = "Attendi…") => {
       for (const b of form.querySelectorAll("button, input")) b.disabled = on;
+      const submit = form.querySelector("button[type=submit]");
+      submit.dataset.label ??= submit.textContent;
+      submit.textContent = on ? label : submit.dataset.label;
+      form.setAttribute("aria-busy", String(on));
     };
     const emailInput = () => h("input", { type: "email", name: "email", autocomplete: "email", required: true, value: email, inputmode: "email" });
     const pwd = (autocomplete) => h("input", { type: "password", name: "password", autocomplete, required: true, minlength: MIN_PASSWORD });
@@ -79,7 +101,10 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
         h("button", { class: "btn ghost small", type: "button", onclick: () => show("recover", { email: form.email.value }) }, "Password dimenticata?"));
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
-        busy(form, true);
+        const empty = ["email", "password"].filter((n) => !form.elements[n].value.trim());
+        markInvalid(form, empty);
+        if (empty.length) return say("Inserisci email e password.");
+        busy(form, true, "Accesso in corso…");
         try {
           await auth.signIn({ email: form.email.value.trim(), password: form.password.value });
           await signedIn();
@@ -107,12 +132,13 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
         e.preventDefault();
         const v = { email: form.email.value.trim(), password: form.password.value, terms: form.terms.checked, privacy: form.privacy.checked, adult: form.adult.checked };
         const problems = signupProblems(v);
+        markInvalid(form, signupInvalid(v));
         if (problems.length) return say(h("ul", {}, ...problems.map((p) => h("li", {}, p))));
         if (looksLikeBot({ honeypot: form.website.value, elapsedMs: Date.now() - shownAt })) {
           // al bot si risponde come a una persona, senza chiamare Supabase
           return show("login", { email: v.email, notice: `Ti abbiamo mandato un'email a ${v.email}: apri il link per attivare l'account, poi accedi. Non la trovi? Controlla anche nello spam.` });
         }
-        busy(form, true);
+        busy(form, true, "Creazione dell'account…");
         try {
           const { confirm } = await auth.signUp({
             email: v.email,
@@ -136,7 +162,10 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
         h("button", { class: "btn ghost small", type: "button", onclick: () => show("login", { email: form.email.value }) }, "Torna all'accesso"));
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
-        busy(form, true);
+        const bad = !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.value.trim());
+        markInvalid(form, bad ? ["email"] : []);
+        if (bad) return say("Inserisci un indirizzo email valido.");
+        busy(form, true, "Invio in corso…");
         try {
           await auth.recover({ email: form.email.value.trim(), redirectTo: redirectTo() });
           say("Se l'indirizzo è registrato, riceverai a breve un'email con il link.", "good");
@@ -153,8 +182,10 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const p = form.password.value;
-        if (p.length < MIN_PASSWORD || !/[a-zA-Z]/.test(p) || !/\d/.test(p)) return say(`Almeno ${MIN_PASSWORD} caratteri, con lettere e numeri.`);
-        busy(form, true);
+        const bad = p.length < MIN_PASSWORD || !/[a-zA-Z]/.test(p) || !/\d/.test(p);
+        markInvalid(form, bad ? ["password"] : []);
+        if (bad) return say(`Almeno ${MIN_PASSWORD} caratteri, con lettere e numeri.`);
+        busy(form, true, "Salvataggio…");
         try {
           await auth.updatePassword(p);
           toast("Password aggiornata.", "ok");

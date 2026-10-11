@@ -101,6 +101,7 @@ if (web) {
     "/app": { title: "Studify — i tuoi esami", description: "Accedi a Studify per studiare con i tuoi materiali del corso." },
     "/termini.html": { title: "Termini e condizioni — Studify", description: "Termini e condizioni d'uso di Studify." },
     "/privacy.html": { title: "Informativa privacy — Studify", description: "Informativa privacy di Studify (art. 13 GDPR)." },
+    "/404.html": { title: "Pagina non trovata — Studify", description: "Questa pagina di Studify non esiste." },
   };
   const withHead = (html, path) => html.replace("<!--HEAD-->", () => head({ path, ...PAGES[path] }));
   // immagini statiche (scripts/make-assets.mjs) e file per i motori di ricerca
@@ -114,8 +115,8 @@ if (web) {
   const landingCss = `${figtreeCss}\n${await readFile(join(ROOT, "public/styles.css"), "utf8")}\n${await readFile(join(ROOT, "web/web.css"), "utf8")}\n${await readFile(join(ROOT, "web/landing.css"), "utf8")}`;
   const landing = (await readFile(join(ROOT, "web/landing.html"), "utf8")).replace("/*CSS*/", () => landingCss);
   await writeFile(join(OUT, "index.html"), withHead(landing, "/"));
-  // pagine legali: autonome, stesso stile essenziale
-  for (const page of ["termini.html", "privacy.html"]) await writeFile(join(OUT, page), withHead((await readFile(join(ROOT, "web", page), "utf8")).replace("/*FONT*/", () => figtreeCss), `/${page}`));
+  // pagine legali e pagina 404 (Vercel la serve per ogni indirizzo che non esiste): autonome, stesso stile essenziale
+  for (const page of ["termini.html", "privacy.html", "404.html"]) await writeFile(join(OUT, page), withHead((await readFile(join(ROOT, "web", page), "utf8")).replace("/*FONT*/", () => figtreeCss), `/${page}`));
   console.log("dist-web/app.html", (body.length / 1024).toFixed(0), "KB · index.html (landing)", (landing.length / 1024).toFixed(0), "KB");
   process.exit(0);
 }
