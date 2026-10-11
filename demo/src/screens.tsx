@@ -39,6 +39,8 @@ const card = "rounded-card border border-line bg-surface shadow-card";
 /* ------------------------------ 1. descrivi l'esame ------------------------------ */
 
 export function ExamScreen({ exam, setExam, go }: Shared) {
+  const [nameError, setNameError] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
   const ph = splitPhases(exam.days);
   const parts = ([["learn", ph.learn], ["consolidate", ph.consolidate], ["simulate", ph.sim], ["light", ph.light]] as [Phase, number][]).filter(([, n]) => n > 0);
   const date = addDays(new Date(), exam.days);
@@ -50,15 +52,23 @@ export function ExamScreen({ exam, setExam, go }: Shared) {
         <p className={lead}>Bastano data, tipo di prova e il tempo che hai: il piano parte da qui e si affina con i materiali.</p>
       </div>
       <div className="flex flex-wrap items-start gap-5">
-        <form className={cn(card, "grid min-w-0 flex-[999_1_420px] gap-5 p-5 sm:p-6")} onSubmit={(e) => { e.preventDefault(); go(1); }}>
+        <form className={cn(card, "grid min-w-0 flex-[999_1_420px] gap-5 p-5 sm:p-6")} noValidate onSubmit={(e) => {
+          e.preventDefault();
+          if (!exam.name.trim()) { setNameError(true); nameRef.current?.focus(); return; }
+          go(1);
+        }}>
           <label htmlFor="exam-name" className="grid gap-1.5 text-[.92rem] font-semibold">
             Insegnamento / esame
-            <input id="exam-name" value={exam.name} onChange={(e) => setExam({ ...exam, name: e.target.value })}
-              className="min-h-[44px] rounded-ctl border border-line-strong bg-surface px-3 text-[1rem] font-normal text-text focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/20" />
+            <input id="exam-name" ref={nameRef} value={exam.name} required placeholder="es. Microeconomia"
+              aria-invalid={nameError || undefined} aria-describedby={nameError ? "exam-name-error" : undefined}
+              onChange={(e) => { setExam({ ...exam, name: e.target.value }); if (e.target.value.trim()) setNameError(false); }}
+              className={cn("min-h-[44px] rounded-ctl border bg-surface px-3 text-[1rem] font-normal text-text focus:outline-none focus:ring-4",
+                nameError ? "border-bad ring-4 ring-bad-soft focus:ring-bad-soft" : "border-line-strong focus:border-brand focus:ring-brand/20")} />
+            {nameError ? <span id="exam-name-error" role="alert" className="text-[.88rem] font-semibold text-bad">Scrivi il nome dell'esame: serve per il modulo e per il piano.</span> : null}
           </label>
           <div className="grid gap-2">
             <label htmlFor="exam-days" className="text-[.92rem] font-semibold">Quando è l'appello?</label>
-            <input id="exam-days" type="range" min={5} max={45} value={exam.days} onChange={(e) => setExam({ ...exam, days: Number(e.target.value) })} className="w-full accent-brand" />
+            <input id="exam-days" type="range" min={5} max={45} value={exam.days} onChange={(e) => setExam({ ...exam, days: Number(e.target.value) })} className="h-11 w-full cursor-pointer accent-brand" />
             <span className="text-[.95rem]"><b>tra {exam.days} giorni</b> <span className="text-muted">· {fmtLong(date)}</span></span>
           </div>
           <Choices name="exam-type" legend="Tipo di prova" value={exam.type} onChange={(type) => setExam({ ...exam, type })}
@@ -316,10 +326,12 @@ export function TodayScreen({ exam, done, toggle, scores, go }: Shared) {
                 return (
                   <li key={t.id} className={cn("flex flex-wrap items-center gap-x-3 gap-y-2 rounded-row border px-4 py-3.5 transition-colors",
                     isDone ? "border-transparent bg-good-soft" : now ? "border-[1.5px] border-brand bg-surface shadow-[0_6px_18px_hsl(var(--brand)/.14)]" : "border-line bg-surface")}>
-                    <Checkbox id={`t-${t.id}`} checked={isDone} onCheckedChange={(v) => toggle(t.id, v === true)} aria-label={`Segna «${t.title}» come fatto`}
-                      className={cn("h-[22px] w-[22px] rounded-[6px] border-line-strong", isDone && "border-good data-[state=checked]:bg-good")} />
+                    <span className="-m-2.5 grid h-11 w-11 flex-none cursor-pointer place-items-center" onClick={(e) => { if (e.target === e.currentTarget) toggle(t.id, !isDone); }}>
+                      <Checkbox id={`t-${t.id}`} checked={isDone} onCheckedChange={(v) => toggle(t.id, v === true)} aria-label={`Segna «${t.title}» come fatto`}
+                        className={cn("h-6 w-6 rounded-[6px] border-line-strong", isDone && "border-good data-[state=checked]:bg-good")} />
+                    </span>
                     <div className="grid min-w-0 flex-[1_1_180px] gap-1">
-                      {now ? <span className="text-[.72rem] font-extrabold uppercase tracking-[.07em] text-brand">Adesso</span> : null}
+                      {now ? <span className="text-[.75rem] font-extrabold uppercase tracking-[.07em] text-brand">Adesso</span> : null}
                       <label htmlFor={`t-${t.id}`} className={cn("cursor-pointer font-semibold", now && "text-[1.05rem]", isDone && "line-through decoration-good/50")}>{t.title}</label>
                       <div className="flex flex-wrap gap-1.5"><Pill tone={now ? "brand" : ""}>{t.method}</Pill></div>
                     </div>
