@@ -113,7 +113,13 @@ if (web) {
   await writeFile(join(OUT, "app.html"), withHead(body, "/app")); // servita su /app (vercel.json)
   // landing su /: statica e leggera (niente JS dell'app né KaTeX), con i token e le classi di styles.css
   const landingCss = `${figtreeCss}\n${await readFile(join(ROOT, "public/styles.css"), "utf8")}\n${await readFile(join(ROOT, "web/web.css"), "utf8")}\n${await readFile(join(ROOT, "web/landing.css"), "utf8")}`;
-  const landing = (await readFile(join(ROOT, "web/landing.html"), "utf8")).replace("/*CSS*/", () => landingCss);
+  // scheda in cima: il piano vero (web/landing-plan.js), con gli argomenti dell'esame demo ridotti a ciò che serve al piano
+  const demoTopics = JSON.parse(await readFile(join(ROOT, "public/demo/module.json"), "utf8")).topics.map(({ id, title, importance, difficulty }) => ({ id, title, importance, difficulty }));
+  const heroPlan = (await build({
+    stdin: { contents: `import { mountHeroPlan } from "./web/landing-plan.js"; const r = document.getElementById("hero-plan"); if (r) mountHeroPlan(r, ${JSON.stringify(demoTopics)});`, resolveDir: ROOT },
+    bundle: true, minify: true, format: "iife", target: "es2020", write: false, legalComments: "none",
+  })).outputFiles[0].text.replace(/<\/script/gi, "<\\/script");
+  const landing = (await readFile(join(ROOT, "web/landing.html"), "utf8")).replace("/*CSS*/", () => landingCss).replace("/*HERO_PLAN*/", () => heroPlan);
   await writeFile(join(OUT, "index.html"), withHead(landing, "/"));
   // pagine legali e pagina 404 (Vercel la serve per ogni indirizzo che non esiste): autonome, stesso stile essenziale
   for (const page of ["termini.html", "privacy.html", "404.html"]) await writeFile(join(OUT, page), withHead((await readFile(join(ROOT, "web", page), "utf8")).replace("/*FONT*/", () => figtreeCss), `/${page}`));

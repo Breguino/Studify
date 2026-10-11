@@ -174,7 +174,8 @@ I pulsanti con solo l'icona hanno sempre un `aria-label` in italiano.
     (WCAG 2.5.8), salvo i link dentro una frase; caselle a 20px, quelle delle attività dentro `.t-check` (area di 44px);
     una casella con la sua scritta su una riga è `label.check-row`. Testo mai sotto i 12px (`.75rem`).
 - **Tema scuro** automatico (`prefers-color-scheme`), forzabile con `data-theme`.
-- **Movimento ridotto** rispettato (`prefers-reduced-motion`).
+- **Movimento ridotto** rispettato (`prefers-reduced-motion`). Le entrate allo scorrimento della landing (`[data-reveal]`) partono solo con JavaScript
+  e senza movimento ridotto, e non nascondono mai ciò che è già in vista.
 - **Stampa**: `@media print`, per la dispensa e le prove d'esame.
 - **Accessibilità**:
   - focus visibile (`:focus-visible` con l'anello `--brand`);
@@ -190,7 +191,8 @@ public/            index.html, styles.css (token e componenti), demo/
 public/js/         logica pura e testata (dates, srs, planner, career, …) + store, ui, nav, core, app (router)
 public/js/views/   una vista per schermata (home, hub, quiz, flash, materials, career, …)
 artifact/          versione pagina Claude: template.html, entry, generate (Claude via `sample`), backend (`db`), fake-claude (prove)
-web/               versione web: template.html, web.css, entry, auth, gate (accesso/account), claude.js, backend, termini/privacy
+web/               versione web: template.html, web.css, entry, auth, gate (accesso/account), claude.js, backend, termini/privacy,
+                   landing (landing-plan.js: la scheda del piano in cima, con buildPlan dell'app)
 api/               funzione Vercel /api/claude (_lib.js testato)
 server/            server Node senza dipendenze (versione locale con chiave API)
 shared/            prompts.js, normalize.js (server e browser)
