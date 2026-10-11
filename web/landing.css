@@ -44,7 +44,16 @@ h2.cd-exam { margin: 0; line-height: 1.3; }
 .cd-controls { display: grid; gap: 14px; padding: 16px; border-radius: 16px; background: var(--surface-2); }
 .cd-range { display: grid; gap: 6px; font-weight: 600; font-size: .95rem; }
 .cd-range output { font-weight: 800; color: var(--brand); }
-.cd-range input { width: 100%; min-height: 44px; padding: 0; border: 0; background: none; box-shadow: none; accent-color: var(--brand); cursor: pointer; }
+.cd-range input { -webkit-appearance: none; appearance: none; width: 100%; min-height: 44px; height: 44px; padding: 0; border: 0; background: transparent; box-shadow: none; cursor: pointer; touch-action: pan-y; }
+/* cursore grande per il dito: barra riempita fino al valore (--p, da landing-plan.js), pallino da 28px */
+.cd-range input::-webkit-slider-runnable-track { height: 8px; border-radius: 999px; background: linear-gradient(to right, var(--brand) var(--p, 30%), var(--line-strong) var(--p, 30%)); }
+.cd-range input::-webkit-slider-thumb { -webkit-appearance: none; width: 28px; height: 28px; margin-top: -10px; border-radius: 50%; background: var(--brand); border: 4px solid var(--surface); box-shadow: 0 0 0 1px var(--line-strong); }
+.cd-range input::-moz-range-track { height: 8px; border-radius: 999px; background: var(--line-strong); }
+.cd-range input::-moz-range-progress { height: 8px; border-radius: 999px; background: var(--brand); }
+.cd-range input::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: var(--brand); border: 4px solid var(--surface); box-shadow: 0 0 0 1px var(--line-strong); }
+.cd-range input:focus { box-shadow: none; outline: none; }
+.cd-range input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 55%, transparent); }
+.cd-range input:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 55%, transparent); }
 .cd-hours { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 8px; }
 .cd-hours legend { padding: 0; margin-bottom: 8px; font-weight: 600; font-size: .95rem; }
 .cd-hours .choices { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
@@ -136,9 +145,19 @@ h2.cd-exam { margin: 0; line-height: 1.3; }
   .wrap { padding-inline: 16px; }
   .hero { padding-top: 36px; padding-bottom: 56px; gap: 36px; }
   .hero-cta .btn { flex: 1 1 100%; }
-  .countdown { padding: 20px; }
+  .countdown { padding: 18px; gap: 14px; border-radius: 22px; }
+  .cd-top { flex-wrap: wrap; gap: 6px 12px; }
+  .cd-top .badge { white-space: nowrap; }
   .cd-num { font-size: 3.5rem; }
-  .cd-task { flex-direction: column; gap: 2px; }
+  .cd-controls { padding: 14px; gap: 10px; }
+  .cd-task { align-items: baseline; padding: 10px 12px; }
+  .cd-note { font-size: .8rem; }
+  .steps { gap: 14px; }
+  .step { padding: 18px; gap: 10px; }
+  .step-art { height: 92px; }
+  .methods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .methods .card { padding: 16px; }
+  .methods h3 { font-size: 1rem; }
   .section, .white-band .split { padding-top: 56px; padding-bottom: 56px; }
   .split { gap: 36px; }
   .cta-band { padding: 32px 22px; }
