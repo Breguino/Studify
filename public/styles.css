@@ -108,7 +108,7 @@ a.exam-card { display: grid; gap: 12px; align-content: start; } /* a.card impost
 .next-side :focus-visible { outline-color: color-mix(in srgb, var(--brand) 55%, transparent); }
 .next-tasks { gap: 8px; }
 .next-cta { margin-top: auto; text-align: center; }
-.next-link { align-self: center; font-weight: 600; text-decoration: none; }
+.next-link { align-self: center; display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; text-decoration: none; }
 .add-card { display: grid; justify-items: center; align-content: center; gap: 6px; min-height: 180px; padding: 20px; border-radius: var(--radius); border: 1.5px dashed var(--line-strong); text-align: center; }
 .add-main { display: grid; justify-items: center; gap: 8px; color: var(--text); text-decoration: none; }
 .add-icon { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); transition: background-color .15s, color .15s; }
@@ -122,7 +122,7 @@ a.career-summary { display: grid; gap: 12px; }
 @media (max-width: 520px) {
   .next-exam { padding: 20px; gap: 20px; border-radius: 22px; }
   .next-side { padding: 18px; }
-  .week { gap: 4px; } .week li { font-size: .74rem; padding: 8px 0; }
+  .week { gap: 4px; } .week li { font-size: .75rem; padding: 8px 0; }
 }
 
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 9px 18px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; transition: background-color .15s, border-color .15s, box-shadow .15s, filter .15s; }
@@ -162,11 +162,14 @@ input, select, textarea { font: inherit; min-height: 44px; padding: 9px 12px; bo
 textarea { min-height: 130px; resize: vertical; }
 input[type=range] { padding: 0; }
 input[type=checkbox], input[type=radio] { width: auto; min-height: 0; accent-color: var(--brand); }
+input[type=checkbox] { width: 20px; height: 20px; flex: 0 0 auto; } /* 13px del browser: troppo piccola da toccare */
 input:focus, select:focus, textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 18%, transparent); outline: none; }
 /* campi sbagliati nei moduli (aria-invalid): bordo e anello rossi; caselle con la scritta in rosso */
 input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--bad); box-shadow: 0 0 0 3px var(--bad-soft); }
 label.check:has(input[aria-invalid="true"]) > span { color: var(--bad); }
 form[aria-busy="true"] { cursor: progress; }
+/* telefoni, tablet e schermi touch: testo dei campi a 16px, altrimenti Safari ingrandisce la pagina quando li tocchi */
+@media (max-width: 820px), (pointer: coarse) { input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea { font-size: 16px; } }
 ::selection { background: color-mix(in srgb, var(--brand) 24%, transparent); }
 .form { display: grid; gap: 16px; max-width: 640px; }
 .cols { align-items: start; display: grid; gap: 14px; grid-template-columns: 1fr 1fr; } @media (max-width: 560px) { .cols { grid-template-columns: 1fr; } }
@@ -183,9 +186,12 @@ form[aria-busy="true"] { cursor: progress; }
 .task .t-title { font-weight: 600; }
 .task .t-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; font-size: .85rem; color: var(--muted); }
 .task.compact { padding: 11px 14px; } .task.compact .t-meta { display: block; margin-top: 2px; }
-.task input[type=checkbox] { width: 22px; height: 22px; flex: 0 0 auto; }
+.task input[type=checkbox] { width: 24px; height: 24px; flex: 0 0 auto; }
+/* casella con la sua scritta su una riga: tutta la riga si tocca (alta 44px) */
+.check-row { display: flex; gap: 8px; align-items: center; min-height: 44px; font-weight: 400; cursor: pointer; }
+.t-check { display: grid; place-items: center; width: 44px; height: 44px; margin: -10px; cursor: pointer; flex: 0 0 auto; }
 .t-min { font-size: .88rem; font-weight: 700; color: var(--muted); white-space: nowrap; }
-.t-now { display: block; font-size: .72rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--brand); margin-bottom: 2px; }
+.t-now { display: block; font-size: .75rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--brand); margin-bottom: 2px; }
 .task.now { border: 1.5px solid var(--brand); box-shadow: 0 6px 18px color-mix(in srgb, var(--brand) 14%, transparent); }
 .task.now .t-title { font-size: 1.05rem; }
 .task.done { background: var(--good-soft); border-color: transparent; }
@@ -410,6 +416,7 @@ td { font-variant-numeric: tabular-nums; } td a { font-weight: 600; text-decorat
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } .bar > div { transition: none; } a.card:hover, .btn:active:not([disabled]) { transform: none; } }
 details > summary { cursor: pointer; }
+details > summary.small { padding-block: 11px; } /* da toccare: alta almeno 44px */
 .source-list { margin: 6px 0 0; padding-left: 18px; font-size: .88rem; }
 .file-drop { border: 2px dashed var(--line); border-radius: 12px; padding: 18px; text-align: center; color: var(--muted); }
 .option[disabled] { opacity: 1; cursor: default; color: var(--text); }
@@ -422,7 +429,7 @@ details > summary { cursor: pointer; }
   .topbar nav { flex-wrap: nowrap; gap: 0; }
   .topbar .btn { padding: 6px 8px; font-size: .9rem; }
   .topbar .nav-wide { display: none; } /* sul telefono: Esami è il logo, il libretto si apre dalla home */
-  .pill { font-size: .72rem; padding: 2px 8px; margin-right: 4px; white-space: nowrap; }
+  .pill { font-size: .75rem; padding: 2px 8px; margin-right: 4px; white-space: nowrap; }
   main { padding-inline: 16px; }
 }
 td select { width: auto; min-width: 5.2rem; min-height: 34px; padding: 5px 8px; font-size: .88rem; }
@@ -518,7 +525,7 @@ mark.uncertain { background: #fde68a; color: #1b1f2a; border-radius: 3px; paddin
 .method-steps li { margin-bottom: 4px; }
 .worked { background: var(--surface-2); border-radius: 10px; padding: 10px 14px; margin-top: 6px; overflow-x: auto; overflow-wrap: anywhere; }
 .worked-solution { border-left: 3px solid var(--brand); padding-left: 12px; margin-top: 8px; overflow-x: auto; overflow-wrap: anywhere; }
-.step-label { margin-top: 8px; text-transform: uppercase; letter-spacing: .04em; font-size: .72rem; }
+.step-label { margin-top: 8px; text-transform: uppercase; letter-spacing: .04em; font-size: .75rem; }
 
 /* libretto */
 .career-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }

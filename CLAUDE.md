@@ -169,6 +169,10 @@ I pulsanti con solo l'icona hanno sempre un `aria-label` in italiano.
 - **Responsive**: mobile-first leggero, con griglie `auto-fill` (`.grid` con minimo 300px) e `flex-wrap`.
   - Punti di rottura: `520px` (barra in alto, margini), `560px` (`.cols` su una colonna), `820px` (accesso, solo web).
   - Nessuno scorrimento orizzontale a 390px (larghezza di un telefono).
+  - Telefono e touch: testo dei campi a 16px fino a 820px e con `pointer: coarse` (sotto, Safari ingrandisce la pagina al tocco);
+    bersagli da toccare alti almeno 44px se stanno da soli (`.next-link`, `summary.small`, link del piè di pagina), 24px al minimo
+    (WCAG 2.5.8), salvo i link dentro una frase; caselle a 20px, quelle delle attività dentro `.t-check` (area di 44px);
+    una casella con la sua scritta su una riga è `label.check-row`. Testo mai sotto i 12px (`.75rem`).
 - **Tema scuro** automatico (`prefers-color-scheme`), forzabile con `data-theme`.
 - **Movimento ridotto** rispettato (`prefers-reduced-motion`).
 - **Stampa**: `@media print`, per la dispensa e le prove d'esame.

@@ -32,7 +32,7 @@ export function taskRow(exam, task, { now = false, compact = false } = {}) {
         saidForExam(exam, task) ? badge("il docente ne parla per l'esame", "bad") : null,
         extra ? h("span", {}, extra) : null);
   return h("div", { class: `task${done ? " done" : ""}${now ? " now" : ""}${compact ? " compact" : ""}` },
-    task.kind === "rest" ? h("span", { "aria-hidden": "true" }, "🌙") : check,
+    task.kind === "rest" ? h("span", { "aria-hidden": "true" }, "🌙") : h("label", { class: "t-check" }, check), // area da toccare più grande della casella
     h("div", { class: "spacer t-body" },
       now && !done ? h("span", { class: "t-now" }, "Adesso") : null,
       h("div", { class: "t-title" }, task.title), meta),
