@@ -170,7 +170,12 @@
   </section>
 </main>
 
-<footer class="site-footer"><span>© Studify</span><a href="termini.html">Termini e condizioni</a><a href="privacy.html">Privacy</a><span>Nessun cookie: né di profilazione, né di statistica</span></footer>
+<div class="sticky-cta" id="sticky-cta" hidden>
+  <a class="btn primary" href="/app?entra=registrati" data-guest>Inizia gratis</a>
+  <a class="btn primary" href="/app" data-member hidden>Vai ai tuoi esami →</a>
+</div>
+
+<footer class="site-footer"><span>© Studify</span><a href="termini.html">Termini e condizioni</a><a href="privacy.html">Privacy</a><a href="mailto:info.studify@gmail.com">Contatti</a><span>Nessun cookie: né di profilazione, né di statistica</span></footer>
 
 <script>
   // Chi ha già una sessione in questo browser vede «Apri Studify» al posto di «Inizia gratis».
@@ -180,6 +185,20 @@
       for (const el of document.querySelectorAll("[data-member]")) el.hidden = false;
     }
   } catch { /* archivio del browser non disponibile: restano i pulsanti per gli ospiti */ }
+
+  // Telefono: il pulsante in basso compare quando quelli in cima sono usciti dallo schermo
+  // e sparisce davanti all'invito finale e al piè di pagina, per non coprirli.
+  (() => {
+    const bar = document.getElementById("sticky-cta");
+    const watched = [".hero-cta", ".cta-band", ".site-footer"].map((q) => document.querySelector(q));
+    if (!("IntersectionObserver" in window) || watched.includes(null)) return;
+    const seen = new Set();
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) e.isIntersecting ? seen.add(e.target) : seen.delete(e.target);
+      bar.hidden = seen.size > 0;
+    });
+    watched.forEach((el) => io.observe(el));
+  })();
 </script>
 </body>
 </html>

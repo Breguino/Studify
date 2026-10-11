@@ -149,7 +149,7 @@ export function dispensaTab(exam) {
       "Il testo di riferimento restano quelle: questa dispensa, scritta dall'AI, le integra con gli altri materiali e può sbagliare. Per la teoria parti dalle sue pagine (in ogni argomento trovi quali leggere); usa questa per collegare le fonti e per metterti alla prova.") : null,
     h("div", { class: "row", style: { gap: "14px", alignItems: "end" } },
       h("label", {}, "Lunghezza", length),
-      h("label", { style: { display: "flex", gap: "8px", alignItems: "center", fontWeight: 400 } }, sol, "Soluzioni in appendice")),
+      h("label", { class: "check-row" }, sol, "Soluzioni in appendice")),
     job ? h("div", { class: "callout row" }, h("span", { class: "spinner" }), (job.el = h("span", {}, job.label)), h("span", { class: "muted small" }, "un capitolo alla volta; puoi cambiare pagina")) : null,
     h("div", { class: "row" },
       h("button", { class: "btn primary", disabled: !ai || !!job || !todo.length || !hasMaterials, onclick: () => write(exam, todo) },

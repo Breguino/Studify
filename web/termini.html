@@ -14,8 +14,8 @@
 body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 "Figtree Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 header { background: var(--surface); border-bottom: 1px solid var(--line); }
 header div, main { max-width: 760px; margin: 0 auto; padding: 14px 20px; }
-header a { font-weight: 800; color: var(--text); text-decoration: none; font-size: 1.15rem; }
-header a::before { content: ""; display: inline-block; width: 24px; height: 24px; border-radius: 7px; margin-right: 8px; vertical-align: -5px; background: var(--brand) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M9.5 21l6.5-11.2 6.5 11.2z' fill='none' stroke='%23ffffff' stroke-width='2.6' stroke-linejoin='round'/%3E%3C/svg%3E") center / 100% no-repeat; }
+header a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 800; color: var(--text); text-decoration: none; font-size: 1.15rem; }
+header a::before { content: ""; display: inline-block; flex: 0 0 auto; width: 24px; height: 24px; border-radius: 7px; margin-right: 8px; vertical-align: -5px; background: var(--brand) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M9.5 21l6.5-11.2 6.5 11.2z' fill='none' stroke='%23ffffff' stroke-width='2.6' stroke-linejoin='round'/%3E%3C/svg%3E") center / 100% no-repeat; }
 @media (prefers-color-scheme: dark) { header a::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M9.5 21l6.5-11.2 6.5 11.2z' fill='none' stroke='%2310121a' stroke-width='2.6' stroke-linejoin='round'/%3E%3C/svg%3E"); } }
 main { padding: 32px 20px 64px; }
 h1 { font-size: clamp(1.7rem, 4vw, 2.2rem); line-height: 1.15; letter-spacing: -.02em; margin: 0 0 6px; }
@@ -36,7 +36,7 @@ th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom
 <p class="draft"><b>Bozza da verificare.</b> Questo testo è un modello preparato senza consulenza legale: prima di aprire Studify al pubblico va fatto rivedere da un avvocato, e vanno completate le parti tra parentesi quadre.</p>
 
 <h2>1. Chi gestisce Studify</h2>
-<p>Studify è un servizio gestito da <b>[NOME COGNOME]</b>, persona fisica, [INDIRIZZO], email <a href="mailto:[EMAIL DI CONTATTO]">[EMAIL DI CONTATTO]</a> (il «Gestore»). Creando un account accetti questi termini.</p>
+<p>Studify è un servizio gestito da <b>Angelo Bregu</b>, persona fisica, [INDIRIZZO], email <a href="mailto:info.studify@gmail.com">info.studify@gmail.com</a> (il «Gestore»). Creando un account accetti questi termini.</p>
 
 <h2>2. Che cosa fa Studify</h2>
 <p>Studify è uno strumento di supporto allo studio universitario. Dai materiali che carichi (appunti, dispense, slide, esami passati, quiz, trascrizioni) ricava argomenti, flashcard, domande, quiz e un piano di studio, anche con l'aiuto di un modello di intelligenza artificiale (Claude, di Anthropic).</p>
@@ -73,7 +73,7 @@ th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom
 <p>Si applica la legge italiana. Per le controversie con un consumatore è competente il foro del luogo di residenza o di domicilio del consumatore.</p>
 
 <h2>10. Contatti</h2>
-<p>Per qualunque domanda: <a href="mailto:[EMAIL DI CONTATTO]">[EMAIL DI CONTATTO]</a>. Il trattamento dei dati personali è descritto nell'<a href="privacy.html">Informativa privacy</a>.</p>
+<p>Per qualunque domanda: <a href="mailto:info.studify@gmail.com">info.studify@gmail.com</a>. Il trattamento dei dati personali è descritto nell'<a href="privacy.html">Informativa privacy</a>.</p>
 </main>
 </body>
 </html>

@@ -1,6 +1,6 @@
 /* Solo versione web: accesso e piè di pagina */
 .site-footer { max-width: 1120px; margin: 0 auto; padding: 0 24px 32px; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: .88rem; color: var(--muted); }
-.site-footer a { color: var(--muted); }
+.site-footer a { color: var(--muted); display: inline-flex; align-items: center; min-height: 44px; }
 /* Fascia indaco scuro (token --hero in public/styles.css): apertura della landing e pannello d'accesso */
 .on-hero { --logo-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M9.5 21l6.5-11.2 6.5 11.2z' fill='none' stroke='%231e1b4b' stroke-width='2.6' stroke-linejoin='round'/%3E%3C/svg%3E"); }
 .on-hero .logo { color: #fff; }
