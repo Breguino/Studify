@@ -6,7 +6,7 @@ import { statsFor } from "../domain.js";
 import { examQuestionStats } from "../exam-questions.js";
 import { keepOrder } from "../moodle.js";
 import * as store from "../store.js";
-import { badge, bar, emptyState, h, pct, shuffle, toast } from "../ui.js";
+import { badge, bar, emptyState, h, pct, releaseOnLeave, shuffle, toast } from "../ui.js";
 
 const KIND = { mcq: "Scelta multipla", open: "Domanda aperta", problem: "Esercizio" };
 
@@ -188,14 +188,15 @@ export function quizView(exam, query) {
     } else if (e.key === "Enter" && onEnter) { e.preventDefault(); onEnter(); }
   }
   addEventListener("keydown", onKey);
+  releaseOnLeave(root, onKey);
 
   function render() {
     const it = items[i];
+    onEnter = null; // anche sul risultato: un Invio in più non deve registrare di nuovo l'ultima risposta
     if (phase === "done") return summary();
     const q = it?.q;
     const w = examStats.weight(q);
     const examBadge = w ? badge(`domanda d'esame vera${w > 1 ? ` · chiesta ${w} volte` : ""}`, "bad") : q.official ? badge(`${q.official.source} · ${q.official.quiz ? "risposta del docente" : q.official.aula ? "svolta in aula" : "soluzione ufficiale"}`, q.official.aula ? "" : "good") : null;
-    onEnter = null;
     const reviewing = phase === "review" && q.kind === "mcq";
     const body = [head(), steps(reviewing ? (it.answer === q.correctIndex ? "good" : "bad") : null),
       h("div", { class: "card stack q-card" }, h("div", { class: "row" }, topicOf(q) ? badge(topicOf(q), "brand") : null, badge(KIND[q.kind]), examBadge), h("div", { class: "q-prompt" }, richParas(q.prompt)))];

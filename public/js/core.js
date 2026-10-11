@@ -7,4 +7,5 @@ export const core = {
   pdfImages: null, // pagina Claude: (file) => {images} pagine come immagini (PDF scansionati)
   downloads: null, // funzione di salvataggio file (solo nella pagina Claude)
   rerender: () => {},
+  onRender: new Set(), // funzioni chiamate dopo ogni disegno di pagina (es. togliere ascoltatori delle sessioni lasciate)
 };

@@ -1,5 +1,6 @@
 // Passo 3 del primo esame: il modulo è pronto. Che cosa contiene, da dove viene, che cosa controllare, e la prima sessione.
 import { ensurePlan } from "../domain.js";
+import { sessionOf } from "../today.js";
 import { fmtDayLong, today } from "../dates.js";
 import { pagesLabel, shortName, topicReading } from "../books.js";
 import { topicFrequency } from "../past-exams.js";
@@ -35,6 +36,8 @@ function topicRow(exam, t, freq) {
 export function readyView(exam) {
   const mod = exam.module;
   if (!mod) return emptyState("Il modulo non c'è ancora", "Carica i materiali e genera il modulo: poi lo controlli qui.", h("a", { class: "btn primary", href: `#/exam/${exam.id}/materials` }, "Materiali"));
+  // il passo 3 si mostra una volta: visto il modulo pronto, «Oggi» torna la pagina di tutti i giorni
+  if (exam.onboarding) { exam.onboarding = false; store.save(); }
   const plan = ensurePlan(exam);
   const waiting = !!plan?.start && plan.start > today();
   const first = waiting ? null : plan?.days[0];
@@ -43,11 +46,7 @@ export function readyView(exam) {
   const unverified = (mod.examHints ?? []).filter((x) => x.verified === false).length;
   const toCheck = mod.topics.filter((t) => t.origin === "model").length + (mod.gaps?.length ?? 0);
   const topics = mod.topics.map((t, i) => ({ t, i })).sort((a, b) => b.t.importance - a.t.importance || a.i - b.i).map((x) => x.t);
-  const start = () => {
-    exam.onboarding = false;
-    store.save();
-    go(`#/exam/${exam.id}/today`);
-  };
+  const start = () => go(`#/exam/${exam.id}/today`);
   const stat = (n, label, tone = "") => h("div", { class: `ready-stat ${tone}` }, h("b", {}, String(n)), h("span", {}, label));
 
   return h("div", { class: "stack ready" },
@@ -72,7 +71,7 @@ export function readyView(exam) {
         unverified ? h("p", { class: "small muted", style: { margin: 0 } }, `${unverified} ${unverified === 1 ? "frase del docente presa" : "frasi del docente prese"} da un PDF non ${unverified === 1 ? "è stata verificata" : "sono state verificate"} sul testo: controllale nel modulo.`) : null),
       h("aside", { class: "plan-preview ready-start", "aria-labelledby": "ready-start-title" },
         h("span", { class: "kicker" }, waiting ? "Il piano è pronto" : "Il piano parte oggi"),
-        h("h2", { id: "ready-start-title" }, waiting ? `Lo studio inizia ${fmtDayLong(plan.start)}` : first ? `Prima sessione: ${first.minutes} min` : "Il piano è pronto"),
+        h("h2", { id: "ready-start-title" }, waiting ? `Lo studio inizia ${fmtDayLong(plan.start)}` : first ? `Prima sessione: ${sessionOf(first, () => false).minutes} min` : "Il piano è pronto"),
         first ? h("ul", { class: "ready-tasks" }, first.tasks.filter((t) => t.kind !== "rest").map((t) => h("li", {}, h("span", {}, t.title), h("b", {}, `${t.minutes} min`)))) : null,
         h("button", { class: "btn ready-go", type: "button", onclick: start }, waiting ? "Vai al piano →" : "Inizia oggi →"),
         h("a", { class: "ready-link", href: `#/exam/${exam.id}/module` }, "Rivedi tutto il modulo"),

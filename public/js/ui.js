@@ -1,3 +1,4 @@
+import { core } from "./core.js";
 // Mini helper per costruire il DOM. Il testo è SEMPRE inserito come text node:
 // il contenuto generato dall'AI o incollato dall'utente non viene mai interpretato come HTML.
 export function h(tag, props = {}, ...children) {
@@ -48,6 +49,18 @@ export function bar(value, { label, tone } = {}) {
     { class: `bar ${tone ?? ""}`, role: "progressbar", "aria-valuenow": Math.round(v * 100), "aria-valuemin": 0, "aria-valuemax": 100, "aria-label": label ?? "avanzamento" },
     h("div", { style: { width: `${v * 100}%` } }),
   );
+}
+
+/** «lunedì» → «Lunedì» */
+export const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * Un ascoltatore di tastiera di una sessione (quiz, flashcard) si toglie al primo cambio di pagina,
+ * non al tasto successivo: altrimenti, navigando col mouse, quelli delle sessioni vecchie si accumulano.
+ */
+export function releaseOnLeave(root, onKey) {
+  const stop = () => { if (!root.isConnected) { removeEventListener("keydown", onKey); core.onRender.delete(stop); } };
+  core.onRender.add(stop);
 }
 
 export const badge = (text, tone = "") => h("span", { class: `badge ${tone}` }, text);

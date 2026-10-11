@@ -1,6 +1,9 @@
 // Cosa mostrare di un esame «oggi»: il prossimo appello, la sessione del giorno, la settimana. Funzioni pure.
 import { addDays, daysBetween, weekdayShort } from "./dates.js";
 
+/** Colore della scadenza: rosso entro 3 giorni, arancio entro 10. */
+export const deadlineTone = (daysLeft) => (daysLeft >= 0 && daysLeft <= 3 ? "bad" : daysLeft >= 0 && daysLeft <= 10 ? "warn" : "");
+
 /** L'esame con l'appello più vicino da oggi in poi (a parità di data, il primo in elenco); null se non ce ne sono. */
 export function nextExam(exams, today) {
   return [...exams].filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0] ?? null;
@@ -34,7 +37,7 @@ export function weekStrip(plan, examDate, today, n = 7) {
     const date = addDays(today, i);
     if (date > examDate) break;
     const d = byDate.get(date);
-    const minutes = d ? d.tasks.filter((t) => t.kind !== "rest").reduce((s, t) => s + (t.minutes || 0), 0) : 0;
+    const minutes = d ? sessionOf(d, () => false).minutes : 0;
     const kind = date === examDate ? "exam" : i === 0 ? "today" : d ? (minutes ? "study" : "free") : plan?.start && date < plan.start ? "before" : "free";
     out.push({ date, day: weekdayShort(date), kind, minutes, phase: d?.phase ?? null });
   }

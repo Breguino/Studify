@@ -72,6 +72,7 @@ function render() {
     console.error(e);
     main.append(h("div", { class: "callout bad" }, `Errore: ${e.message}`));
   }
+  for (const f of [...core.onRender]) f();
   window.scrollTo(0, 0);
   main.focus?.();
 }

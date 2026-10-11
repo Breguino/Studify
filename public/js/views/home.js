@@ -4,10 +4,10 @@ import { careerSummary } from "./career.js";
 import { importGroupButton } from "./group.js";
 import { taskRow } from "./tasks.js";
 import { fmtDate, fmtDayLong, addDays, today } from "../dates.js";
-import { nextExam, sessionOf, weekStrip } from "../today.js";
+import { deadlineTone, nextExam, sessionOf, weekStrip } from "../today.js";
 import { EXAM_TYPES } from "../methods.js";
 import * as store from "../store.js";
-import { badge, bar, confirmDialog, emptyState, h, icon, pct, toast } from "../ui.js";
+import { badge, bar, capital, confirmDialog, emptyState, h, icon, pct, toast } from "../ui.js";
 import { core } from "../core.js";
 
 async function createDemo() {
@@ -33,7 +33,6 @@ async function createDemo() {
   }
 }
 
-const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const appello = (exam) => exam.appelli?.find((a) => a.date === exam.date);
 
 function dateLine(exam) {
@@ -55,7 +54,7 @@ function examCard(exam) {
   const waiting = plan?.start && plan.start > today(); // finestra di studio non ancora iniziata
   const s = plan && !waiting ? sessionOf(plan.days[0], (t) => isDone(exam, t)) : null;
   const due = dueCount(exam);
-  const tone = dl >= 0 && dl <= 3 ? "bad" : dl >= 0 && dl <= 10 ? "warn" : "";
+  const tone = deadlineTone(dl);
   return h(
     "a",
     { class: "card exam-card", href: `#/exam/${exam.id}` },

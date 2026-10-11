@@ -3,7 +3,7 @@ import { today } from "../dates.js";
 import { flashQueue } from "../domain.js";
 import { GRADES, nextInterval, review } from "../srs.js";
 import * as store from "../store.js";
-import { bar, emptyState, h } from "../ui.js";
+import { bar, emptyState, h, releaseOnLeave } from "../ui.js";
 import { core } from "../core.js";
 
 const fmtInt = (d) => (d <= 1 ? "1 g" : `${d} g`);
@@ -57,6 +57,7 @@ export function flashView(exam, query) {
     else if (revealed && "1234".includes(e.key)) grade(Number(e.key) - 1);
   }
   addEventListener("keydown", onKey);
+  releaseOnLeave(root, onKey);
 
   function render() {
     if (!queue.length) return finish();

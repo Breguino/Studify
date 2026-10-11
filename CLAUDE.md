@@ -68,7 +68,9 @@ Altri helper di `ui.js` (anche `icon(nome)`, icone SVG a tratto, e `stepper(n)`)
 - `emptyState(titolo, testo, ...azioni)`
 - `link(href, testo, cls)`
 - `confirmDialog(msg, { danger })`
-- `paras(testo)`, `pct(x)`
+- `paras(testo)`, `pct(x)`, `capital(s)`
+- `releaseOnLeave(root, onKey)`: toglie l'ascoltatore di tastiera di una sessione (quiz, flashcard) al primo cambio di pagina
+  (usa `core.onRender`, le funzioni che il router chiama dopo ogni pagina)
 
 **Catalogo delle classi** (riusale invece di crearne di nuove):
 
@@ -98,6 +100,8 @@ Altri helper di `ui.js` (anche `icon(nome)`, icone SVG a tratto, e `stepper(n)`)
 Il router a hash sta in `public/js/app.js` (`#/`, `#/exam/:id/:tab`, `#/libretto`, `#/settings`, …).
 Per ridisegnare, una vista tiene il nodo radice e lo rimpiazza:
 `root.replaceChildren(...content().filter(Boolean))`. Filtra i `null`: `replaceChildren(null)` scrive la parola «null».
+Una vista non cambia i dati mentre si disegna (niente `store.save()` nel render), salvo quando mostrarla è l'evento stesso:
+la schermata «pronto» del primo esame chiude l'onboarding perché si vede una volta sola.
 
 **Anteprima senza dati reali:** `npm run demo` (server con AI simulata ed esame demo), oppure `npm run build:harness`,
 che crea `dist/harness.html`: la pagina Claude con un `window.claude` finto.
