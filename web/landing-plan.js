@@ -57,6 +57,7 @@ export function mountHeroPlan(root, topics) {
   function draw({ announce = true } = {}) {
     const p = heroPlan({ ...state, topics, start: today() });
     $("days").textContent = String(state.days);
+    range.style.setProperty("--p", `${((state.days - range.min) / (range.max - range.min)) * 100}%`);
     $("days-out").textContent = plural(state.days, "giorno", "giorni");
     $("date").textContent = p.examShort;
     $("phases").replaceChildren(
