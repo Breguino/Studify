@@ -36,7 +36,7 @@ th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom
 <p class="draft"><b>Bozza da verificare.</b> Questo testo è un modello preparato senza consulenza legale: prima di aprire Studify al pubblico va fatto rivedere da un avvocato, e vanno completate le parti tra parentesi quadre.</p>
 
 <h2>1. Titolare del trattamento</h2>
-<p><b>Angelo Bregu</b>, persona fisica, [INDIRIZZO], email <a href="mailto:info.studify@gmail.com">info.studify@gmail.com</a>. Non è stato nominato un responsabile della protezione dei dati (non obbligatorio per questo trattamento). [DA VERIFICARE]</p>
+<p><b>Angelo Bregu</b>, persona fisica, [INDIRIZZO], email <a href="mailto:info.studify@gmail.com">info.studify@gmail.com</a>. Non è stato nominato un responsabile della protezione dei dati: l'art. 37 GDPR lo richiede per autorità pubbliche, monitoraggi sistematici su larga scala o trattamenti su larga scala di categorie particolari di dati, e Studify non rientra in questi casi.</p>
 
 <h2>2. Quali dati trattiamo</h2>
 <div class="table-wrap"><table>
@@ -56,7 +56,7 @@ th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom
 <ul>
 <li><b>Fornirti il servizio</b> (account, salvataggio e sincronizzazione, generazione dei contenuti): esecuzione del contratto, art. 6.1.b GDPR.</li>
 <li><b>Sicurezza, prevenzione degli abusi e limiti di spesa</b>, conservazione della prova dell'accettazione dei termini: legittimo interesse del Titolare, art. 6.1.f.</li>
-<li><b>Statistiche di visita</b> anonime e aggregate, per capire quali pagine vengono usate e migliorare il sito: legittimo interesse del Titolare, art. 6.1.f. Non si usano cookie né identificativi persistenti: secondo Vercel, chi visita è riconosciuto solo tramite un codice ricavato dalla richiesta, che non viene conservato oltre le 24 ore. [DA VERIFICARE SULLA DOCUMENTAZIONE DI VERCEL IN VIGORE]</li>
+<li><b>Statistiche di visita</b> anonime e aggregate, per capire quali pagine vengono usate e migliorare il sito: legittimo interesse del Titolare, art. 6.1.f. Non si usano cookie né identificativi persistenti: secondo la documentazione di Vercel, chi visita è riconosciuto solo tramite un codice ricavato dalla richiesta (un hash), che viene scartato dopo 24 ore; le statistiche sono anonime e non legate all'indirizzo IP.</li>
 <li><b>Obblighi di legge</b> e richieste delle autorità: art. 6.1.c.</li>
 </ul>
 <p>Non usiamo i tuoi dati per pubblicità, non li vendiamo e non facciamo profilazione. Fornire l'email è necessario per creare l'account.</p>
@@ -66,12 +66,12 @@ th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom
 <ul>
 <li><b>Supabase Inc.</b> — database e autenticazione, con server nell'UE;</li>
 <li><b>Vercel Inc.</b> — pubblicazione del sito, statistiche di visita e funzione che inoltra le richieste a Claude;</li>
-<li><b>Anthropic PBC</b> — elaborazione con il modello Claude. Secondo le sue condizioni commerciali, i dati inviati tramite API non sono usati per addestrare i modelli e sono conservati per un periodo limitato. [DA VERIFICARE SULLE CONDIZIONI IN VIGORE]</li>
+<li><b>Anthropic PBC</b> — elaborazione con il modello Claude. Per i clienti commerciali dell'API, come Studify, Anthropic agisce come responsabile del trattamento: per impostazione predefinita non usa i dati inviati per addestrare i modelli e li cancella entro 30 giorni (salvo obblighi di legge o verifiche sul rispetto delle sue regole d'uso).</li>
 </ul>
-<p><b>Trasferimenti fuori dall'UE.</b> Vercel e Anthropic hanno sede negli Stati Uniti. Il trasferimento avviene sulla base del Data Privacy Framework UE-USA, per i fornitori certificati, e/o delle clausole contrattuali standard della Commissione europea. [DA VERIFICARE PER CIASCUN FORNITORE]</p>
+<p><b>Trasferimenti fuori dall'UE.</b> Vercel e Anthropic hanno sede negli Stati Uniti. Vercel è certificata secondo il Data Privacy Framework UE-USA e il suo accordo sul trattamento dei dati prevede anche le clausole contrattuali standard della Commissione europea (decisione 2021/914); per Anthropic il trasferimento si basa sulle clausole contrattuali standard incluse nel suo accordo sul trattamento dei dati, parte delle condizioni commerciali.</p>
 
 <h2>5. Per quanto tempo</h2>
-<p>Account, dati di studio, consenso e consumo: finché l'account esiste. Quando lo elimini vengono cancellati subito dal database; possono restare per un periodo limitato nelle copie di sicurezza e nei registri tecnici dei fornitori, secondo i loro tempi. [INDICARE I TEMPI]</p>
+<p>Account, dati di studio, consenso e consumo: finché l'account esiste. Quando lo elimini vengono cancellati subito dal database; restano ancora per al massimo 7 giorni nelle copie di sicurezza giornaliere di Supabase, che poi vengono sostituite. Il testo inviato a Claude viene cancellato da Anthropic entro 30 giorni (vedi sopra); i registri tecnici di Vercel seguono i tempi di Vercel.</p>
 
 <h2>6. Archiviazione nel browser</h2>
 <p>Studify non usa cookie: né di profilazione, né di statistica. Usa solo l'archiviazione del browser strettamente necessaria al servizio: la sessione d'accesso e un promemoria per proporti «Accedi» invece di «Registrati» (localStorage); i file che carichi e una copia dei tuoi dati di studio, per usare Studify anche senza connessione (IndexedDB); i file dell'app stessa, per aprirla offline (cache del service worker, senza dati personali). Le statistiche di visita funzionano senza salvare nulla sul tuo dispositivo. Per questo non è richiesto un banner per il consenso ai cookie (art. 122 del Codice privacy e linee guida del Garante del 10 giugno 2021). All'uscita dall'account i file e la copia dei dati salvati nel browser vengono cancellati.</p>

@@ -132,7 +132,7 @@ export async function authorize(env, authHeader, fetchFn = fetch) {
  * Risposta: righe JSON (NDJSON) — {"type":"text","delta"} …, poi {"type":"done","truncated"} oppure {"type":"error","code"}.
  */
 export function createHandler({ env, anthropic, fetchFn = fetch, log = console.error }) {
-  const model = env.ANTHROPIC_MODEL || "claude-opus-5-5";
+  const model = env.ANTHROPIC_MODEL || "claude-sonnet-5-5"; // metà del costo di Opus 5.5: il credito del mese dura il doppio
   const maxTokens = Number(env.ANTHROPIC_MAX_TOKENS ?? 32000);
   return async function handler(req, res) {
     const fail = (status, code, message) => {

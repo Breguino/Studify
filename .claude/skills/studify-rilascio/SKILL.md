@@ -59,10 +59,15 @@ Una prova che fallisce una volta e passa alla seconda non è «a posto»: riferi
 
 **Pagine legali** (`web/privacy.html`, `web/termini.html`): se cambia il *contenuto* (che dati, per quanto, chi li riceve,
 quali regole), aggiorna la data della versione nella pagina e `PRIVACY_VERSION` o `TERMS_VERSION` in `web/gate.js`.
-Sappi che cosa fa davvero: la versione viene **solo registrata alla registrazione** (metadati e tabella `consents`), così
-si sa che cosa ha accettato chi si iscrive da ora in poi. **Non** fa riaccettare chi è già iscritto: nel codice non c'è
-nessun confronto tra versione accettata e versione attuale. Quindi, per un cambio di sostanza, di' all'utente che gli
-iscritti vanno avvisati (l'informativa lo promette) e proponi, se serve, una richiesta di riaccettazione nell'app.
+Sappi che cosa fa davvero:
+- alla registrazione la versione viene registrata (metadati e tabella `consents`): è ciò che ha accettato chi si iscrive;
+- per l'**informativa**, chi si era iscritto con una versione precedente vede una volta, dopo l'accesso, la finestra
+  «Abbiamo aggiornato l'informativa privacy» (`privacyNotice` e `privacyOutdated` in `web/gate.js`). «Ho capito» salva
+  `privacy_seen` nei metadati: è una presa visione, non un nuovo consenso. Quando cambi `PRIVACY_VERSION`, **riscrivi
+  `PRIVACY_CHANGES`** (che cosa è cambiato, in due righe), altrimenti la finestra descrive il cambio precedente;
+- per i **termini** non c'è nulla del genere: un cambio di sostanza va comunicato a parte, e va proposto all'utente.
+L'avviso arriva solo a chi accede: chi non apre l'app non lo vede. Se serve un'email, chiedila all'utente (non c'è un
+servizio di invio collegato).
 Per un refuso o una correzione di forma non toccare data e versione, e di' che le hai lasciate invariate.
 Se non è chiaro se una modifica è di sostanza, chiedilo: è una scelta legale, non tecnica.
 
