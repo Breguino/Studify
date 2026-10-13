@@ -47,6 +47,7 @@ function route() {
       case "interroga": return interrogaView(exam);
       case "edit": return examFormView(exam);
       case "pronto": return readyView(exam);
+      case "riepilogo": return readyView(exam, { again: true }); // riaperto dalla scheda Modulo
       default: return hubView(exam, b || "today");
     }
   }

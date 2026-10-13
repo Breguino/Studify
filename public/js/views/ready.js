@@ -33,11 +33,10 @@ function topicRow(exam, t, freq) {
       t.origin === "model" ? badge("da verificare", "warn") : t.origin === "online" ? badge("dal web", "brand") : badge("dai tuoi materiali", "good")));
 }
 
-export function readyView(exam) {
+export function readyView(exam, { again = false } = {}) {
   const mod = exam.module;
   if (!mod) return emptyState("Il modulo non c'è ancora", "Carica i materiali e genera il modulo: poi lo controlli qui.", h("a", { class: "btn primary", href: `#/exam/${exam.id}/materials` }, "Materiali"));
   // il passo 3 si mostra una volta: visto il modulo pronto, «Oggi» torna la pagina di tutti i giorni
-  const firstTime = !!exam.onboarding; // riaperto dal modulo: niente indicatore dei tre passi
   if (exam.onboarding) { exam.onboarding = false; store.save(); }
   const plan = ensurePlan(exam);
   const waiting = !!plan?.start && plan.start > today();
@@ -51,7 +50,7 @@ export function readyView(exam) {
   const stat = (n, label, tone = "") => h("div", { class: `ready-stat ${tone}` }, h("b", {}, String(n)), h("span", {}, label));
 
   return h("div", { class: "stack ready" },
-    firstTime ? stepper(3) : h("a", { class: "next-link small", href: `#/exam/${exam.id}/module` }, "← Torna al modulo"),
+    !again ? stepper(3) : h("a", { class: "next-link small", href: `#/exam/${exam.id}/module` }, "← Torna al modulo"),
     h("div", { class: "page-intro" }, h("h1", {}, `Il modulo di ${exam.name} è pronto`),
       h("p", { class: "lead" }, toCheck || unverified
         ? "Dai un'occhiata a ciò che è segnato «da verificare»: il resto viene dai tuoi materiali, con la fonte accanto."

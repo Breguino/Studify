@@ -255,7 +255,7 @@ function moduleTab(exam) {
       h("div", { class: "row" }, badge(`${mod.topics.length} argomenti`, "brand"), badge(`${mod.flashcards.length} flashcard`), badge(`${mod.questions.length} domande`), mod.examHints?.length ? badge(`${mod.examHints.length} ${mod.examHints.length === 1 ? "indicazione" : "indicazioni"} sull'esame`, "bad") : null, mod.local ? badge("modalità base", "warn") : null),
       exam.moduleUpdatedAt ? h("p", { class: "muted small", style: { margin: "8px 0 0" } }, `Aggiornato con appunti nuovi il ${fmtDate(today(new Date(exam.moduleUpdatedAt)))}.`) : null,
       // il riepilogo «modulo pronto» si vede da solo una volta sola: da qui si riapre
-      h("a", { class: "next-link small", href: `#/exam/${exam.id}/pronto` }, "Riepilogo: argomenti dal più importante e prima sessione →")),
+      h("a", { class: "next-link small", href: `#/exam/${exam.id}/riepilogo` }, "Riepilogo: argomenti dal più importante e prima sessione →")),
     hintsBox(exam, mod.examHints, mod),
     papers ? h("div", { class: "callout row between" }, h("span", {}, freq.n
       ? `Esami passati: ${freq.n} ${freq.n === 1 ? "prova analizzata" : "prove analizzate"}. Accanto a ogni argomento, in quante prove compare.`
