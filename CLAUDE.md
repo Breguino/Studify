@@ -68,6 +68,7 @@ Altri helper di `ui.js` (anche `icon(nome)`, icone SVG a tratto, e `stepper(n)`)
 - `emptyState(titolo, testo, ...azioni)`
 - `link(href, testo, cls)`
 - `confirmDialog(msg, { danger })`
+- `saveFile(nome, dati, tipo)`: scarica un file (nella pagina Claude passa da `core.downloads`), es. il calendario `.ics`
 - `paras(testo)`, `pct(x)`, `capital(s)`
 - `releaseOnLeave(root, onKey)`: toglie l'ascoltatore di tastiera di una sessione (quiz, flashcard) al primo cambio di pagina
   (usa `core.onRender`, le funzioni che il router chiama dopo ogni pagina)
@@ -138,6 +139,10 @@ che crea `dist/harness.html`: la pagina Claude con un `window.claude` finto.
   La versione web ha anche una CSP restrittiva in `vercel.json`, con `connect-src` limitato all'origine e a Supabase.
 - **Favicon**: SVG in data URI in `public/index.html` e `web/template.html`.
 - **File dell'utente** (PDF, foto): IndexedDB nel browser, mai sul server. Le pagine di PDF diventano immagini JPEG (canvas → Blob).
+  Possono mancare (esame aperto da un altro dispositivo): una vista che legge un file usa `store.requireFile(id, titolo)`,
+  che dà un `MissingFileError` con il messaggio giusto, e non `getFile` seguito da un errore generico.
+- **Offline (solo web)**: il service worker (`web/sw.js`) mette in cache soltanto `/app` e i moduli `/js/*`, mai le risposte
+  di Supabase o di `/api/claude`; i dati offline sono la copia in IndexedDB di `web/offline.js`.
 - **Asset da Figma**:
   - piccoli (illustrazioni, loghi): SVG in linea o data URI nel CSS, mai URL esterni;
   - grandi: chiedere prima, perché la pagina Claude è un unico file (oggi circa 2,8 MB).
@@ -192,7 +197,8 @@ public/js/         logica pura e testata (dates, srs, planner, career, …) + st
 public/js/views/   una vista per schermata (home, hub, quiz, flash, materials, career, …)
 artifact/          versione pagina Claude: template.html, entry, generate (Claude via `sample`), backend (`db`), fake-claude (prove)
 web/               versione web: template.html, web.css, entry, auth, gate (accesso/account), claude.js, backend, termini/privacy,
-                   landing (landing-plan.js: la scheda del piano in cima, con buildPlan dell'app)
+                   landing (landing-plan.js: la scheda del piano in cima, con buildPlan dell'app),
+                   offline.js (copia locale dello stato, testata) e sw.js (service worker: installabile e offline)
 api/               funzione Vercel /api/claude (_lib.js testato)
 server/            server Node senza dipendenze (versione locale con chiave API)
 shared/            prompts.js, normalize.js (server e browser)

@@ -4,6 +4,7 @@
 import { build } from "esbuild";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,12 +38,14 @@ const common = {
 };
 let js = "";
 let webEntry = "";
+let webAssets = [];
 if (web) {
   // Versione web: moduli ES divisi in file con l'hash nel nome (cache lunga). pdf.js e KaTeX si scaricano solo quando servono.
   const JS_DIR = join(ROOT, "dist-web/js");
   await rm(JS_DIR, { recursive: true, force: true });
   const res = await build({ ...common, entryPoints: { app: entries[0] }, format: "esm", splitting: true, outdir: JS_DIR, entryNames: "[name]-[hash]", chunkNames: "c-[hash]", metafile: true });
   webEntry = `/js/${Object.entries(res.metafile.outputs).find(([, o]) => o.entryPoint).at(0).split("/").pop()}`;
+  webAssets = Object.keys(res.metafile.outputs).map((f) => `/js/${f.split("/").pop()}`);
 } else {
   const out = await build({ ...common, stdin: { contents: entries.map((e) => `import ${JSON.stringify(e)};`).join("\n"), resolveDir: ROOT }, format: "iife", write: false });
   js = out.outputFiles[0].text.replace(/<\/script/gi, "<\\/script");
@@ -106,7 +109,10 @@ if (web) {
   const withHead = (html, path) => html.replace("<!--HEAD-->", () => head({ path, ...PAGES[path] }));
   // immagini statiche (scripts/make-assets.mjs) e file per i motori di ricerca
   for (const f of ["og.png", "favicon.svg", "favicon.ico", "favicon-32.png", "apple-touch-icon.png", "icon-192.png", "icon-512.png"]) await writeFile(join(OUT, f), readFileSync(join(ROOT, "web/assets", f)));
-  await writeFile(join(OUT, "site.webmanifest"), JSON.stringify({ name: "Studify", short_name: "Studify", lang: "it", start_url: "/app", display: "standalone", background_color: "#f4f5f9", theme_color: "#4338ca", icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }, { src: "/icon-512.png", sizes: "512x512", type: "image/png" }] }, null, 2));
+  await writeFile(join(OUT, "site.webmanifest"), JSON.stringify({ id: "/app", name: "Studify", short_name: "Studify", description: "Prepara gli esami con i tuoi materiali: piano di studio, quiz e flashcard, anche senza connessione.", lang: "it", start_url: "/app", scope: "/", display: "standalone", background_color: "#f4f5f9", theme_color: "#4338ca", icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }, { src: "/icon-512.png", sizes: "512x512", type: "image/png" }] }, null, 2));
+  // service worker (installabile, offline): la versione cambia con i file dell'app, così la cache vecchia si butta
+  const swVersion = createHash("sha256").update(webAssets.join() + body).digest("hex").slice(0, 12);
+  await writeFile(join(OUT, "sw.js"), (await readFile(join(ROOT, "web/sw.js"), "utf8")).replace("/*VERSION*/", swVersion).replace("/*ASSETS*/[]", JSON.stringify(webAssets)));
   await writeFile(join(OUT, "robots.txt"), `User-agent: *\nAllow: /\nDisallow: /app\nDisallow: /api/\n\nSitemap: ${SITE}/sitemap.xml\n`);
   const today = new Date().toISOString().slice(0, 10);
   await writeFile(join(OUT, "sitemap.xml"), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${["/", "/termini.html", "/privacy.html"].map((p) => `  <url><loc>${SITE}${p}</loc><lastmod>${today}</lastmod></url>`).join("\n")}\n</urlset>\n`);

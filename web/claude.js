@@ -37,7 +37,11 @@ async function imagePayload(img) {
 export function createSample({ auth, endpoint = "/api/claude", fetchFn = (...a) => fetch(...a) }) {
   async function run(prompt, opts = {}, json = false) {
     const images = await Promise.all((opts.images ?? []).map(imagePayload));
-    const token = await auth.accessToken().catch(() => null);
+    const offline = () => globalThis.navigator?.onLine === false;
+    const token = await auth.accessToken().catch((e) => {
+      if (e?.code === "network") throw sampleError("offline");
+      return null;
+    });
     if (!token) throw sampleError("session_expired");
     let r;
     try {
@@ -48,7 +52,7 @@ export function createSample({ auth, endpoint = "/api/claude", fetchFn = (...a) 
         signal: opts.signal,
       });
     } catch (e) {
-      throw sampleError(e?.name === "AbortError" ? "cancelled" : "server_error");
+      throw sampleError(e?.name === "AbortError" ? "cancelled" : offline() ? "offline" : "server_error");
     }
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));

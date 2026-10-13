@@ -277,8 +277,10 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
     if (auth.session) {
       try {
         if (await auth.accessToken()) return signedIn();
-      } catch {
-        /* rinnovo fallito: accesso */
+      } catch (e) {
+        // senza rete il token non si rinnova, ma la sessione resta: si entra con la copia dei dati in questo browser
+        if (e?.code === "network") return signedIn();
+        /* rinnovo rifiutato: accesso */
       }
     }
     let returning = !!auth.session;

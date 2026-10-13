@@ -47,3 +47,5 @@ if (new URLSearchParams(location.search).has("eliminato")) {
 }
 gate.start(initialHash);
 boot();
+// installabile e apribile senza connessione (web/sw.js); se il browser non lo permette, l'app funziona lo stesso
+if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
