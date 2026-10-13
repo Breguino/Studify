@@ -71,10 +71,11 @@ a.exam-card { display: grid; gap: 12px; align-content: start; } /* a.card impost
 .page-head { align-items: flex-end; margin-bottom: 4px; } .page-head h1 { margin: 0; }
 .page-date { display: block; font-weight: 600; color: var(--muted); }
 @media (max-width: 520px) {
-  /* sul telefono: titolo e «+ Nuovo esame» sulla stessa riga; l'import da file è nella scheda «Aggiungi un esame» */
-  .page-head { flex-wrap: nowrap; }
-  .page-head > .row { flex-wrap: nowrap; flex: 0 0 auto; }
-  .page-head .btn.ghost { display: none; }
+  /* sul telefono: titolo e «+ Nuovo esame» sulla stessa riga; con almeno un esame l'import da file è nella scheda
+     «Aggiungi un esame» (.import-moved), senza esami resta qui sotto, perché quella scheda non c'è */
+  .page-head:has(.import-moved) { flex-wrap: nowrap; }
+  .page-head:has(.import-moved) > .row { flex-wrap: nowrap; flex: 0 0 auto; }
+  .page-head .import-moved { display: none; }
   .page-head .btn.primary { padding-inline: 14px; }
 }
 .kicker { font-size: .8rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }

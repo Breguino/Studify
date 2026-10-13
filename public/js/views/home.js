@@ -143,7 +143,7 @@ export function homeView() {
     { class: "stack home" },
     h("div", { class: "row between page-head" },
       h("div", {}, h("span", { class: "page-date" }, capital(fmtDayLong(t))), h("h1", {}, "I tuoi esami")),
-      h("div", { class: "row" }, h("a", { class: "btn ghost", href: "#/import" }, "Importa CSV / Excel"), h("a", { class: "btn primary", href: "#/new" }, "+ Nuovo esame"))),
+      h("div", { class: "row" }, h("a", { class: `btn ghost${exams.length ? " import-moved" : ""}`, href: "#/import" }, "Importa CSV / Excel"), h("a", { class: "btn primary", href: "#/new" }, "+ Nuovo esame"))),
     exams.length
       ? [
           next ? nextExamHero(next) : null,
