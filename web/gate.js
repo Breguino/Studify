@@ -5,7 +5,7 @@ import { clearLocalFiles } from "./backend.js";
 import { rpc } from "./claude.js";
 
 export const TERMS_VERSION = "2026-10-05";
-export const PRIVACY_VERSION = "2026-10-06";
+export const PRIVACY_VERSION = "2026-10-13";
 const MIN_PASSWORD = 8;
 
 const redirectTo = () => `${location.origin}${location.pathname}`;
