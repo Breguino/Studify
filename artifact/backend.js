@@ -127,6 +127,7 @@ export const backend = {
   // I PDF non sono supportati in questa versione: i file restano in memoria.
   putFile: (id, data) => (mem.set(id, data), Promise.resolve()),
   getFile: (id) => Promise.resolve(mem.get(id)),
+  hasFile: (id) => Promise.resolve(mem.has(id)),
   delFile: (id) => (mem.delete(id), Promise.resolve()),
 };
 const mem = new Map();

@@ -1,5 +1,6 @@
 // Stato dell'app. In memoria + persistenza su IndexedDB (i PDF superano la quota di localStorage).
 // Lo stato è un unico oggetto serializzabile; i file binari stanno in uno store separato.
+import { MissingFileError } from "./files.js";
 import { backend } from "./backend.js";
 import { today } from "./dates.js";
 
@@ -42,6 +43,14 @@ addEventListener("visibilitychange", () => document.visibilityState === "hidden"
 
 export const putFile = (id, data) => backend.putFile(id, data);
 export const getFile = (id) => backend.getFile(id);
+/** C'è il file in questo browser? (senza leggerlo, se il backend lo permette) */
+export const hasFile = async (id) => (backend.hasFile ? backend.hasFile(id) : (await backend.getFile(id)) != null);
+/** Un file che deve esserci: se manca (caricato su un altro dispositivo) un errore che dice che cosa fare. */
+export async function requireFile(id, title) {
+  const data = id ? await backend.getFile(id) : null;
+  if (data == null) throw new MissingFileError(title);
+  return data;
+}
 export const delFile = (id) => backend.delFile(id);
 
 /* ------------------------------- esami -------------------------------- */

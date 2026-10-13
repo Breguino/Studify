@@ -64,15 +64,14 @@ function paperBox(exam, p) {
     box.append(h("p", { class: "muted small" }, "Apro il PDF della prova…"));
     (async () => {
       try {
-        const data = await store.getFile(m.fileId);
-        if (!data) throw new Error("il file non c'è più");
+        const data = await store.requireFile(m.fileId, m.title);
         const whole = p.from === 1 && p.to === (m.numPages ?? p.to);
         const b64 = whole || !extractPdfPages ? data : await extractPdfPages(data, p.from, p.to);
         const url = URL.createObjectURL(new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: "application/pdf" }));
         box.replaceChildren(h("iframe", { src: url, title: `Testo della prova: ${p.label}`, class: "paper-pdf" }),
           h("a", { href: url, target: "_blank", rel: "noopener", class: "small" }, "Apri il PDF della prova in un'altra scheda"));
       } catch (e) {
-        box.replaceChildren(h("p", { class: "callout bad" }, `Non riesco ad aprire il PDF: ${e.message}.`));
+        box.replaceChildren(h("p", { class: "callout bad" }, e.name === "MissingFileError" ? e.message : `Non riesco ad aprire il PDF: ${e.message}.`));
       }
     })();
     return box;

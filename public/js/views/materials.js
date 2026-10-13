@@ -21,6 +21,7 @@ import { applyOfficial, isSolutionsFile, officialExercises, officialQuestions, o
 import { moodleHtmlToText, parseMoodleQuiz } from "../moodle.js";
 import { paperStartsOf } from "../lessons.js";
 import * as store from "../store.js";
+import { fileIdOf } from "../files.js";
 import { fmtDate, today } from "../dates.js";
 import { clipRich, rich, richParas } from "../math.js";
 import { blobToBase64, byName, isImage, prepareImage } from "../images.js";
@@ -197,7 +198,7 @@ function withLessons(m) {
 const structure = (m) => (roleOf(m) === "esami" ? preparePapers(m) : roleOf(m) === "domande" ? m : withLessons(m));
 
 /** Testo di ogni pagina di un PDF salvato (versione con server), riga per riga. */
-const pdfPageTexts = async (m, maxPages = 300) => pageTexts(await store.getFile(m.fileId), maxPages);
+const pdfPageTexts = async (m, maxPages = 300) => pageTexts(await store.requireFile(m.fileId, m.title), maxPages);
 
 /** PDF di esami passati (versione con server): dal testo delle pagine si trova dove inizia ogni prova. */
 async function findPdfPapers(m) {
@@ -230,7 +231,7 @@ function readPdfExercises(exam, m) {
   return run(exam, "transcribe", async (onProgress) => {
     const n = m.numPages ?? 1;
     if (n > 60) throw new Error("Al massimo 60 pagine per un'esercitazione: dividi il PDF.");
-    const data = await store.getFile(m.fileId);
+    const data = await store.requireFile(m.fileId, m.title);
     const pages = [];
     for (let from = 1; from <= n; from += 5) {
       const to = Math.min(n, from + 4);
@@ -425,7 +426,7 @@ async function payload(list, { onlyNew = false } = {}) {
       if (text) materials.push({ kind: "notes", role: "domande", title: m.title, pages: r ? `${r.from}-${r.to}` : "", unit: m.unit ?? "pagine", year: m.year ?? "", handwritten: false, text });
     }
     else if (m.kind === "pdf") {
-      let data = await store.getFile(m.fileId);
+      let data = await store.requireFile(m.fileId, m.title);
       if (r && extractPdfPages && (r.from > 1 || r.to < (m.numPages ?? Infinity))) data = await extractPdfPages(data, r.from, r.to);
       pages += r ? r.to - r.from + 1 : m.numPages ?? 0;
       bytes += data.length;
@@ -858,6 +859,27 @@ export function materialsTab(exam, { first = false } = {}) {
     : null;
 
   /* --- elenco materiali --- */
+  // PDF caricato su un altro dispositivo: il materiale c'è (gli esami si sincronizzano), il file no.
+  // Si controlla dopo aver disegnato la pagina, per non rallentarla.
+  const fileStatus = (m) => {
+    const slot = h("div", { class: "callout warn file-missing", hidden: true });
+    store.hasFile(m.fileId).then((ok) => {
+      if (ok) return;
+      const input = h("input", { type: "file", accept: "application/pdf,.pdf", class: "visually-hidden", onchange: async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const dataUrl = await readFileAs(file, "dataurl");
+        await store.putFile(m.fileId, dataUrl.slice(dataUrl.indexOf(",") + 1));
+        toast(file.size === m.size ? `«${m.title}» è di nuovo in questo browser.` : `«${m.title}» caricato, ma non sembra lo stesso file di prima (dimensione diversa): controlla le pagine scelte.`, "ok");
+        core.rerender();
+      } });
+      slot.replaceChildren(
+        h("span", {}, h("b", {}, "Il PDF è su un altro dispositivo. "), "Il materiale c'è, ma il file è rimasto nel browser dove l'hai caricato: per usarlo da qui, caricalo di nuovo."),
+        h("label", { class: "btn small" }, input, "Carica di nuovo"));
+      slot.hidden = false;
+    });
+    return slot;
+  };
   const pending = pendingMaterials(exam);
   const isPending = new Set(pending.map((m) => m.id));
   const list = hasContent
@@ -882,6 +904,7 @@ export function materialsTab(exam, { first = false } = {}) {
               roleOf(m) === "svolti" ? h("div", { class: "small muted" }, "Esercizi svolti dal docente: l'AI ne ricava il metodo in passi (come li risolve lui, con la sua notazione) e crea esercizi dello stesso tipo. Li ritrovi negli argomenti come «Esercizi guidati». Se sono scansioni o appunti a mano, controlla le formule nell'anteprima.") : null,
               m.kind === "notes" ? (m.handwritten ? handwrittenRow(exam, m) : formulaRow(exam, m)) : null),
             h("button", { class: "btn small danger", onclick: () => removeMaterial(exam, m), "aria-label": `Rimuovi ${m.title}` }, "Rimuovi")),
+          fileIdOf(m) ? fileStatus(m) : null,
           m.kind === "web" ? h("details", {}, h("summary", { class: "small" }, m.generated ? "Anteprima (bozza dalla conoscenza di Claude, senza fonti)" : `Anteprima e ${m.sources.length} fonti`),
             h("pre", { style: { whiteSpace: "pre-wrap", maxHeight: "260px", overflow: "auto", font: "inherit", fontSize: ".9rem" } }, m.text),
             h("ul", { class: "source-list" }, m.sources.map((s) => h("li", {}, h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer" }, s.title || s.url))))) : null,

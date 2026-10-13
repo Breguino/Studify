@@ -59,7 +59,7 @@ export async function syncChapterLinks(exam, onProgress = () => {}, { force = fa
 }
 
 /** Testo di ogni pagina di un PDF tra i materiali (salvato, o già estratto nella pagina Claude). */
-const pageTextsOf = async (m) => (m.kind === "pdf" ? pdfPageTexts(await store.getFile(m.fileId), 1200) : String(m.text ?? "").split("\f"));
+const pageTextsOf = async (m) => (m.kind === "pdf" ? pdfPageTexts(await store.requireFile(m.fileId, m.title), 1200) : String(m.text ?? "").split("\f"));
 
 /**
  * Le dispense del docente in PDF diventano un testo di riferimento: indice dalla pagina «Indice» o dai titoli dei capitoli.
@@ -99,7 +99,7 @@ async function locatePdf(exam, book) {
   const m = exam.materials.find((x) => x.id === book.materialId);
   if (!m || !book.toc?.length) return;
   try {
-    const texts = m.kind === "pdf" ? await pdfPageTexts(await store.getFile(m.fileId), 1200) : String(m.text ?? "").split("\f");
+    const texts = m.kind === "pdf" ? await pdfPageTexts(await store.requireFile(m.fileId, m.title), 1200) : String(m.text ?? "").split("\f");
     book.offset = findOffset(texts, book.toc);
   } catch {
     book.offset = null;

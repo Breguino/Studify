@@ -22,8 +22,7 @@ export const topicList = (exam) => exam.module.topics.map(({ id, title }) => ({ 
 export async function paperForApi(exam, p) {
   const m = exam.materials.find((x) => x.id === p.materialId);
   if (m.kind === "pdf") {
-    const data = await store.getFile(m.fileId);
-    if (!data) throw new Error(`Il PDF «${m.title}» non è più disponibile: caricalo di nuovo.`);
+    const data = await store.requireFile(m.fileId, m.title);
     const whole = p.from === 1 && p.to === (m.numPages ?? p.to);
     return { label: p.label, data: whole || !extractPdfPages ? data : await extractPdfPages(data, p.from, p.to) };
   }

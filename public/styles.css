@@ -337,6 +337,9 @@ form[aria-busy="true"] { cursor: progress; }
 @media (max-width: 520px) { .hub-head { flex-wrap: nowrap; align-items: flex-start; gap: 12px; } .hub-head > .btn { margin-top: 6px; } }
 .days-more > summary { cursor: pointer; display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; color: var(--brand); }
 .days-more[open] > summary { margin-bottom: 10px; }
+.file-missing { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; margin-top: 10px; }
+.file-missing[hidden] { display: none; }
+.file-missing label.btn:focus-within { outline: 3px solid color-mix(in srgb, var(--brand) 55%, transparent); outline-offset: 2px; }
 .hub-title { display: grid; gap: 4px; min-width: 0; } .hub-title h1 { margin: 0; }
 .hub-meta { gap: 6px 12px; }
 .today-layout { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
