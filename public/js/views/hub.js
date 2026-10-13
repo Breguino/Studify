@@ -126,7 +126,12 @@ function todayTab(exam) {
   const budget = exam.hoursPerDay * 60;
   const sim = nextSimulation(plan, today());
   const hint = hintFor(exam, s.next);
-  const recalc = h("button", { class: "btn small ghost", onclick: () => { ensurePlan(exam, true); core.rerender(); } }, "Ricalcola piano");
+  // Il piano si ricalcola da solo (ogni giorno e quando cambiano data, ore o materiali), ma non durante la giornata:
+  // la sessione di oggi resta ferma mentre la fai. Chi finisce prima può anticipare il prossimo argomento.
+  const pendingTopics = exam.module.topics.some((t) => !exam.learned[t.id]);
+  const ahead = pendingTopics
+    ? h("button", { class: "btn small", onclick: () => { ensurePlan(exam, true); core.rerender(); } }, "Anticipa il prossimo argomento")
+    : null;
 
   const session = first
     ? h("section", { class: "card session-card", "aria-labelledby": "sessione" },
@@ -134,20 +139,21 @@ function todayTab(exam) {
           h("div", { class: "stack", style: { gap: "2px" } },
             h("span", { class: "kicker" }, `Oggi · ${fmtDay(today())} · ${PHASES[first.phase]}`),
             h("h2", { id: "sessione" }, s.tasks.length ? `La sessione di oggi: ${s.minutes} min` : "Oggi niente in programma")),
-          h("div", { class: "row" }, s.tasks.length ? h("span", { class: "muted small" }, `${s.doneMinutes} di ${s.minutes} min fatti · ${first.lessons?.length ? first.usable : Math.round(budget)} disponibili`) : null, rest.length ? null : recalc)),
+          h("div", { class: "row" }, s.tasks.length ? h("span", { class: "muted small" }, `${s.doneMinutes} di ${s.minutes} min fatti · ${first.lessons?.length ? first.usable : Math.round(budget)} disponibili`) : null)),
         s.tasks.length ? bar(s.minutes ? s.doneMinutes / s.minutes : 0, { tone: "good", label: "sessione di oggi" }) : null,
         first.lessons?.length ? h("div", { class: "callout" }, h("b", {}, "Oggi hai lezione: "), first.lessons.map(fmtLesson).join(" · "), first.avail > 0 ? `. Tempo di studio rimasto: ~${first.avail} min.` : ". Poco tempo di studio oggi: solo un po' di flashcard.") : null,
         first.overload ? h("div", { class: "callout warn" }, "Il carico di oggi supera il tempo che hai indicato: fai prima le attività in cima.") : null,
         h("div", { class: "stack", style: { gap: "8px" } }, first.tasks.map((t) => taskRow(exam, t, { now: t === s.next }))),
         s.next && s.tasks.length > 1 ? h("p", { class: "muted small", style: { margin: 0 } }, "Hai poco tempo? Comincia da «Adesso»: gli argomenti che oggi non studi tornano nel piano dei prossimi giorni.") : null,
-        !s.next && s.tasks.length ? h("div", { class: "callout good" }, h("b", {}, "Fatto per oggi."), " Domani il piano riparte da dove sei arrivato.") : null)
+        !s.next && s.tasks.length ? h("div", { class: "callout good row between day-done" },
+          h("span", {}, h("b", {}, "Fatto per oggi."), " Domani il piano riparte da dove sei arrivato.", ahead ? " Hai ancora voglia? Puoi anticipare." : ""),
+          ahead) : null)
     : null;
 
   const upcoming = rest.length
     ? h("section", { class: "stack upcoming", "aria-labelledby": "prossimi" },
         h("div", { class: "row between" },
-          h("h2", { id: "prossimi", style: { margin: 0 } }, waiting ? `Dal ${fmtDate(plan.start)}` : "I prossimi giorni"),
-          recalc),
+          h("h2", { id: "prossimi", style: { margin: 0 } }, waiting ? `Dal ${fmtDate(plan.start)}` : "I prossimi giorni")),
         h("ul", { class: "legend", "aria-label": "Fasi del piano" }, Object.entries(PHASES).map(([k, t]) => h("li", { "data-phase": k }, t))),
         // la settimana davanti; il resto del piano a scomparsa, altrimenti sul telefono sono schermate di schede
         h("div", { class: "days" }, rest.slice(0, DAYS_SHOWN).map(dayCell)),
@@ -247,7 +253,9 @@ function moduleTab(exam) {
   return h("div", { class: "stack" },
     h("div", { class: "card" }, h("h2", {}, mod.title || "Modulo di studio"), richParas(mod.overview),
       h("div", { class: "row" }, badge(`${mod.topics.length} argomenti`, "brand"), badge(`${mod.flashcards.length} flashcard`), badge(`${mod.questions.length} domande`), mod.examHints?.length ? badge(`${mod.examHints.length} ${mod.examHints.length === 1 ? "indicazione" : "indicazioni"} sull'esame`, "bad") : null, mod.local ? badge("modalità base", "warn") : null),
-      exam.moduleUpdatedAt ? h("p", { class: "muted small", style: { margin: "8px 0 0" } }, `Aggiornato con appunti nuovi il ${fmtDate(today(new Date(exam.moduleUpdatedAt)))}.`) : null),
+      exam.moduleUpdatedAt ? h("p", { class: "muted small", style: { margin: "8px 0 0" } }, `Aggiornato con appunti nuovi il ${fmtDate(today(new Date(exam.moduleUpdatedAt)))}.`) : null,
+      // il riepilogo «modulo pronto» si vede da solo una volta sola: da qui si riapre
+      h("a", { class: "next-link small", href: `#/exam/${exam.id}/riepilogo` }, "Riepilogo: argomenti dal più importante e prima sessione →")),
     hintsBox(exam, mod.examHints, mod),
     papers ? h("div", { class: "callout row between" }, h("span", {}, freq.n
       ? `Esami passati: ${freq.n} ${freq.n === 1 ? "prova analizzata" : "prove analizzate"}. Accanto a ogni argomento, in quante prove compare.`

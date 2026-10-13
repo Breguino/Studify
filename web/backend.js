@@ -47,7 +47,7 @@ const synced = withLocalCopy({
   uid: async () => (await window.claude?.use?.("user"))?.id?.() ?? null,
   notify: (what) => toast(what === "offline"
     ? "Sei senza connessione: continua pure a studiare. Le modifiche restano su questo dispositivo e vanno online appena torna la rete."
-    : "Di nuovo online: le modifiche fatte senza connessione sono salvate.", what === "offline" ? "error" : "ok"),
+    : "Di nuovo online: le modifiche fatte senza connessione sono salvate.", what === "offline" ? "info" : "ok"), // offline non è un errore
 });
 globalThis.addEventListener?.("online", () => synced.retry()); // nelle prove in Node non ci sono eventi del browser
 

@@ -37,7 +37,7 @@ export function toast(msg, kind = "info") {
   const box = document.getElementById("toasts");
   const t = h("div", { class: `toast ${kind}`, role: "status" }, msg);
   box.append(t);
-  setTimeout(() => t.remove(), kind === "error" ? 7000 : 3500);
+  setTimeout(() => t.remove(), kind === "error" || String(msg).length > 90 ? 7000 : 3500); // i messaggi lunghi restano il tempo di leggerli
 }
 
 export const pct = (x) => (x == null ? "—" : `${Math.round(x * 100)}%`);
