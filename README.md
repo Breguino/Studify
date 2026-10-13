@@ -138,7 +138,7 @@ Prove: `test/web.test.js` (funzione, accesso, `sample`, `db`, controlli di regis
      risultato è scartato; un orale facoltativo non rende l'esame «scritto + orale». Senza AI la lettura è a regole (dichiarata come
      tale). Il risultato resta nel piano di studi.
    I dati trovati sul web sono sempre segnalati «da verificare» (a.a., fonti): la prova d'esame resta «Non indicato» se la scheda non la dichiara.
-0b. **Importa da CSV o Excel** (pulsante «Importa CSV / Excel»): tre tipi di file, riconosciuti dalle intestazioni (colonne correggibili a mano):
+0b. **Importa da CSV o Excel** (pulsante «Importa CSV / Excel» nella home; sul telefono «Importa da CSV / Excel» nella scheda «Aggiungi un esame»): tre tipi di file, riconosciuti dalle intestazioni (colonne correggibili a mano):
    - **appelli d'esame**: insegnamento, data, ora, aula, tipo di prova, CFU, anno. Più date per lo stesso insegnamento = più appelli (si sceglie
      da «Modifica»); le date già passate vengono ignorate; l'esame esistente con lo stesso nome viene aggiornato, non duplicato;
    - **piano di studi**: insegnamento, anno, CFU, tipo (obbligatorio / a scelta), prova;
@@ -349,7 +349,8 @@ Prove: `test/web.test.js` (funzione, accesso, `sample`, `db`, controlli di regis
      prossimi sette giorni (minuti di studio, giorni liberi, l'appello) e la sessione di oggi da spuntare; sotto gli altri esami,
      ciascuno con i giorni che mancano, e il riepilogo del libretto.
    - **Oggi** (pagina dell'esame): la sessione del giorno con l'attività da fare **adesso** in evidenza (la prima ancora da fare
-     che si può aprire), i prossimi giorni a riquadri con il colore della fase e la prossima simulazione; di lato una frase del
+     che si può aprire), i prossimi sei giorni a riquadri con il colore della fase (il resto del piano si apre con «Tutto il piano»)
+     e la prossima simulazione; di lato una frase del
      docente sull'esame (dell'argomento di adesso, se c'è), gli argomenti dove c'è più da guadagnare e le flashcard da ripassare.
    - **Quiz**: una tacca per domanda (giusta, da rivedere, di adesso), alternative con la lettera e, dopo la risposta, «Corretta» /
      «La tua risposta» e il perché, con la fonte se la domanda è del docente. Da tastiera: A–D (o 1–4) per rispondere, Invio per

@@ -90,11 +90,13 @@ function nextExamHero(exam) {
     h("div", { class: "next-count" },
       h("b", {}, dl === 0 ? "oggi" : `${exam.dateTentative ? "~" : ""}${dl}`),
       dl > 0 ? h("span", {}, dl === 1 ? "giorno" : "giorni", h("br"), "all'appello") : h("span", {}, "in bocca", h("br"), "al lupo")),
-    exam.module
+    // senza dati una riga sola, non una barra vuota: la preparazione compare dopo il primo quiz o le prime flashcard
+    exam.module && ready == null ? h("span", { class: "next-note" }, "La preparazione stimata compare dopo il primo quiz o le prime flashcard.") : null,
+    exam.module && ready != null
       ? h("div", { class: "next-ready" },
-          h("div", { class: "row between" }, h("span", {}, "Preparazione stimata"), h("b", {}, ready == null ? "—" : pct(ready))),
-          bar(ready ?? 0, { label: "preparazione stimata" }),
-          h("span", { class: "next-note" }, ready == null ? "Si misura con quiz e flashcard: fai il primo e compare qui." : "Dai quiz e dalle flashcard, pesati per l'importanza degli argomenti."))
+          h("div", { class: "row between" }, h("span", {}, "Preparazione stimata"), h("b", {}, pct(ready))),
+          bar(ready, { label: "preparazione stimata" }),
+          h("span", { class: "next-note" }, "Dai quiz e dalle flashcard, pesati per l'importanza degli argomenti."))
       : null,
     week.length > 1 ? h("ol", { class: "week", "aria-label": "I prossimi giorni" }, week.map((d) => h("li", { class: d.kind }, h("span", {}, d.day), h("b", {}, cell(d))))) : null);
 
@@ -126,8 +128,8 @@ function nextExamHero(exam) {
 function addCard() {
   return h("div", { class: "add-card" },
     h("a", { class: "add-main", href: "#/new" }, h("span", { class: "add-icon" }, icon("plus", 22)), h("b", {}, "Aggiungi un esame")),
-    h("span", { class: "small muted" }, "oppure"),
-    ...importGroupButton("btn ghost small"));
+    h("span", { class: "small muted add-or" }, "oppure"),
+    h("div", { class: "row add-more" }, ...importGroupButton("btn ghost small"), h("a", { class: "btn ghost small", href: "#/import" }, "Importa da CSV / Excel")));
 }
 
 export function homeView() {
