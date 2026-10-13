@@ -63,6 +63,20 @@ export function releaseOnLeave(root, onKey) {
   core.onRender.add(stop);
 }
 
+/**
+ * Salva un file sul dispositivo: nella pagina Claude con la funzione `downloads`, altrove con un link di download.
+ * Restituisce true se il file è stato salvato (o il download è partito).
+ */
+export async function saveFile(filename, data, type = "application/octet-stream") {
+  if (core.downloads) {
+    try { await core.downloads({ filename, data }); return true; } catch (e) { if (e?.code !== "declined") toast("Salvataggio del file non riuscito.", "error"); return false; }
+  }
+  const a = h("a", { href: URL.createObjectURL(new Blob([data], { type })), download: filename });
+  a.click();
+  URL.revokeObjectURL(a.href);
+  return true;
+}
+
 export const badge = (text, tone = "") => h("span", { class: `badge ${tone}` }, text);
 
 /* Icone a tratto (seguono il colore del testo e il tema). h() crea solo elementi HTML: gli SVG vogliono createElementNS. */

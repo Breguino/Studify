@@ -33,13 +33,14 @@ export function explain(e) {
     model_unavailable: "Il modello di Claude configurato sul server non è disponibile per questa chiave.",
     server_error: "Il server di Studify non ha risposto. Riprova tra poco.",
     cancelled: "Operazione annullata.",
+    offline: "Sei senza connessione: Claude torna quando sei di nuovo online. Quiz, flashcard e piano funzionano anche così.",
   }[e?.code] ?? "Errore di comunicazione con Claude. Riprova.";
   if (e?.message && (e.code === "quota_exceeded" || e.code === "sampling_disabled")) return new Error(e.message); // messaggio preciso dal server di Studify
   return new Error(msg);
 }
 
 // Errori per cui non ha senso continuare con gli altri passi (le altre richieste fallirebbero allo stesso modo).
-const FATAL = new Set(["not_granted", "sampling_disabled", "rate_limited", "quota_exceeded", "session_expired", "billing", "invalid_key", "model_unavailable"]);
+const FATAL = new Set(["not_granted", "sampling_disabled", "rate_limited", "quota_exceeded", "session_expired", "billing", "invalid_key", "model_unavailable", "offline"]);
 const isFatal = (e) => FATAL.has(e?.code);
 
 /** Esegue `fn` su ogni elemento con al più `n` richieste in volo. */

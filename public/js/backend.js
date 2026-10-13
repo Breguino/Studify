@@ -47,5 +47,6 @@ export const backend = {
   },
   putFile: (id, data) => (ok ? tx("files", "readwrite", (s) => s.put(data, id)) : (memFiles.set(id, data), Promise.resolve())),
   getFile: (id) => (ok ? tx("files", "readonly", (s) => s.get(id)) : Promise.resolve(memFiles.get(id))),
+  hasFile: (id) => (ok ? tx("files", "readonly", (s) => s.getKey(id)).then((k) => k !== undefined) : Promise.resolve(memFiles.has(id))),
   delFile: (id) => (ok ? tx("files", "readwrite", (s) => s.delete(id)) : (memFiles.delete(id), Promise.resolve())),
 };
