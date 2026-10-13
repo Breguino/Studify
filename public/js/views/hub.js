@@ -49,13 +49,15 @@ export function hubView(exam, tab) {
     h("a", { class: "back-link no-print", href: "#/" }, "← I tuoi esami"),
     h("div", { class: "row between hub-head no-print" },
       h("div", { class: "hub-title" }, h("h1", {}, exam.name), examMeta(exam)),
-      h("a", { class: "btn", href: `#/exam/${exam.id}/edit` }, "Modifica")),
+      h("a", { class: "btn small", href: `#/exam/${exam.id}/edit` }, "Modifica")),
     h("nav", { class: "tabs no-print", "aria-label": "Sezioni" }, TABS.map(([k, t]) => h("a", { href: `#/exam/${exam.id}/${k}`, "aria-current": k === tab ? "page" : null }, t))),
     body,
   );
 }
 
 /* --------------------------------- OGGI --------------------------------- */
+
+const DAYS_SHOWN = 6; // giorni del piano mostrati subito sotto la sessione di oggi
 
 /** Una frase del docente sull'esame da tenere sott'occhio: sull'argomento di adesso, se c'è, altrimenti la prima. */
 function hintFor(exam, task) {
@@ -113,7 +115,7 @@ function todayTab(exam) {
           h("div", { class: "stack", style: { gap: "2px" } },
             h("span", { class: "kicker" }, `Oggi · ${fmtDay(today())} · ${PHASES[first.phase]}`),
             h("h2", { id: "sessione" }, s.tasks.length ? `La sessione di oggi: ${s.minutes} min` : "Oggi niente in programma")),
-          h("div", { class: "row" }, s.tasks.length ? h("span", { class: "muted small" }, `${s.doneMinutes} di ${s.minutes} min fatti · ${first.lessons?.length ? first.usable : Math.round(budget)} disponibili`) : null, recalc)),
+          h("div", { class: "row" }, s.tasks.length ? h("span", { class: "muted small" }, `${s.doneMinutes} di ${s.minutes} min fatti · ${first.lessons?.length ? first.usable : Math.round(budget)} disponibili`) : null, rest.length ? null : recalc)),
         s.tasks.length ? bar(s.minutes ? s.doneMinutes / s.minutes : 0, { tone: "good", label: "sessione di oggi" }) : null,
         first.lessons?.length ? h("div", { class: "callout" }, h("b", {}, "Oggi hai lezione: "), first.lessons.map(fmtLesson).join(" · "), first.avail > 0 ? `. Tempo di studio rimasto: ~${first.avail} min.` : ". Poco tempo di studio oggi: solo un po' di flashcard.") : null,
         first.overload ? h("div", { class: "callout warn" }, "Il carico di oggi supera il tempo che hai indicato: fai prima le attività in cima.") : null,
@@ -126,8 +128,13 @@ function todayTab(exam) {
     ? h("section", { class: "stack upcoming", "aria-labelledby": "prossimi" },
         h("div", { class: "row between" },
           h("h2", { id: "prossimi", style: { margin: 0 } }, waiting ? `Dal ${fmtDate(plan.start)}` : "I prossimi giorni"),
-          h("div", { class: "row" }, waiting ? recalc : null, h("ul", { class: "legend", "aria-label": "Fasi del piano" }, Object.entries(PHASES).map(([k, t]) => h("li", { "data-phase": k }, t))))),
-        h("div", { class: "days" }, rest.map(dayCell)),
+          recalc),
+        h("ul", { class: "legend", "aria-label": "Fasi del piano" }, Object.entries(PHASES).map(([k, t]) => h("li", { "data-phase": k }, t))),
+        // la settimana davanti; il resto del piano a scomparsa, altrimenti sul telefono sono schermate di schede
+        h("div", { class: "days" }, rest.slice(0, DAYS_SHOWN).map(dayCell)),
+        rest.length > DAYS_SHOWN ? h("details", { class: "days-more" },
+          h("summary", {}, `Tutto il piano: altri ${rest.length - DAYS_SHOWN} giorni fino all'esame`),
+          h("div", { class: "days" }, rest.slice(DAYS_SHOWN).map(dayCell))) : null,
         sim ? h("div", { class: "callout warn sim-next" }, h("b", {}, `${capital(fmtDayLong(sim.date))}: simulazione d'esame`),
           h("span", {}, `tra ${sim.inDays} ${sim.inDays === 1 ? "giorno" : "giorni"} · ${sim.task.minutes} min a tempo, senza appunti${sim.task.kind === "sim" ? ", su una prova d'esame vera" : ""}`)) : null)
     : null;
