@@ -354,6 +354,10 @@ form[aria-busy="true"] { cursor: progress; }
 .q-src { font-size: .85rem; color: var(--muted); }
 .side-card { display: grid; gap: 12px; padding: 20px; } .side-card.row { display: flex; }
 .side-card h2 { margin: 0; font-size: 1.05rem; }
+.cal-card p { margin: 0; }
+.cal-row { gap: 10px; flex-wrap: wrap; }
+.cal-time { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.cal-time input { width: auto; }
 .weak-row { display: grid; gap: 6px; } .weak-row .bar { height: 6px; } .weak-row .never { color: var(--bad); }
 .weak-row > .row { flex-wrap: nowrap; align-items: baseline; } .weak-row > .row > span { min-width: 0; } .weak-row > .row > b { flex: 0 0 auto; }
 .side-link { font-weight: 700; text-decoration: none; }
