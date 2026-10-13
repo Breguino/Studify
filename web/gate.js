@@ -7,6 +7,12 @@ import { rpc } from "./claude.js";
 export const TERMS_VERSION = "2026-10-05";
 export const PRIVACY_VERSION = "2026-10-13";
 const MIN_PASSWORD = 8;
+// Che cosa è cambiato nell'informativa dall'ultima versione: lo vede una volta chi si era iscritto prima.
+const PRIVACY_CHANGES = "Per farti studiare anche senza connessione, ora una copia dei tuoi dati di studio (esami, piano, progressi) resta anche in questo browser, oltre che online. All'uscita dall'account viene cancellata, insieme ai file.";
+
+/** L'informativa è cambiata dopo quella accettata (o già vista) da questo account? Solo per chi si è registrato con il consenso. */
+export const privacyOutdated = (meta = {}, current = PRIVACY_VERSION) =>
+  !!meta.terms_version && ([meta.privacy_version, meta.privacy_seen].filter(Boolean).sort().at(-1) ?? "") < current;
 
 const redirectTo = () => `${location.origin}${location.pathname}`;
 const field = (label, input, hint) => h("label", {}, label, input, hint ? h("span", { class: "hint" }, hint) : null);
@@ -244,6 +250,31 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
     }
     close();
     resolveReady();
+    if (privacyOutdated(auth.user?.user_metadata)) privacyNotice();
+  }
+
+  /** Avviso dell'informativa aggiornata: una volta, finché non si preme «Ho capito». */
+  function privacyNotice() {
+    const previous = document.activeElement;
+    const done = async () => {
+      dlg.remove();
+      document.removeEventListener("keydown", onKey);
+      previous?.focus?.();
+      // «visto», non «accettato»: la base giuridica resta il contratto, il consenso della registrazione non cambia
+      await auth.updateMetadata({ privacy_seen: PRIVACY_VERSION, privacy_seen_at: new Date().toISOString() }).catch(() => {});
+    };
+    const onKey = (e) => e.key === "Escape" && done();
+    document.addEventListener("keydown", onKey);
+    const dlg = h("div", { class: "modal-backdrop", role: "presentation" },
+      h("div", { class: "modal card stack", role: "dialog", "aria-modal": "true", "aria-labelledby": "privacy-news" },
+        h("h2", { id: "privacy-news", style: { margin: 0 } }, "Abbiamo aggiornato l'informativa privacy"),
+        h("p", { style: { margin: 0 } }, PRIVACY_CHANGES),
+        h("p", { class: "small muted", style: { margin: 0 } }, "Non cambia nient'altro: stessi dati online, stessi fornitori."),
+        h("div", { class: "row" },
+          h("button", { class: "btn primary", onclick: done }, "Ho capito"),
+          h("a", { class: "btn", href: "privacy.html", target: "_blank", rel: "noopener" }, "Leggi l'informativa"))));
+    document.body.append(dlg);
+    dlg.querySelector("button")?.focus();
   }
 
   async function recordConsent() {

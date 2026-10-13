@@ -116,6 +116,11 @@ export function createAuth({ url, key, fetchFn = (...a) => fetch(...a), storage 
       const user = await call("user", { method: "PUT", token: await auth.accessToken(), body: { password } });
       save({ ...session, user });
     },
+    /** Aggiunge campi ai metadati dell'account (Supabase li unisce a quelli che ci sono). */
+    async updateMetadata(data) {
+      const user = await call("user", { method: "PUT", token: await auth.accessToken(), body: { data } });
+      save({ ...session, user });
+    },
     async signOut() {
       const token = session?.access_token;
       save(null);

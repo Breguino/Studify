@@ -5,7 +5,7 @@ import { EventEmitter } from "node:events";
 import { HttpError, claudeErrorCode, costUsd, createHandler, messageParams, readBody } from "../api/_lib.js";
 import { authError, createAuth, parseAuthHash } from "../web/auth.js";
 import { createDb, createSample, parseJsonText } from "../web/claude.js";
-import { initialMode, looksLikeBot, MIN_FILL_MS, signupInvalid, signupProblems } from "../web/gate.js";
+import { initialMode, looksLikeBot, MIN_FILL_MS, privacyOutdated, signupInvalid, signupProblems } from "../web/gate.js";
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const ENV = { SUPABASE_URL: "https://sb.test", SUPABASE_KEY: "pk", ANTHROPIC_API_KEY: "sk-test", USER_MONTHLY_LIMIT_USD: "3", TOTAL_MONTHLY_LIMIT_USD: "30" };
@@ -107,7 +107,7 @@ test("handler: risposta in streaming NDJSON e consumo registrato con il costo", 
   assert.equal(res.statusCode, 200);
   assert.match(res.headers["content-type"], /ndjson/);
   assert.deepEqual(res.lines(), [{ type: "text", delta: "Ciao" }, { type: "text", delta: " mondo" }, { type: "done", truncated: false }]);
-  assert.equal(anthropic.seen[0].model, "claude-opus-5-5");
+  assert.equal(anthropic.seen[0].model, "claude-sonnet-5-5", "predefinito: Sonnet 5.5");
   const rec = sb.calls.find((c) => c.url.endsWith("record_ai_usage"));
   assert.ok(rec, "consumo registrato");
   assert.equal(rec.init.headers.Authorization, "Bearer user-jwt", "registrato con il token dell'utente (RLS), senza chiave di servizio");
@@ -163,7 +163,7 @@ test("handler: rifiuto e interruzione → riga d'errore, consumo comunque regist
 test("handler: GET restituisce il limite mensile e se la chiave è configurata (non il valore)", async () => {
   const res = fakeRes();
   await createHandler({ env: ENV, anthropic: fakeAnthropic(), fetchFn: fakeSupabase().fetchFn })(fakeReq({ method: "GET", token: null }), res);
-  assert.deepEqual(JSON.parse(res.chunks.join("")), { limits: { user: 3 }, configured: true, model: "claude-opus-5-5" });
+  assert.deepEqual(JSON.parse(res.chunks.join("")), { limits: { user: 3 }, configured: true, model: "claude-sonnet-5-5" });
   const res2 = fakeRes();
   await createHandler({ env: { ...ENV, ANTHROPIC_API_KEY: "" }, anthropic: null, fetchFn: fakeSupabase().fetchFn })(fakeReq({ method: "GET", token: null }), res2);
   const body = JSON.parse(res2.chunks.join(""));
@@ -371,4 +371,12 @@ test("modulo di registrazione: campi da segnare in rosso, nell'ordine del modulo
   assert.deepEqual(signupInvalid({ ...ok, password: "solamentelettere" }), ["password"]);
   assert.deepEqual(signupInvalid({}), ["email", "password", "terms", "privacy", "adult"]);
   for (const v of [ok, { ...ok, email: "" }, { ...ok, password: "corta1", terms: false }, {}]) assert.equal(signupInvalid(v).length, signupProblems(v).length, "un campo per ogni errore");
+});
+
+test("informativa aggiornata: l'avviso compare una volta a chi si era iscritto prima", () => {
+  assert.equal(privacyOutdated({ terms_version: "2026-10-05", privacy_version: "2026-10-06" }, "2026-10-13"), true);
+  assert.equal(privacyOutdated({ terms_version: "2026-10-05", privacy_version: "2026-10-06", privacy_seen: "2026-10-13" }, "2026-10-13"), false, "già visto");
+  assert.equal(privacyOutdated({ terms_version: "2026-10-05", privacy_version: "2026-10-13" }, "2026-10-13"), false, "iscritto con la versione attuale");
+  assert.equal(privacyOutdated({ terms_version: "2026-10-05" }, "2026-10-13"), true, "versione mancante: avviso");
+  assert.equal(privacyOutdated({}, "2026-10-13"), false, "senza consenso registrato (account di prova): niente avviso");
 });
