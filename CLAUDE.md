@@ -62,7 +62,7 @@ h("button", { class: "btn primary", onclick: () => save() }, "Salva");
 ```
 
 Altri helper di `ui.js` (anche `icon(nome)`, icone SVG a tratto, e `stepper(n)`):
-- `toast(msg, "ok"|"error")`
+- `toast(msg, "ok"|"error"|"info")`: «info» è neutro, per avvisi che non sono errori (es. senza connessione)
 - `bar(valore, { label, tone })`
 - `badge(testo, tone)`
 - `emptyState(titolo, testo, ...azioni)`

@@ -345,7 +345,10 @@ Prove: `test/web.test.js` (funzione, accesso, `sample`, `db`, controlli di regis
    le sue dispense non passano davanti al libro, e l'app lo dice dove conta: una frase sull'esame trovata in un materiale del
    tutorato è segnata «detta al tutorato, non dal docente», i metodi ricavati dai suoi esercizi svolti sono «Come lo risolve il
    tutor», negli esercizi guidati e nel piano «metodo del tutor». Un PDF «Tutorato 3» senza altri indizi è un foglio di esercizi.
-14. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo se salti giorni o finisci prima.
+14. **Studia con il piano**: ogni giorno hai una lista di attività; si ricalcola da solo ogni giorno (se salti giorni o finisci
+   prima) e quando cambi data, ore, tipo di prova o materiali. Durante la giornata la sessione di oggi resta ferma mentre la fai:
+   chi la finisce e ha ancora argomenti da studiare trova «Anticipa il prossimo argomento» nel riquadro «Fatto per oggi».
+   Il riepilogo «modulo pronto» (argomenti dal più importante, prima sessione) si riapre dal link in cima alla scheda «Modulo».
    - **Home**: l'esame con l'appello più vicino è in una fascia indaco, con il conto alla rovescia, la preparazione stimata, i
      prossimi sette giorni (minuti di studio, giorni liberi, l'appello) e la sessione di oggi da spuntare; sotto gli altri esami,
      ciascuno con i giorni che mancano, e il riepilogo del libretto.
