@@ -45,9 +45,13 @@ const synced = withLocalCopy({
     set: (uid, record) => tx("readwrite", (s) => s.put(record, uid), "state"),
   },
   uid: async () => (await window.claude?.use?.("user"))?.id?.() ?? null,
-  notify: (what) => toast(what === "offline"
-    ? "Sei senza connessione: continua pure a studiare. Le modifiche restano su questo dispositivo e vanno online appena torna la rete."
-    : "Di nuovo online: le modifiche fatte senza connessione sono salvate.", what === "offline" ? "info" : "ok"), // offline non è un errore
+  notify: (what, names = []) => (what === "conflict"
+    ? toast(`${names.map((n) => `«${n}»`).join(", ")}: ${names.length === 1 ? "l'hai modificato" : "li hai modificati"} sia qui sia su un altro dispositivo. Ho tenuto la versione online e aggiunto quella di questo dispositivo come copia «(da questo dispositivo)»: tieni quella giusta ed elimina l'altra.`, "info")
+    : toast(what === "offline"
+      ? "Sei senza connessione: continua pure a studiare. Le modifiche restano su questo dispositivo e vanno online appena torna la rete."
+      : "Di nuovo online: le modifiche fatte senza connessione sono salvate.", what === "offline" ? "info" : "ok")), // offline non è un errore
+  // arrivate modifiche da un altro dispositivo mentre l'app era aperta: lo store le prende, l'app ridisegna
+  onMerge: (state) => dispatchEvent(new CustomEvent("studify:merged", { detail: state })),
 });
 globalThis.addEventListener?.("online", () => synced.retry()); // nelle prove in Node non ci sono eventi del browser
 

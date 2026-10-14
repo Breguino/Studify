@@ -143,6 +143,8 @@ che crea `dist/harness.html`: la pagina Claude con un `window.claude` finto.
 - **File dell'utente** (PDF, foto): IndexedDB nel browser, mai sul server. Le pagine di PDF diventano immagini JPEG (canvas → Blob).
   Possono mancare (esame aperto da un altro dispositivo): una vista che legge un file usa `store.requireFile(id, titolo)`,
   che dà un `MissingFileError` con il messaggio giusto, e non `getFile` seguito da un errore generico.
+  Per cancellare un file usa `store.delFile(id, materialeOEsame)`: lo cancella solo se nessun altro materiale lo usa
+  (due copie dello stesso esame, dopo un'unione tra dispositivi, condividono i file).
 - **Offline (solo web)**: il service worker (`web/sw.js`) mette in cache soltanto `/app` e i moduli `/js/*`, mai le risposte
   di Supabase o di `/api/claude`; i dati offline sono la copia in IndexedDB di `web/offline.js`.
 - **Asset da Figma**:
@@ -200,7 +202,8 @@ public/js/views/   una vista per schermata (home, hub, quiz, flash, materials, c
 artifact/          versione pagina Claude: template.html, entry, generate (Claude via `sample`), backend (`db`), fake-claude (prove)
 web/               versione web: template.html, web.css, entry, auth, gate (accesso/account), claude.js, backend, termini/privacy,
                    landing (landing-plan.js: la scheda del piano in cima, con buildPlan dell'app),
-                   offline.js (copia locale dello stato, testata) e sw.js (service worker: installabile e offline)
+                   offline.js (copia locale dello stato, testata), merge.js (unione tra dispositivi, testata)
+                   e sw.js (service worker: installabile e offline)
 api/               funzione Vercel /api/claude (_lib.js testato)
 server/            server Node senza dipendenze (versione locale con chiave API)
 shared/            prompts.js, normalize.js (server e browser)

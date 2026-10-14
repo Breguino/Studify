@@ -18,13 +18,14 @@ function fakeCloud(initial = null) {
 }
 const fakeLocal = (rec = {}) => ({ rec, get: async (k) => rec[k] ?? null, set: async (k, v) => { rec[k] = structuredClone(v); } });
 const st = (name) => ({ version: 1, exams: [{ id: "e1", name }], profile: null });
+const rec = (r) => (r ? { state: r.state, dirty: r.dirty } : r); // il record ha anche `base`, controllato a parte
 
 test("offline: online si tiene una copia in pari", async () => {
   const cloud = fakeCloud(st("A"));
   const local = fakeLocal();
   const b = withLocalCopy({ cloud, local, uid: async () => "u1" });
   assert.equal((await b.init()).state.exams[0].name, "A");
-  assert.deepEqual(local.rec.u1, { state: st("A"), dirty: false });
+  assert.deepEqual(rec(local.rec.u1), { state: st("A"), dirty: false });
   await b.write(st("B"));
   assert.equal(cloud.stored.exams[0].name, "B");
   assert.equal(local.rec.u1.dirty, false);
@@ -40,7 +41,7 @@ test("offline: senza rete si apre la copia, le modifiche restano in locale e par
   assert.equal(r.persistent, true, "si studia e si salva lo stesso");
   assert.equal(r.state.exams[0].name, "A");
   await b.write(st("B")); // non lancia: niente «salvataggio fallito»
-  assert.deepEqual(local.rec.u1, { state: st("B"), dirty: true });
+  assert.deepEqual(rec(local.rec.u1), { state: st("B"), dirty: true });
   assert.equal(cloud.stored.exams[0].name, "A");
   cloud.up = true;
   await b.retry();
@@ -98,10 +99,66 @@ test("offline: una modifica salvata subito in locale va online al prossimo acces
   const b = withLocalCopy({ cloud, local, uid: async () => "u1" });
   await b.init();
   await b.stage(st("B")); // modifica; la pagina si chiude prima del salvataggio online
-  assert.deepEqual(local.rec.u1, { state: st("B"), dirty: true });
+  assert.deepEqual(rec(local.rec.u1), { state: st("B"), dirty: true });
   assert.equal(cloud.stored.exams[0].name, "A");
   const again = withLocalCopy({ cloud, local, uid: async () => "u1" }); // riapertura
   assert.equal((await again.init()).state.exams[0].name, "B");
   assert.equal(cloud.stored.exams[0].name, "B", "inviata online all'apertura");
   assert.equal(local.rec.u1.dirty, false);
+});
+
+// due esami, per le prove tra dispositivi
+const two = (a, b) => ({ version: 1, profile: null, exams: [{ id: "a", name: "Analisi", n: a }, { id: "b", name: "Fisica", n: b }] });
+
+test("due dispositivi: il computer chiuso subito non cancella il lavoro fatto poi sul telefono", async () => {
+  const cloud = fakeCloud(two(0, 0));
+  const pcLocal = fakeLocal();
+  const pc = withLocalCopy({ cloud, local: pcLocal, uid: async () => "u1" });
+  await pc.init();
+  await pc.stage(two(1, 0)); // sul computer: Analisi, poi la pagina si chiude prima dell'invio
+  // sul telefono: Fisica, salvata online
+  const phone = withLocalCopy({ cloud, local: fakeLocal(), uid: async () => "u1" });
+  await phone.init();
+  await phone.write(two(0, 5));
+  // si riapre il computer
+  const seen = [];
+  const pc2 = withLocalCopy({ cloud, local: pcLocal, uid: async () => "u1", notify: (w, n) => seen.push([w, n]) });
+  const r = await pc2.init();
+  assert.deepEqual(r.state.exams.map((e) => e.n), [1, 5], "Analisi dal computer, Fisica dal telefono");
+  assert.deepEqual(cloud.stored.exams.map((e) => e.n), [1, 5], "online l'unione");
+  assert.ok(!seen.some(([w]) => w === "conflict"), "esami diversi: nessun conflitto");
+});
+
+test("due dispositivi: stesso esame cambiato su tutti e due, resta anche la copia di questo dispositivo", async () => {
+  const cloud = fakeCloud(two(0, 0));
+  const pcLocal = fakeLocal();
+  const pc = withLocalCopy({ cloud, local: pcLocal, uid: async () => "u1" });
+  await pc.init();
+  await pc.stage(two(1, 0));
+  const phone = withLocalCopy({ cloud, local: fakeLocal(), uid: async () => "u1" });
+  await phone.init();
+  await phone.write(two(7, 0));
+  const seen = [];
+  const r = await withLocalCopy({ cloud, local: pcLocal, uid: async () => "u1", notify: (w, n) => seen.push([w, n]) }).init();
+  assert.deepEqual(r.state.exams.map((e) => [e.name, e.n]), [["Analisi", 7], ["Analisi (da questo dispositivo)", 1], ["Fisica", 0]]);
+  assert.deepEqual(seen.find(([w]) => w === "conflict"), ["conflict", ["Analisi"]]);
+});
+
+test("due dispositivi: offline qui, online sul telefono; al ritorno della rete si unisce e l'app riceve lo stato unito", async () => {
+  const cloud = fakeCloud(two(0, 0));
+  const pcLocal = fakeLocal();
+  const pc = withLocalCopy({ cloud, local: pcLocal, uid: async () => "u1" });
+  await pc.init();
+  cloud.up = false;
+  const merged = [];
+  const pc2 = withLocalCopy({ cloud, local: pcLocal, uid: async () => "u1", onMerge: (s) => merged.push(s) });
+  await pc2.init(); // aperto senza rete: la copia
+  await pc2.write(two(1, 0)); // studia Analisi offline
+  cloud.up = true;
+  const phone = withLocalCopy({ cloud, local: fakeLocal(), uid: async () => "u1" });
+  await phone.init();
+  await phone.write(two(0, 5)); // intanto il telefono, online
+  await pc2.retry(); // torna la rete sul computer
+  assert.deepEqual(cloud.stored.exams.map((e) => e.n), [1, 5]);
+  assert.deepEqual(merged.at(-1)?.exams.map((e) => e.n), [1, 5], "l'app mostra anche il lavoro del telefono");
 });
