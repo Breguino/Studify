@@ -1,5 +1,6 @@
 // Punto d'ingresso della versione web (Vercel + Supabase): come la pagina Claude, ma con accesso,
 // dati sincronizzati su Supabase e Claude tramite /api/claude.
+import { inject } from "@vercel/analytics";
 import demo from "../public/demo/module.json";
 import { core } from "../public/js/core.js";
 import { boot } from "../public/js/app.js";
@@ -54,5 +55,7 @@ if (new URLSearchParams(location.search).has("eliminato")) {
 }
 gate.start(initialHash);
 boot();
+// Vercel Web Analytics
+inject();
 // installabile e apribile senza connessione (web/sw.js); se il browser non lo permette, l'app funziona lo stesso
 if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
