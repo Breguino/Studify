@@ -177,9 +177,9 @@ function slidesOrDispense(fileName, role, pages) {
 }
 
 async function removeMaterial(exam, m) {
-  if (m.fileId) await store.delFile(m.fileId);
-  if (m.pdfFileId) await store.delFile(m.pdfFileId);
-  for (const id of m.imageIds ?? []) await store.delFile(id);
+  if (m.fileId) await store.delFile(m.fileId, m);
+  if (m.pdfFileId) await store.delFile(m.pdfFileId, m);
+  for (const id of m.imageIds ?? []) await store.delFile(id, m);
   exam.materials = exam.materials.filter((x) => x.id !== m.id);
   if (exam.books?.some((b) => b.kind === "dispense" && b.materialId === m.id)) { exam.books = exam.books.filter((b) => b.kind !== "dispense" || b.materialId !== m.id); exam.plan = null; }
   if (["esami", "domande"].includes(roleOf(m)) && exam.module) { applyExamBoost(exam); exam.plan = null; } // senza quelle prove o domande la frequenza cambia
@@ -220,7 +220,7 @@ async function pdfToQuestions(m) {
   try {
     const text = (await pdfPageTexts(m, 1000)).join("\f");
     if (text.replace(/\f/g, "").trim().length < 20) return toast(`«${m.title}» non ha testo selezionabile: fotografa l'elenco (Appunti scritti a mano, poi tipo «Domande d'esame») o incollalo.`, "error");
-    if (m.fileId) await store.delFile(m.fileId);
+    if (m.fileId) await store.delFile(m.fileId, m);
     Object.assign(m, { kind: "notes", text, size: text.length, fromPdf: true, fileId: undefined });
   } catch (e) {
     toast(`«${m.title}»: ${e.message}`, "error");
@@ -242,7 +242,7 @@ function readPdfExercises(exam, m) {
     }
     const text = pages.map((p) => p ?? "").join("\f");
     if (!text.replace(/\f/g, "").trim()) throw new Error("Claude non ha restituito il testo del PDF. Riprova.");
-    await store.delFile(m.fileId);
+    await store.delFile(m.fileId, m);
     Object.assign(m, { kind: "notes", text, size: text.length, numPages: n, fromPdf: true, mathPages: `1-${n}`, fileId: undefined });
     const ex = officialExercises(exam).filter((e) => e.materialId === m.id);
     const off = await syncOfficial(exam, onProgress);

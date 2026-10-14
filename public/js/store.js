@@ -45,6 +45,8 @@ export async function flush() {
   }
 }
 addEventListener("pagehide", flush);
+// versione web: unione con le modifiche fatte su un altro dispositivo (web/offline.js), mentre l'app era aperta
+addEventListener("studify:merged", (e) => { state.exams = e.detail.exams; state.profile = e.detail.profile; });
 addEventListener("visibilitychange", () => document.visibilityState === "hidden" && flush());
 
 export const putFile = (id, data) => backend.putFile(id, data);
@@ -57,7 +59,14 @@ export async function requireFile(id, title) {
   if (data == null) throw new MissingFileError(title);
   return data;
 }
-export const delFile = (id) => backend.delFile(id);
+/** Materiali (di tutti gli esami) che usano il file `id`, tranne `except` (un materiale o un esame). */
+const fileUsers = (id, except) => state.exams.flatMap((e) => (e === except ? [] : e.materials ?? []))
+  .filter((m) => m !== except && (m.fileId === id || m.pdfFileId === id || (m.imageIds ?? []).includes(id)));
+/**
+ * Cancella un file del browser, ma solo se nessun altro materiale lo usa: due copie dello stesso esame
+ * (per esempio dopo un'unione tra dispositivi) condividono i file. `except`: il materiale o l'esame che lo lascia.
+ */
+export const delFile = (id, except = null) => (id && !fileUsers(id, except).length ? backend.delFile(id) : Promise.resolve());
 
 /* ------------------------------- esami -------------------------------- */
 
@@ -105,7 +114,7 @@ export function newExam(fields) {
 export async function deleteExam(id) {
   const e = getExam(id);
   if (!e) return;
-  for (const m of e.materials) if (m.fileId) await delFile(m.fileId);
+  for (const m of e.materials) for (const f of [m.fileId, m.pdfFileId, ...(m.imageIds ?? [])]) if (f) await delFile(f, e);
   state.exams = state.exams.filter((x) => x.id !== id);
   save();
 }

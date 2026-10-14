@@ -92,6 +92,7 @@ function renderAiPill() {
 
 core.rerender = render;
 addEventListener("hashchange", render);
+addEventListener("studify:merged", () => render()); // dati uniti con un altro dispositivo: si ridisegna
 
 let lastSaveToast = 0;
 store.setSaveErrorHandler(() => {
