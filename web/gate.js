@@ -2,7 +2,7 @@
 // e finestra «Account» (consumo di Claude, cambio password, uscita, eliminazione dell'account).
 import { h, toast } from "../public/js/ui.js";
 import { clearLocalFiles } from "./backend.js";
-import { rpc } from "./claude.js";
+import { creditUsage, rpc } from "./claude.js";
 
 export const TERMS_VERSION = "2026-10-05";
 export const PRIVACY_VERSION = "2026-10-13";
@@ -386,9 +386,7 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
     document.body.append(dlg);
     dlg.querySelector("button")?.focus();
     try {
-      const [row] = (await rpc({ url, key, auth }, "ai_spend_this_month")) ?? [];
-      spent = Number(row?.mine ?? 0);
-      limit = (await (await fetch("/api/claude")).json().catch(() => ({})))?.limits?.user ?? null;
+      ({ spent, limit } = await creditUsage({ url, key, auth }));
       usage.textContent = limit ? `Credito di Claude usato questo mese: ${Math.min(100, Math.round((spent / limit) * 100))}%. Si rinnova il primo del mese.` : `Consumo di Claude questo mese: ${spent.toFixed(2)} $.`;
     } catch {
       usage.textContent = "Consumo di Claude: non disponibile.";

@@ -1,5 +1,7 @@
 // Sostituisce public/js/api.js nella versione pubblicata come pagina Claude: stessa interfaccia,
 // ma le chiamate vanno a Claude (capability `sample`) invece che al server.
+import { core } from "../public/js/core.js";
+import { checkCredit } from "../public/js/views/credit.js";
 import { analyzePastExams, assignExercises, extractBooks, linkChapters, gradeExam, examFormatFromText, extendModule, transcribePages, writeDispensa, generateModule, generateNotes, getSample, gradeAnswer, importRows, parseCurriculum } from "./generate.js";
 
 export async function status() {
@@ -10,6 +12,15 @@ export async function status() {
 }
 
 export async function runJob(path, body, onProgress = () => {}) {
+  await checkCredit(path); // versione web: credito del mese quasi finito o finito
+  try {
+    return await dispatch(path, body, onProgress);
+  } finally {
+    core.creditChanged?.();
+  }
+}
+
+async function dispatch(path, body, onProgress) {
   if (path === "/api/module") return generateModule(body, onProgress);
   if (path === "/api/module-extend") return extendModule(body, onProgress);
   if (path === "/api/exam-format-text") return examFormatFromText(body, onProgress);

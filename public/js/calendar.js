@@ -44,19 +44,22 @@ export function parseTime(t) {
  * `days`: i giorni del piano ({ date, minutes, tasks }); si tengono quelli da `today` in poi con minuti di studio.
  * `time`: ora di inizio delle sessioni; `alarm`: minuti di anticipo dell'avviso (0 = all'inizio).
  */
-export function planToIcs({ exam, days, today, time = "18:00", alarm = 0, url = "", now = new Date() }) {
+export function planToIcs({ exam, days, today, time = "18:00", alarm = 0, url = "", now = new Date(), sequence = 0, cancel = [] }) {
   const [hh, mm] = parseTime(time);
   const start = `T${pad(hh)}${pad(mm)}00`;
   const stamp = utcStamp(now);
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Studify//Piano di studio//IT", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
     `X-WR-CALNAME:${escapeText(`Studify · ${exam.name}`)}`];
-  const sessions = (days ?? []).filter((d) => d.date >= today && d.date < exam.date && d.minutes > 0);
+  const sessions = studyDays(days, today, exam.date);
+  // SEQUENCE: chi riscarica aggiorna gli eventi con lo stesso UID invece di duplicarli (nei calendari che lo rispettano)
+  const seqLine = `SEQUENCE:${Math.max(0, Math.round(sequence))}`;
   for (const d of sessions) {
     const tasks = (d.tasks ?? []).filter((t) => t.kind !== "rest" && t.minutes > 0);
     const desc = [...tasks.map((t) => `• ${t.title} (${t.minutes} min)`), url ? `Apri il piano: ${url}` : ""].filter(Boolean).join("\n");
     lines.push("BEGIN:VEVENT",
       `UID:${exam.id}-${d.date}@studify`, // stesso giorno, stesso UID: riscaricando, i calendari che lo supportano aggiornano l'evento
       `DTSTAMP:${stamp}`,
+      seqLine,
       `DTSTART:${day(d.date)}${start}`,
       `DURATION:PT${Math.round(d.minutes)}M`,
       `SUMMARY:${escapeText(`Studify · ${exam.name}: ${Math.round(d.minutes)} min`)}`,
@@ -65,13 +68,41 @@ export function planToIcs({ exam, days, today, time = "18:00", alarm = 0, url = 
       "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${escapeText(`È ora di studiare ${exam.name}`)}`, `TRIGGER:-PT${Math.max(0, Math.round(alarm))}M`, "END:VALARM",
       "END:VEVENT");
   }
+  // giorni scaricati la volta prima che nel piano non ci sono più: annullati, così non restano nel calendario
+  for (const date of cancel.filter((x) => x >= today && !sessions.some((d) => d.date === x))) {
+    lines.push("BEGIN:VEVENT", `UID:${exam.id}-${date}@studify`, `DTSTAMP:${stamp}`, seqLine, `DTSTART:${day(date)}${start}`, "DURATION:PT30M",
+      `SUMMARY:${escapeText(`Studify · ${exam.name}: niente studio`)}`, "STATUS:CANCELLED", "END:VEVENT");
+  }
   if (exam.date >= today) {
-    lines.push("BEGIN:VEVENT", `UID:${exam.id}-appello@studify`, `DTSTAMP:${stamp}`,
+    lines.push("BEGIN:VEVENT", `UID:${exam.id}-appello@studify`, `DTSTAMP:${stamp}`, seqLine,
       `DTSTART;VALUE=DATE:${day(exam.date)}`, `DTEND;VALUE=DATE:${nextDay(exam.date)}`,
       `SUMMARY:${escapeText(`Esame: ${exam.name}`)}`, "TRANSP:TRANSPARENT", "END:VEVENT");
   }
   lines.push("END:VCALENDAR");
   return { ics: lines.map(foldLine).join("\r\n") + "\r\n", sessions: sessions.length };
+}
+
+/** Giorni con studio da `today` al giorno prima dell'esame. */
+const studyDays = (days, today, examDate) => (days ?? []).filter((d) => d.date >= today && d.date < examDate && d.minutes > 0);
+
+/** Che cosa c'era nel file scaricato: serve a capire più avanti se il piano è cambiato. */
+export function calendarSnapshot({ exam, days, today, time, sequence = 0, at = new Date().toISOString() }) {
+  const [hh, mm] = parseTime(time);
+  return { at, sequence, examDate: exam.date, time: `${pad(hh)}:${pad(mm)}`, days: Object.fromEntries(studyDays(days, today, exam.date).map((d) => [d.date, Math.round(d.minutes)])) };
+}
+
+/**
+ * Il calendario scaricato non corrisponde più al piano? Si guardano solo i giorni da oggi in poi
+ * (quelli passati escono dal piano ogni giorno e non contano), più data dell'esame e ora.
+ */
+export function calendarStale(snap, { exam, days, today, time }) {
+  if (!snap) return false;
+  const now = calendarSnapshot({ exam, days, today, time });
+  if (now.examDate !== snap.examDate || now.time !== snap.time) return true;
+  const future = (o) => Object.entries(o).filter(([d]) => d >= today);
+  const was = new Map(future(snap.days));
+  const is = new Map(future(now.days));
+  return was.size !== is.size || [...is].some(([d, m]) => was.get(d) !== m);
 }
 
 /** Nome del file: «studify-microeconomia.ics». */

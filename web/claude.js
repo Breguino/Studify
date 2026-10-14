@@ -146,6 +146,13 @@ export async function rpc({ url, key, auth, fetchFn = (...a) => fetch(...a) }, n
   return text ? JSON.parse(text) : null;
 }
 
+/** Credito di Claude del mese: { spent, limit } in dollari (limit null se il server non lo dice). */
+export async function creditUsage({ url, key, auth, fetchFn = (...a) => fetch(...a) }) {
+  const [row] = (await rpc({ url, key, auth, fetchFn }, "ai_spend_this_month")) ?? [];
+  const limit = (await (await fetchFn("/api/claude")).json().catch(() => ({})))?.limits?.user ?? null;
+  return { spent: Number(row?.mine ?? 0), limit };
+}
+
 /** Installa window.claude: ogni capability attende che l'utente abbia fatto l'accesso. */
 export function installClaude({ ready, auth, url, key }) {
   let closed = false;

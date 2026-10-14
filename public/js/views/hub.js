@@ -9,7 +9,7 @@ import { fmtLesson } from "../timetable.js";
 import { clipRich, rich, richParas } from "../math.js";
 import * as store from "../store.js";
 import { badge, bar, capital, emptyState, h, pct, saveFile, toast } from "../ui.js";
-import { icsFilename, planToIcs } from "../calendar.js";
+import { calendarSnapshot, calendarStale, icsFilename, planToIcs } from "../calendar.js";
 import { core } from "../core.js";
 import { firstMaterialsView, materialsTab } from "./materials.js";
 import { examMeta } from "./exam-meta.js";
@@ -65,17 +65,27 @@ const DAYS_SHOWN = 6; // giorni del piano mostrati subito sotto la sessione di o
  * del telefono (file .ics, public/js/calendar.js). L'ora scelta resta nell'esame (reminderTime, personale).
  */
 function calendarCard(exam, plan) {
-  const time = h("input", { type: "time", value: exam.reminderTime || "18:00", "aria-label": "Ora delle sessioni di studio", onchange: (e) => { exam.reminderTime = e.target.value; store.save(); } });
+  const time = h("input", { type: "time", value: exam.reminderTime || "18:00", "aria-label": "Ora delle sessioni di studio", onchange: (e) => { exam.reminderTime = e.target.value; store.save(); if (exam.calendarExport) core.rerender(); } }); // ora cambiata: il file scaricato non è più in pari
+  const prev = exam.calendarExport ?? null; // che cosa c'era nell'ultimo file scaricato
+  const stale = calendarStale(prev, { exam, days: plan.days, today: today(), time: exam.reminderTime || "18:00" });
   const download = async () => {
     const url = /^https?:$/.test(location.protocol) && !core.downloads ? `${location.href.split("#")[0]}#/exam/${encodeURIComponent(exam.id)}/today` : "";
-    const { ics, sessions } = planToIcs({ exam, days: plan.days, today: today(), time: time.value, alarm: 0, url });
+    const sequence = (prev?.sequence ?? -1) + 1;
+    const { ics, sessions } = planToIcs({ exam, days: plan.days, today: today(), time: time.value, alarm: 0, url, sequence, cancel: Object.keys(prev?.days ?? {}) });
     if (!sessions) return toast("Da oggi all'esame non ci sono sessioni di studio da mettere nel calendario.", "error");
-    if (await saveFile(icsFilename(exam.name), ics, "text/calendar")) toast(`${sessions} ${sessions === 1 ? "sessione" : "sessioni"} nel file: aprilo con l'app del calendario per aggiungerle.`, "ok");
+    if (!(await saveFile(icsFilename(exam.name), ics, "text/calendar"))) return;
+    exam.calendarExport = calendarSnapshot({ exam, days: plan.days, today: today(), time: time.value, sequence });
+    store.save();
+    toast(`${sessions} ${sessions === 1 ? "sessione" : "sessioni"} nel file: aprilo con l'app del calendario per aggiungerle.`, "ok");
+    core.rerender();
   };
   return h("section", { class: "card side-card cal-card", "aria-labelledby": "cal-side" },
     h("h2", { id: "cal-side" }, "Promemoria nel calendario"),
-    h("p", { class: "muted small" }, "Ogni sessione del piano diventa un evento con avviso, che arriva anche ad app chiusa. Si apre con Google Calendar, Calendario di Apple o Outlook. Se il piano cambia, scaricalo di nuovo."),
-    h("div", { class: "row cal-row" }, h("label", { class: "cal-time" }, "Alle", time), h("button", { class: "btn small", type: "button", onclick: download }, "Scarica il calendario")));
+    h("p", { class: "muted small" }, "Ogni sessione del piano diventa un evento con avviso, che arriva anche ad app chiusa. Si apre con Google Calendar, Calendario di Apple o Outlook."),
+    stale
+      ? h("div", { class: "callout warn small cal-stale", role: "status" }, h("b", {}, "Il piano è cambiato"), " dopo che hai scaricato il calendario: riscaricalo e aprilo di nuovo. I giorni che non ci sono più vengono annullati; se la tua app mostra doppioni, cancella gli eventi Studify vecchi.")
+      : prev ? h("p", { class: "small muted" }, `Scaricato il ${fmtDate(today(new Date(prev.at)))}: è in pari con il piano.`) : null,
+    h("div", { class: "row cal-row" }, h("label", { class: "cal-time" }, "Alle", time), h("button", { class: `btn small${stale ? " primary" : ""}`, type: "button", onclick: download }, stale ? "Riscarica il calendario" : "Scarica il calendario")));
 }
 
 /** Una frase del docente sull'esame da tenere sott'occhio: sull'argomento di adesso, se c'è, altrimenti la prima. */
