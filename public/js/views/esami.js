@@ -11,6 +11,7 @@ import * as store from "../store.js";
 import { countLabel, examQuestionStats } from "../exam-questions.js";
 import { pendingMaterials } from "../module-update.js";
 import { badge, bar, h, toast } from "../ui.js";
+import { creditLine } from "./credit.js";
 
 const jobs = new Map(); // esame → { el, label }
 const MAX_PDF_PAGES = 300; // pagine di prove in PDF per un'analisi (il limite dell'API è 600)
@@ -107,7 +108,7 @@ function analysisCard(exam, papers) {
   const out = [h("h2", { style: { margin: 0 } }, "Che cosa chiede l'esame")];
   if (!valid) {
     out.push(h("p", { class: "muted small", style: { margin: 0 } }, "Claude legge le prove e collega ogni esercizio agli argomenti del modulo: vedi quali escono più spesso, com'è fatta la prova e quali esercizi si ripetono. Gli argomenti che escono in almeno metà delle prove diventano «centrali» nel piano."),
-      why ? h("p", { class: "small", style: { margin: 0 } }, why) : null, statusLine, h("div", {}, btn));
+      why ? h("p", { class: "small", style: { margin: 0 } }, why) : null, statusLine, ai ? creditLine() : null, h("div", {}, btn));
     return h("div", { class: "card stack" }, ...out);
   }
   const pe = exam.pastExams;
@@ -134,7 +135,7 @@ function analysisCard(exam, papers) {
     pe.uncovered.length ? h("div", { class: "callout warn" }, h("b", {}, "Chiesti nelle prove ma assenti dal modulo"), h("ul", {}, pe.uncovered.map((u) => h("li", {}, rich(u)))),
       h("div", { class: "small" }, "Cerca questi argomenti nel libro o negli appunti e aggiungili ai materiali.")) : null,
     pe.caveats.length ? h("div", { class: "small muted" }, h("b", {}, "Attenzione: "), pe.caveats.join(" ")) : null,
-    why ? h("p", { class: "small", style: { margin: 0 } }, why) : null, statusLine, h("div", {}, btn));
+    why ? h("p", { class: "small", style: { margin: 0 } }, why) : null, statusLine, ai ? creditLine() : null, h("div", {}, btn));
   return h("div", { class: "card stack" }, ...out);
 }
 

@@ -82,6 +82,18 @@ export function withLocalCopy({ cloud, local, uid, notify = () => {} }) {
       await push(snap, n);
     },
 
+    /**
+     * Subito dopo ogni modifica, prima del salvataggio online (che aspetta un secondo e mezzo): la copia locale
+     * segnata «da inviare». Se la pagina si chiude prima, al prossimo accesso init() la manda online.
+     */
+    stage(state) {
+      if (!id) return;
+      const n = ++seq; // una scrittura online già partita non segna più in pari la copia
+      pending = structuredClone(state);
+      const snap = pending;
+      return keep(snap, true).then(() => n);
+    },
+
     /** Al ritorno della connessione: invia ciò che è rimasto in locale. */
     async retry() {
       if (pending) await push(pending, seq);

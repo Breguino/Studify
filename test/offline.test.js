@@ -91,3 +91,17 @@ test("offline: una modifica più recente non viene segnata in pari da una scritt
   assert.equal(local.rec.u1.state.exams[0].name, "C");
   assert.equal(local.rec.u1.dirty, false);
 });
+
+test("offline: una modifica salvata subito in locale va online al prossimo accesso, anche se la pagina si è chiusa prima", async () => {
+  const cloud = fakeCloud(st("A"));
+  const local = fakeLocal();
+  const b = withLocalCopy({ cloud, local, uid: async () => "u1" });
+  await b.init();
+  await b.stage(st("B")); // modifica; la pagina si chiude prima del salvataggio online
+  assert.deepEqual(local.rec.u1, { state: st("B"), dirty: true });
+  assert.equal(cloud.stored.exams[0].name, "A");
+  const again = withLocalCopy({ cloud, local, uid: async () => "u1" }); // riapertura
+  assert.equal((await again.init()).state.exams[0].name, "B");
+  assert.equal(cloud.stored.exams[0].name, "B", "inviata online all'apertura");
+  assert.equal(local.rec.u1.dirty, false);
+});

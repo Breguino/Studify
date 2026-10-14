@@ -11,6 +11,7 @@ import { parseRange } from "../module-update.js";
 import * as store from "../store.js";
 import { badge, confirmDialog, emptyState, h, toast } from "../ui.js";
 import { materialsPayload } from "./materials.js";
+import { creditLine } from "./credit.js";
 
 const jobs = new Map(); // esame → { el, label }
 
@@ -151,6 +152,7 @@ export function dispensaTab(exam) {
       h("label", {}, "Lunghezza", length),
       h("label", { class: "check-row" }, sol, "Soluzioni in appendice")),
     job ? h("div", { class: "callout row" }, h("span", { class: "spinner" }), (job.el = h("span", {}, job.label)), h("span", { class: "muted small" }, "un capitolo alla volta; puoi cambiare pagina")) : null,
+    ai ? creditLine() : null,
     h("div", { class: "row" },
       h("button", { class: "btn primary", disabled: !ai || !!job || !todo.length || !hasMaterials, onclick: () => write(exam, todo) },
         !todo.length ? "Tutti i capitoli sono pronti" : ready ? (todo.length === 1 ? "Scrivi il capitolo mancante o da aggiornare" : `Scrivi i ${todo.length} capitoli mancanti o da aggiornare`) : `Scrivi la dispensa (${todo.length} ${todo.length === 1 ? "capitolo" : "capitoli"})`),

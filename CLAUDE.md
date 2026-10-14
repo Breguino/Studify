@@ -68,6 +68,8 @@ Altri helper di `ui.js` (anche `icon(nome)`, icone SVG a tratto, e `stepper(n)`)
 - `emptyState(titolo, testo, ...azioni)`
 - `link(href, testo, cls)`
 - `confirmDialog(msg, { danger })`
+- `creditLine()` e `checkCredit(percorso)` in `views/credit.js`: riga del credito di Claude accanto ai pulsanti che lo usano
+  (solo web, `core.credit`); il controllo prima delle richieste lunghe è già in `artifact/api.js` (`runJob`)
 - `saveFile(nome, dati, tipo)`: scarica un file (nella pagina Claude passa da `core.downloads`), es. il calendario `.ics`
 - `paras(testo)`, `pct(x)`, `capital(s)`
 - `releaseOnLeave(root, onKey)`: toglie l'ascoltatore di tastiera di una sessione (quiz, flashcard) al primo cambio di pagina

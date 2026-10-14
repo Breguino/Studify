@@ -7,7 +7,7 @@ import { flush } from "../public/js/store.js";
 import { hasText, plainLines } from "../public/js/pdf-table.js";
 import { pdfImages, readPdf } from "../artifact/pdf-text.js";
 import { createAuth } from "./auth.js";
-import { installClaude } from "./claude.js";
+import { creditUsage, installClaude } from "./claude.js";
 import { createGate } from "./gate.js";
 
 /* global __SUPABASE_URL__, __SUPABASE_KEY__ */
@@ -33,6 +33,13 @@ const gate = createGate({
 claude = installClaude({ ready: gate.ready, auth, url, key });
 
 core.demoModule = demo;
+// credito di Claude del mese (public/js/credit.js): letto al massimo ogni 30 secondi
+let credit = null;
+core.credit = async () => {
+  if (!credit || Date.now() - credit.at > 30_000) credit = { at: Date.now(), value: creditUsage({ url, key, auth }).catch((e) => { credit = null; throw e; }) };
+  return credit.value;
+};
+core.creditChanged = () => (credit = null); // dopo una richiesta a Claude il consumo è cambiato
 core.pdfText = async (file) => {
   const { pages, numPages } = await readPdf(await file.arrayBuffer(), { maxPages: 1000 });
   return { text: hasText(pages) ? pages.map((p) => plainLines([p]).join("\n")).join("\f") : "", pages: numPages };

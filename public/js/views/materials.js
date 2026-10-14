@@ -28,6 +28,7 @@ import { blobToBase64, byName, isImage, prepareImage } from "../images.js";
 import { badge, confirmDialog, h, icon, readFileAs, stepper, toast, uid } from "../ui.js";
 import { currentHash, go } from "../nav.js";
 import { examMeta } from "./exam-meta.js";
+import { creditLine } from "./credit.js";
 
 const MAX_PDF_TOTAL = 300 * 1024 * 1024; // archiviati nel browser: anche libri interi, poi se ne scelgono le pagine
 // Per una richiesta all'AI (limiti dell'API: 600 pagine e 32 MB; il server accetta 40 MB di richiesta in base64)
@@ -922,6 +923,7 @@ export function materialsTab(exam, { first = false } = {}) {
         : "AI non disponibile: la modalità base ricava argomenti e flashcard dalle definizioni presenti nei tuoi appunti testuali (niente quiz)."),
       h("p", { class: "muted small", style: { margin: 0 } }, "Non serve aspettare di avere tutto: puoi partire dagli appunti delle prime lezioni e aggiungere gli altri man mano."),
       jobLine(exam, "module", "Generazione in corso"),
+      ai ? creditLine() : null,
       h("div", { class: "row gen-actions" },
         first ? h("a", { class: "btn ghost", href: `#/exam/${exam.id}/edit` }, "← Indietro") : null,
         ai ? h("button", { class: "btn primary", disabled: !hasContent || busy, onclick: () => generate(exam) }, "Genera con l'AI") : null,
@@ -938,6 +940,7 @@ export function materialsTab(exam, { first = false } = {}) {
               : "la modalità base aggiunge argomenti e flashcard ricavati dalle definizioni.",
             h("b", {}, " Flashcard, quiz e argomenti già studiati restano come sono.")),
           jobLine(exam, "update", "Aggiornamento in corso"), jobLine(exam, "module", "Generazione in corso"),
+          ai ? creditLine() : null,
           h("div", { class: "row" },
             h("button", { class: "btn primary", disabled: busy, onclick: () => (ai ? update(exam) : updateLocal(exam)) }, "Aggiungi al modulo"),
             regen, toPlan))
@@ -945,6 +948,7 @@ export function materialsTab(exam, { first = false } = {}) {
           h("h3", {}, "Il modulo comprende tutti i materiali"),
           h("p", { class: "muted small", style: { margin: 0 } }, `${exam.moduleUpdatedAt ? `Ultimo aggiornamento: ${fmtDate(today(new Date(exam.moduleUpdatedAt)))}. ` : ""}Dopo la prossima lezione aggiungi qui gli appunti e poi «Aggiungi al modulo»: ripassare ogni settimana quello che hai appena studiato funziona meglio che concentrare tutto prima dell'esame.`),
           jobLine(exam, "module", "Generazione in corso"),
+          ai && hasContent ? creditLine() : null,
           h("div", { class: "row" }, toPlan, regen));
   }
 

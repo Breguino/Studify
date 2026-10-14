@@ -189,6 +189,9 @@ form[aria-busy="true"] { cursor: progress; }
 .callout { padding: 14px 16px; border-radius: 14px; background: var(--brand-soft); border: 1px solid transparent; }
 .callout.warn { background: var(--warn-soft); } .callout.bad { background: var(--bad-soft); } .callout.good { background: var(--good-soft); }
 .callout > :last-child { margin-bottom: 0; }
+/* credito di Claude del mese (versione web) accanto ai pulsanti che lo usano */
+.credit-line { margin: 0; }
+.credit-line.low { color: var(--warn); font-weight: 600; }
 .empty { text-align: center; padding: 40px 20px; border: 2px dashed var(--line); border-radius: var(--radius); }
 .empty .row { justify-content: center; }
 

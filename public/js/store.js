@@ -22,10 +22,16 @@ export async function init() {
 }
 
 /** Salvataggio con debounce: chiamalo dopo ogni modifica. */
+let staging = false;
 export function save() {
   if (!persistent) return;
   clearTimeout(timer);
   timer = setTimeout(flush, backend.debounceMs);
+  // versione web: copia locale subito (una per giro di eventi), così chiudere la pagina prima del salvataggio non perde nulla
+  if (backend.stage && !staging) {
+    staging = true;
+    queueMicrotask(() => { staging = false; backend.stage(state)?.catch?.(() => {}); });
+  }
 }
 
 export async function flush() {

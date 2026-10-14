@@ -57,6 +57,7 @@ export const backend = {
   noPersistMessage: "Non riesco a raggiungere l'archivio online: le modifiche non verranno salvate. Controlla la connessione e ricarica la pagina.",
   init: () => synced.init(),
   write: (state) => synced.write(state),
+  stage: (state) => synced.stage(state), // copia locale subito, a ogni modifica (store.save)
   putFile: (id, data) => safe(() => tx("readwrite", (s) => s.put(data, id)), () => mem.set(id, data)),
   getFile: (id) => safe(() => tx("readonly", (s) => s.get(id)), () => mem.get(id)),
   hasFile: (id) => safe(() => tx("readonly", (s) => s.getKey(id)), () => (mem.has(id) ? id : undefined)).then((k) => k !== undefined),
