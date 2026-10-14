@@ -214,7 +214,7 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
     overlay = h("div", { class: "auth-gate", role: "dialog", "aria-modal": "true", "aria-labelledby": "auth-title" },
       h("div", { class: "auth-wrap" },
         h("section", { class: "auth-pitch on-hero" },
-          h("div", { class: "logo auth-logo" }, "Studify"),
+          h("a", { class: "logo auth-logo", href: "/", "aria-label": "Studify: torna al sito" }, "Studify"),
           h("h1", {}, "Prepara gli esami con i tuoi materiali."),
           h("p", {}, "Appunti, dispense, slide, esami passati e quiz del docente diventano argomenti, flashcard, quiz e un piano di studio giorno per giorno fino all'appello."),
           h("ul", { class: "auth-points" },
@@ -222,6 +222,7 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
             h("li", {}, "Ripasso distribuito e richiamo attivo, ogni giorno."),
             h("li", {}, "I tuoi esami sincronizzati su tutti i dispositivi."))),
         h("section", { class: "auth-card card" },
+          h("a", { class: "next-link small auth-back", href: "/" }, "← Torna al sito"), // anche dall'app installata, che non ha il tasto «indietro»
           h("h2", { id: "auth-title" }, title),
           tabs,
           notice ? h("div", { class: "callout good" }, notice) : null,
@@ -327,7 +328,7 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
     await beforeLeave({ save: true });
     await clearLocalFiles();
     await auth.signOut();
-    location.replace(location.pathname);
+    location.replace("/"); // fuori dall'account si torna al sito, non alla schermata d'accesso
   }
 
   async function account() {
