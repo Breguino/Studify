@@ -114,7 +114,9 @@ in app, landing, pagine legali e icone.
 **Redirect URLs** con l'indirizzo Vercel, altrimenti i link delle email (conferma, recupero password) portano a `localhost`.
 Come Redirect URL conviene `https://<dominio>/**`, che comprende `/app`; se è autorizzata solo la radice, la landing inoltra comunque il link.
 Il server email predefinito di Supabase invia pochissime email l'ora: per un uso reale serve un SMTP proprio
-(*Authentication → Emails → SMTP Settings*).
+(*Authentication → Emails → SMTP Settings*). I modelli delle email in italiano, con oggetto e istruzioni, sono in
+`supabase/email/` (da incollare in *Authentication → Emails → Templates*). Per la prima prova con uno studente vero c'è
+una scaletta in `docs/prova-con-uno-studente.md`.
 
 `vercel.json` imposta build, cartella `dist-web`, regione della funzione (Francoforte, `fra1`, accanto al database), la rotta `/app`,
 durata massima (300 s), intestazioni di sicurezza (CSP, niente iframe) e cache lunga per `/js/`.
