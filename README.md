@@ -75,8 +75,11 @@ in app, landing, pagine legali e icone.
   Dopo la registrazione il messaggio «Ti abbiamo mandato un'email…» fa da pagina di ringraziamento, e alla conferma l'app saluta
   con «Email confermata: benvenuto in Studify!».
 - **Statistiche di visita**: Vercel Web Analytics, senza cookie, con lo script servito dallo stesso dominio. Lo script è incluso solo
-  nelle build su Vercel; va attivato in *Analytics* sulla dashboard. Con `STUDIFY_ANALYTICS=off` si spegne; con
-  `STUDIFY_ANALYTICS=/percorso/script.js` si usa il percorso indicato dalla dashboard, se diverso.
+  nelle build su Vercel; va attivato in *Analytics* sulla dashboard (non in *Speed Insights*, che misura solo la velocità)
+  e vale dal deploy successivo: finché `/_vercel/insights/script.js` risponde 404, serve un nuovo deploy di produzione.
+  Le istruzioni della dashboard (`npm i @vercel/analytics`, componente `<Analytics/>`) sono per Next.js e qui non servono.
+  Con `STUDIFY_ANALYTICS=off` si spegne; con `STUDIFY_ANALYTICS=/percorso/script.js` si usa il percorso indicato dalla
+  dashboard, se diverso.
 - **Niente banner dei cookie**: il sito non usa cookie, né di profilazione né di statistica, ma solo l'archiviazione tecnica del browser
   (sessione, file caricati). Per le linee guida del Garante non serve consenso; l'informativa lo spiega.
 - **Anti-spam**: campo trappola nascosto e tempo minimo di compilazione (2 s) nel modulo di registrazione, più la conferma email
