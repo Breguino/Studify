@@ -235,6 +235,18 @@
       io.observe(el);
     }
     document.documentElement.classList.add("reveal");
+
+    // illustrazioni dei tre passi: si animano (.play, CSS in landing.css) quando entrano in vista
+    const play = new IntersectionObserver((entries) => {
+      for (const e of entries) if (e.isIntersecting) { e.target.classList.replace("wait", "play"); play.unobserve(e.target); }
+    }, { rootMargin: "0px 0px -15% 0px" });
+    for (const art of document.querySelectorAll(".step-art")) {
+      if (art.getBoundingClientRect().top < innerHeight) continue; // già in vista: resta ferma
+      [...art.children].forEach((c, i) => c.style.setProperty("--n", String(i)));
+      art.querySelectorAll("em").forEach((c, i) => c.style.setProperty("--n", String(i)));
+      art.classList.add("wait");
+      play.observe(art);
+    }
   })();
 </script>
 <script>/*HERO_PLAN*/</script>

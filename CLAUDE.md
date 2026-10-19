@@ -184,7 +184,8 @@ I pulsanti con solo l'icona hanno sempre un `aria-label` in italiano.
     una casella con la sua scritta su una riga è `label.check-row`. Testo mai sotto i 12px (`.75rem`).
 - **Tema scuro** automatico (`prefers-color-scheme`), forzabile con `data-theme`.
 - **Movimento ridotto** rispettato (`prefers-reduced-motion`). Le entrate allo scorrimento della landing (`[data-reveal]`) partono solo con JavaScript
-  e senza movimento ridotto, e non nascondono mai ciò che è già in vista.
+  e senza movimento ridotto, e non nascondono mai ciò che è già in vista. Lo stesso vale per le animazioni della landing
+  (`.countdown.intro` all'apertura, `.step-art.play` scorrendo, in `web/landing.css`): mostrano come funziona l'app, non decorano.
 - **Stampa**: `@media print`, per la dispensa e le prove d'esame.
 - **Accessibilità**:
   - focus visibile (`:focus-visible` con l'anello `--brand`);

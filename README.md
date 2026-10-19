@@ -57,6 +57,10 @@ i prossimi giorni con le date di oggi e la sessione di oggi. Li calcola `buildPl
 dell'esame demo (`web/landing-plan.js`, provato in `test/landing.test.js`; la build lo incorpora nella pagina, circa 3 KB compressi).
 Senza JavaScript restano i valori d'esempio, senza comandi. Scorrendo, le sezioni entrano con una breve dissolvenza; chi ha chiesto
 meno movimento le vede subito, e ciò che è già in vista all'apertura non si nasconde mai.
+All'apertura la scheda del piano si compone (i giorni contano fino al valore, la barra delle fasi si riempie, entrano i giorni
+e le attività di oggi; se muovi il cursore durante il conteggio vale il tuo valore), e le illustrazioni dei tre passi si animano
+quando arrivano sullo schermo (i file cadono, gli argomenti ricevono il bollino, le barre del piano crescono). Solo CSS più
+poche righe di JavaScript, senza librerie; con «movimento ridotto» o senza JavaScript la pagina resta ferma.
 Sul telefono (sotto 680px), quando i pulsanti in cima escono dallo schermo, compare lo stesso invito fisso in basso; sparisce
 davanti all'invito finale e al piè di pagina, per non coprirli.
 Se un link delle email (conferma, recupero password) arriva alla radice invece che su `/app`, la landing lo inoltra all'app.

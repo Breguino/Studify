@@ -67,18 +67,21 @@ export function mountHeroPlan(root, topics) {
       const seg = el("span"); seg.dataset.phase = x.phase; seg.style.flexGrow = String(x.days);
       $("phases").firstChild.append(seg);
       const li = el("li", null); li.dataset.phase = x.phase;
+      li.style.setProperty("--n", String($("phases").lastChild.children.length));
       li.append(el("span", null, x.label), el("b", null, `${x.days} g`));
       $("phases").lastChild.append(li);
     }
-    $("week").replaceChildren(...p.week.map((d) => {
+    $("week").replaceChildren(...p.week.map((d, i) => {
       const c = el("span", `cd-day${d.label === "oggi" ? " today" : ""}${d.exam ? " exam" : ""}`);
+      c.style.setProperty("--n", String(i));
       if (d.phase && !d.exam && d.label !== "oggi") c.dataset.phase = d.phase;
       c.append(el("small", null, d.label), el("b", null, d.exam ? "esame" : `${d.minutes}′`));
       return c;
     }));
     $("today-label").textContent = `Oggi · ${p.today.minutes} minuti`;
-    $("tasks").replaceChildren(...p.today.tasks.map((t) => {
+    $("tasks").replaceChildren(...p.today.tasks.map((t, i) => {
       const r = el("div", "cd-task");
+      r.style.setProperty("--n", String(i));
       r.append(el("b", null, t.title), el("span", null, `${t.minutes}′`));
       return r;
     }));
@@ -90,4 +93,24 @@ export function mountHeroPlan(root, topics) {
   range.addEventListener("change", () => draw());
   for (const r of root.querySelectorAll("input[name=hp-hours]")) r.addEventListener("change", () => { state.hours = Number(r.value); draw(); });
   draw({ announce: false });
+  intro(root, $("days"), state);
 }
+
+/**
+ * Apertura della scheda: il piano si compone (CSS .intro in landing.css) e i giorni contano fino al valore.
+ * Solo una volta e senza «movimento ridotto»; poi .intro va via, così i ridisegni dal cursore non si rianimano.
+ */
+function intro(root, num, state) {
+  if (!globalThis.matchMedia || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  root.classList.add("intro");
+  setTimeout(() => root.classList.remove("intro"), 2400);
+  const days = state.days, t0 = performance.now(), ms = 900;
+  const tick = (t) => {
+    if (state.days !== days) return; // hai già mosso il cursore: vale il tuo valore
+    const k = Math.min(1, Math.max(0, (t - t0) / ms));
+    num.textContent = String(Math.round(days * ease(k)));
+    if (k < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+const ease = (k) => 1 - (1 - k) ** 3;
