@@ -24,7 +24,7 @@ export function flashView(exam, query) {
     if (taskId && total0 > 0) { exam.done[taskId] = true; store.save(); }
     const next = Object.values(exam.srs).map((s) => s.due).filter((d) => d && d > today()).sort()[0];
     root.replaceChildren(
-      h("div", { class: "card stack", style: { textAlign: "center" } },
+      h("div", { class: "card stack fc-done", style: { textAlign: "center" } },
         h("h2", {}, total0 ? "Sessione completata 🎉" : "Niente da ripassare ora"),
         total0 ? h("p", {}, `${stats.reviewed} risposte, ${stats.reviewed - stats.again} ricordate al primo colpo.`) : h("p", { class: "muted" }, "Non ci sono carte in scadenza né nuove da introdurre oggi."),
         next ? h("p", { class: "muted small" }, `Prossime carte in scadenza: ${next}.`) : null,

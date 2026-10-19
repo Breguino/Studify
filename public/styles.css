@@ -440,6 +440,30 @@ td { font-variant-numeric: tabular-nums; } td a { font-weight: 600; text-decorat
 .spinner { width: 16px; height: 16px; border: 2.5px solid var(--line); border-top-color: var(--brand); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } .bar > div { transition: none; } a.card:hover, .btn:active:not([disabled]) { transform: none; } }
+
+/* Movimento nello studio: piccolo, rapido e con un significato (nuova carta, risposta, correzione, attività fatta).
+   Parte quando l'elemento compare: le viste ridisegnano da capo, quindi ogni classe qui è messa solo sul momento giusto
+   (la carta nuova non è .revealed, la correzione è .options.revealed, l'attività appena spuntata è .just-done). */
+@media (prefers-reduced-motion: no-preference) {
+  .flashcard:not(.revealed) { animation: st-deal .38s cubic-bezier(.2, .8, .2, 1) both; }
+  .flashcard .fc-back { animation: st-rise .32s cubic-bezier(.2, .8, .2, 1) both; }
+  .fc-grade .grades .btn { animation: st-rise .3s cubic-bezier(.2, .8, .2, 1) both; }
+  .fc-grade .grades .btn:nth-child(2) { animation-delay: 40ms; }
+  .fc-grade .grades .btn:nth-child(3) { animation-delay: 80ms; }
+  .fc-grade .grades .btn:nth-child(4) { animation-delay: 120ms; }
+  .fc-done { animation: st-pop .45s cubic-bezier(.3, 1.3, .5, 1) both; }
+  .options.revealed .option.correct { animation: st-pop .4s cubic-bezier(.3, 1.4, .5, 1) both; }
+  .options.revealed .option.correct .opt-key { animation: st-pop .4s cubic-bezier(.3, 1.6, .5, 1) .08s both; }
+  .options.revealed .option.wrong { animation: st-shake .38s ease both; }
+  .callout.q-why { animation: st-rise .32s cubic-bezier(.2, .8, .2, 1) .1s both; }
+  .task.just-done { animation: st-done .5s ease both; }
+  .task.just-done .t-check { animation: st-pop .38s cubic-bezier(.3, 1.6, .5, 1) both; }
+}
+@keyframes st-deal { from { opacity: 0; transform: translateX(28px) rotate(1.5deg); } }
+@keyframes st-rise { from { opacity: 0; transform: translateY(8px); } }
+@keyframes st-pop { from { transform: scale(.94); } 55% { transform: scale(1.03); } }
+@keyframes st-shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+@keyframes st-done { from { background-color: var(--surface); border-color: var(--good); } }
 details > summary { cursor: pointer; }
 details > summary.small { padding-block: 11px; } /* da toccare: alta almeno 44px */
 .source-list { margin: 6px 0 0; padding-left: 18px; font-size: .88rem; }

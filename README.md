@@ -368,6 +368,9 @@ Prove: `test/web.test.js` (funzione, accesso, `sample`, `db`, controlli di regis
    - **Quiz**: una tacca per domanda (giusta, da rivedere, di adesso), alternative con la lettera e, dopo la risposta, «Corretta» /
      «La tua risposta» e il perché, con la fonte se la domanda è del docente. Da tastiera: A–D (o 1–4) per rispondere, Invio per
      andare avanti. **Flashcard**: domanda e risposta sulla stessa carta, quante ricordate e quante da rivedere, valutazione 1–4.
+   - **Movimento** (solo senza «movimento ridotto»): la carta nuova entra come se la distribuissi, la risposta compare dal basso,
+     nel quiz l'alternativa giusta fa un piccolo scatto e quella sbagliata trema, e l'attività appena spuntata si colora di verde.
+     Ogni animazione dura meno di mezzo secondo e parte solo in quel momento, non a ogni ridisegno della pagina.
    - **Promemoria nel calendario** (colonna laterale di «Oggi»): «Scarica per il calendario» crea un file `.ics` con una sessione
      per ogni giorno di studio, all'ora scelta (predefinita 18:00, salvata nell'esame) e con le attività nella descrizione, più il giorno
      dell'appello. Si apre con Google Calendar, Calendario di Apple o Outlook, che mandano l'avviso anche ad app chiusa: è il modo
