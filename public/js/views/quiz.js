@@ -159,7 +159,7 @@ export function quizView(exam, query) {
     // le domande del docente si ripetono: alternative in ordine diverso ogni volta, per ricordare il concetto e non la lettera
     // (non se una alternativa dipende dalla posizione, come «tutte le precedenti»)
     it.order ??= q.official && !keepOrder(q.options) ? shuffle(q.options.map((_, k) => k)) : q.options.map((_, k) => k);
-    const opts = h("div", { class: "options" }, it.order.map((k, pos) => {
+    const opts = h("div", { class: `options${reveal ? " revealed" : ""}` }, it.order.map((k, pos) => { // .revealed: animazione della correzione
       const o = q.options[k];
       const cls = reveal ? (k === q.correctIndex ? "correct" : k === it.answer ? "wrong" : "") : it.answer === k ? "correct" : "";
       const tag = reveal ? (k === q.correctIndex ? "Corretta" : k === it.answer ? "La tua risposta" : null) : null;

@@ -11,6 +11,8 @@ const saidForExam = (exam, task) => !!task.topicId && (exam.module?.examHints ??
  * Una riga del piano. `now`: è l'attività da fare adesso (in evidenza, con «Inizia» principale).
  * `compact`: per la home, titolo e una riga di dettagli.
  */
+let justDone = null; // l'attività appena spuntata: solo lei fa la piccola animazione (CSS .task.just-done)
+
 export function taskRow(exam, task, { now = false, compact = false } = {}) {
   const done = isDone(exam, task);
   const href = taskHref(exam, task);
@@ -22,8 +24,10 @@ export function taskRow(exam, task, { now = false, compact = false } = {}) {
   }
   const check = h("input", { type: "checkbox", checked: done, "aria-label": `Segna «${task.title}» come fatto` });
   check.addEventListener("change", () => {
+    justDone = check.checked ? task.id : null;
     setDone(exam, task, check.checked);
-    core.rerender();
+    core.rerender(); // ridisegna subito: dopo, le righe nuove non si animano più
+    justDone = null;
   });
   const meta = compact
     ? h("div", { class: "t-meta" }, [task.minutes ? `${task.minutes} min` : "", method, extra].filter(Boolean).join(" · "))
@@ -31,7 +35,7 @@ export function taskRow(exam, task, { now = false, compact = false } = {}) {
         method ? badge(method, now ? "brand" : "") : null,
         saidForExam(exam, task) ? badge("il docente ne parla per l'esame", "bad") : null,
         extra ? h("span", {}, extra) : null);
-  return h("div", { class: `task${done ? " done" : ""}${now ? " now" : ""}${compact ? " compact" : ""}` },
+  return h("div", { class: `task${done ? " done" : ""}${done && justDone === task.id ? " just-done" : ""}${now ? " now" : ""}${compact ? " compact" : ""}` },
     task.kind === "rest" ? h("span", { "aria-hidden": "true" }, "🌙") : h("label", { class: "t-check" }, check), // area da toccare più grande della casella
     h("div", { class: "spacer t-body" },
       now && !done ? h("span", { class: "t-now" }, "Adesso") : null,

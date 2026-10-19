@@ -186,6 +186,9 @@ I pulsanti con solo l'icona hanno sempre un `aria-label` in italiano.
 - **Movimento ridotto** rispettato (`prefers-reduced-motion`). Le entrate allo scorrimento della landing (`[data-reveal]`) partono solo con JavaScript
   e senza movimento ridotto, e non nascondono mai ciò che è già in vista. Lo stesso vale per le animazioni della landing
   (`.countdown.intro` all'apertura, `.step-art.play` scorrendo, in `web/landing.css`): mostrano come funziona l'app, non decorano.
+  Nell'app («Movimento nello studio» in `public/styles.css`) le viste ridisegnano da capo, quindi un'animazione va su una classe
+  messa solo nel momento giusto: `.flashcard:not(.revealed)` (carta nuova), `.options.revealed` (correzione del quiz),
+  `.task.just-done` (attività appena spuntata, `justDone` in `views/tasks.js`). Sotto il mezzo secondo, sempre con movimento ridotto rispettato.
 - **Stampa**: `@media print`, per la dispensa e le prove d'esame.
 - **Accessibilità**:
   - focus visibile (`:focus-visible` con l'anello `--brand`);
