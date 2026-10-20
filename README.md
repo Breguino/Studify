@@ -55,7 +55,8 @@ con un'unica azione principale «Inizia gratis» → `/app?entra=registrati`. Ch
 La scheda in cima è un **piano vero**: scegli fra quanti giorni c'è l'esame (5–60) e quante ore al giorno, e vedi le fasi,
 i prossimi giorni con le date di oggi e la sessione di oggi. Li calcola `buildPlan`, lo stesso dell'app, con gli argomenti
 dell'esame demo (`web/landing-plan.js`, provato in `test/landing.test.js`; la build lo incorpora nella pagina, circa 3 KB compressi).
-Senza JavaScript restano i valori d'esempio, senza comandi. Scorrendo, le sezioni entrano con una breve dissolvenza; chi ha chiesto
+Con JavaScript una riga invita a provarla («sposta la data dell'esame e cambia le ore»); senza, restano i valori d'esempio, senza comandi.
+Le domande in fondo rispondono anche a «Cosa mi serve per iniziare?» e «L'intelligenza artificiale può sbagliare?». Scorrendo, le sezioni entrano con una breve dissolvenza; chi ha chiesto
 meno movimento le vede subito, e ciò che è già in vista all'apertura non si nasconde mai.
 All'apertura la scheda del piano si compone (i giorni contano fino al valore, la barra delle fasi si riempie, entrano i giorni
 e le attività di oggi; se muovi il cursore durante il conteggio vale il tuo valore), e le illustrazioni dei tre passi si animano
