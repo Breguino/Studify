@@ -42,6 +42,7 @@ h2.cd-exam { margin: 0; line-height: 1.3; }
 .cd-num { font-variant-numeric: tabular-nums; }
 /* scheda interattiva (web/landing-plan.js): senza JavaScript restano i valori d'esempio, senza comandi */
 .cd-controls { display: grid; gap: 14px; padding: 16px; border-radius: 16px; background: var(--surface-2); }
+.cd-hint { margin: 0; font-size: .9rem; color: var(--muted); }
 .cd-range { display: grid; gap: 6px; font-weight: 600; font-size: .95rem; }
 .cd-range output { font-weight: 800; color: var(--brand); }
 .cd-range input { -webkit-appearance: none; appearance: none; width: 100%; min-height: 44px; height: 44px; padding: 0; border: 0; background: transparent; box-shadow: none; cursor: pointer; touch-action: pan-y; }

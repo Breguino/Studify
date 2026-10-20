@@ -46,12 +46,13 @@
     <section class="countdown" id="hero-plan" aria-labelledby="hp-title">
       <div class="cd-top">
         <div>
-          <h2 class="cd-exam" id="hp-title">Il piano di un esame d'esempio: Microeconomia</h2>
+          <h2 class="cd-exam" id="hp-title">Esame d'esempio: Microeconomia</h2>
           <div class="cd-days" aria-hidden="true"><span class="cd-num" data-hp="days">21</span><span>giorni all'appello</span></div>
         </div>
         <span class="badge warn" data-hp="date">fra 3 settimane</span>
       </div>
       <div class="cd-controls" data-hp="controls" hidden>
+        <p class="cd-hint">Prova: sposta la data dell'esame e cambia le ore, il piano si ricalcola.</p>
         <label class="cd-range"><span>Esame tra <output data-hp="days-out">21 giorni</output></span>
           <input type="range" min="5" max="60" value="21" data-hp="days-in"></label>
         <fieldset class="cd-hours">
@@ -81,7 +82,7 @@
         </div>
       </div>
       <p class="visually-hidden" aria-live="polite" data-hp="summary"></p>
-      <p class="cd-note">Calcolato come nell'app, con gli argomenti dell'esame d'esempio. Con i tuoi materiali, gli argomenti sono i tuoi.</p>
+      <p class="cd-note">Calcolato come nell'app. Con i tuoi materiali, gli argomenti sono i tuoi.</p>
     </section>
   </section>
 </div>
@@ -110,8 +111,8 @@
       <div class="card flat step">
         <div class="step-art art-module" aria-hidden="true"><span><b>Elasticità della domanda</b><em class="ok">dal docente</em></span><span><b>Monopolio</b><em class="check">da verificare</em></span></div>
         <span class="step-n">2</span>
-        <h3>Ottieni un modulo verificato</h3>
-        <p class="muted">Argomenti, flashcard e domande ricavati dai materiali. Ciò che non viene dai materiali è segnato.</p>
+        <h3>Ottieni argomenti, flashcard e quiz</h3>
+        <p class="muted">Ricavati dai tuoi materiali, con la fonte. Quello che non viene dai materiali è segnato a parte.</p>
       </div>
       <div class="card flat step">
         <div class="step-art art-plan" aria-hidden="true"><i style="height:40%"></i><i style="height:55%"></i><i style="height:50%"></i><i style="height:75%"></i><i style="height:65%"></i><i style="height:90%"></i><span class="badge bad">esame</span></div>
@@ -169,9 +170,11 @@
     </div>
     <div id="domande" class="faq">
       <span class="kicker">Domande</span>
+      <details class="card flat"><summary>Cosa mi serve per iniziare?</summary><p class="muted">Un indirizzo email e i materiali di un esame: vanno bene anche solo i tuoi appunti, o le foto di quelli scritti a mano. Argomenti, flashcard, quiz e piano li prepara Studify.</p></details>
       <details class="card flat"><summary>Quanto costa?</summary><p class="muted">Niente. Ogni account ha un limite mensile di uso dell'intelligenza artificiale, che si rinnova il primo del mese; flashcard, quiz e piano restano disponibili anche quando il limite è raggiunto.</p></details>
       <details class="card flat"><summary>Funziona con la mia università?</summary><p class="muted">Sì, con qualunque corso: parte dai materiali che hai tu. Puoi indicare ateneo e corso di studio, e importare il libretto e gli orari.</p></details>
       <details class="card flat"><summary>Posso studiare con i compagni?</summary><p class="muted">Sì: esporti un esame e lo mandi al gruppo, senza i tuoi progressi personali. Poi vi interrogate a turno con le domande del modulo.</p></details>
+      <details class="card flat"><summary>L'intelligenza artificiale può sbagliare?</summary><p class="muted">Sì, come ogni AI. Per questo le frasi del docente e le soluzioni ufficiali restano come sono, con la fonte, e quello che l'AI aggiunge è segnato a parte: controllalo sempre sui materiali del corso.</p></details>
       <details class="card flat"><summary>Serve installare qualcosa?</summary><p class="muted">No: funziona nel browser, su computer e telefono. Gli esami si sincronizzano tra i dispositivi.</p></details>
     </div>
   </section>
