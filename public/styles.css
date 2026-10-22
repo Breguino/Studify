@@ -472,7 +472,7 @@ details > summary.small { padding-block: 11px; } /* da toccare: alta almeno 44px
 .option[disabled]:not(.correct):not(.wrong) { opacity: .65; }
 .inline-form > input, .inline-form > select { width: auto; flex: 1 1 150px; } .inline-form > input[type=number] { flex: 0 0 90px; }
 .modal-backdrop { position: fixed; inset: 0; background: rgba(10, 12, 20, .5); display: grid; place-items: center; padding: 16px; z-index: 30; }
-.modal { max-width: 420px; width: 100%; }
+.modal { max-width: 420px; width: 100%; max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; } /* finestra più alta dello schermo: scorre al suo interno */
 @media (max-width: 520px) {
   .topbar { padding: 10px 16px; gap: 8px; }
   .topbar nav { flex-wrap: nowrap; gap: 0; }

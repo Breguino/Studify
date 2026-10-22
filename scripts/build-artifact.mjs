@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { euro, PAID, PLANS, yearSaving } from "../public/js/plans.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const harness = process.argv.includes("--harness");
@@ -106,7 +107,21 @@ if (web) {
     "/privacy.html": { title: "Informativa privacy — Studify", description: "Informativa privacy di Studify (art. 13 GDPR)." },
     "/404.html": { title: "Pagina non trovata — Studify", description: "Questa pagina di Studify non esiste." },
   };
-  const withHead = (html, path) => html.replace("<!--HEAD-->", () => head({ path, ...PAGES[path] }));
+  // Abbonamenti (BILLING=on su Vercel): tengono le parti <!--BILLING-->…<!--/BILLING--> e tolgono <!--NOBILLING-->…; spenti, il contrario.
+  const billing = process.env.BILLING === "on";
+  const billingBlocks = (html) => html
+    .replace(billing ? /<!--NOBILLING-->[\s\S]*?<!--\/NOBILLING-->/g : /<!--BILLING-->[\s\S]*?<!--\/BILLING-->/g, "")
+    .replace(/<!--\/?(NO)?BILLING-->/g, "")
+    .replace("<!--PRICES-->", () => priceCards())
+    .replace(/%(BASE|PRO)_(MONTH|YEAR)%/g, (_, p, i) => euro(PLANS[p.toLowerCase()][i.toLowerCase()]));
+  const priceCards = () => `<div class="plans landing-plans">${["free", ...PAID].map((id) => {
+    const p = PLANS[id];
+    const price = p.month ? `<p class="plan-price">${euro(p.month)}<small> al mese</small></p><p class="small muted">oppure ${euro(p.year)} all'anno (${yearSaving(id)} mesi gratis)</p>` : `<p class="plan-price">0 €</p><p class="small muted">per sempre</p>`;
+    const credit = id === "free" ? "Credito di Claude di base, ogni mese" : `Credito di Claude ${p.credit / PLANS.free.credit} volte il piano Gratis`;
+    const cta = id === "free" ? `<a class="btn" href="/app?entra=registrati">Inizia gratis</a>` : `<a class="btn${id === "pro" ? " primary" : ""}" href="/app?entra=registrati&amp;abbonamento=scegli">Scegli ${p.name}</a>`;
+    return `<div class="card flat plan${id === "pro" ? " plan-top" : ""}"><b>${p.name}</b>${price}<p class="small">${p.pitch}</p><p class="small muted">${credit}</p>${cta}</div>`;
+  }).join("")}</div>`;
+  const withHead = (html, path) => billingBlocks(html).replace("<!--HEAD-->", () => head({ path, ...PAGES[path] }));
   // immagini statiche (scripts/make-assets.mjs) e file per i motori di ricerca
   for (const f of ["og.png", "favicon.svg", "favicon.ico", "favicon-32.png", "apple-touch-icon.png", "icon-192.png", "icon-512.png"]) await writeFile(join(OUT, f), readFileSync(join(ROOT, "web/assets", f)));
   await writeFile(join(OUT, "site.webmanifest"), JSON.stringify({ id: "/app", name: "Studify", short_name: "Studify", description: "Prepara gli esami con i tuoi materiali: piano di studio, quiz e flashcard, anche senza connessione.", lang: "it", start_url: "/app", scope: "/", display: "standalone", background_color: "#f4f5f9", theme_color: "#4338ca", icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }, { src: "/icon-512.png", sizes: "512x512", type: "image/png" }] }, null, 2));

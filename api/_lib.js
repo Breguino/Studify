@@ -1,5 +1,7 @@
 // Parte pura della funzione /api/claude (Vercel): controlli, costi e chiamate a Supabase.
 // I file con «_» in api/ non diventano endpoint.
+import { activePlan } from "../public/js/plans.js";
+import { billingOn, planLimit, readSubscription } from "./_billing.js";
 
 export const MAX_PROMPT_BYTES = 262_144; // come la capability `sample` delle pagine Claude
 export const MAX_IMAGES = 3; // il corpo di una richiesta a Vercel non può superare 4,5 MB
@@ -108,23 +110,33 @@ export async function recordUsage(env, token, { input, output, cost }, fetchFn =
   if (!r.ok) throw new Error(`record_ai_usage: ${r.status}`);
 }
 
-/** Limiti di spesa in dollari al mese (variabili d'ambiente su Vercel). */
+/**
+ * Limiti di spesa in dollari al mese (variabili d'ambiente su Vercel). `user` è quello del piano Gratis;
+ * gli abbonati hanno il credito del loro piano (api/_billing.js). Il tetto `total` vale solo per chi non paga.
+ */
 export const limits = (env) => ({
-  user: Number(env.USER_MONTHLY_LIMIT_USD ?? 3),
+  user: planLimit(env, "free"),
   total: Number(env.TOTAL_MONTHLY_LIMIT_USD ?? 30),
 });
 
-/** Controlli prima di chiamare Claude: utente, credito. Restituisce l'utente. */
+/** Piano e credito dell'utente: { plan, limit, sub }. */
+export async function userPlan(env, token, fetchFn = fetch) {
+  const sub = await readSubscription(env, token, fetchFn).catch(() => null);
+  const plan = activePlan(sub);
+  return { plan, limit: planLimit(env, plan), sub };
+}
+
+/** Controlli prima di chiamare Claude: utente, credito del suo piano. Restituisce l'utente. */
 export async function authorize(env, authHeader, fetchFn = fetch) {
   const token = /^Bearer (.+)$/.exec(authHeader ?? "")?.[1];
   if (!token) throw new HttpError(401, "session_expired");
   const user = await getUser(env, token, fetchFn);
   if (!user) throw new HttpError(401, "session_expired");
-  const spend = await monthSpend(env, token, fetchFn);
-  const lim = limits(env);
-  if (spend.mine >= lim.user) throw new HttpError(429, "quota_exceeded", "Hai usato tutto il credito di Claude di questo mese: si rinnova il primo del mese.");
-  if (spend.total >= lim.total) throw new HttpError(429, "quota_exceeded", "Il credito di Claude di Studify per questo mese è esaurito: riprova il mese prossimo.");
-  return { user, token };
+  const [spend, { plan, limit }] = await Promise.all([monthSpend(env, token, fetchFn), userPlan(env, token, fetchFn)]);
+  const upsell = plan === "free" && billingOn(env) ? " Con un abbonamento il credito è più alto: Account → Abbonamento." : "";
+  if (spend.mine >= limit) throw new HttpError(429, "quota_exceeded", `Hai usato tutto il credito di Claude di questo mese: si rinnova il primo del mese.${upsell}`);
+  if (plan === "free" && spend.total >= limits(env).total) throw new HttpError(429, "quota_exceeded", `Il credito di Claude di Studify per questo mese è esaurito: riprova il mese prossimo.${upsell}`);
+  return { user, token, plan };
 }
 
 /**
@@ -141,11 +153,18 @@ export function createHandler({ env, anthropic, fetchFn = fetch, log = console.e
       res.end(JSON.stringify({ code, message }));
     };
     if (req.method === "GET") {
-      // limite mensile per utente, mostrato nella finestra «Account» (nessun dato personale)
+      // limite mensile, mostrato nella finestra «Account»; con il token dell'utente, quello del suo piano
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store");
+      const out = { limits: { user: limits(env).user }, configured: Boolean(env.ANTHROPIC_API_KEY), model, billing: billingOn(env), plan: "free" };
+      const token = /^Bearer (.+)$/.exec(req.headers?.authorization ?? "")?.[1];
+      if (token && env.SUPABASE_URL && await getUser(env, token, fetchFn).catch(() => null)) {
+        const { plan, limit, sub } = await userPlan(env, token, fetchFn);
+        Object.assign(out, { plan, limits: { user: limit }, subscription: sub && { ...sub, stripe_customer_id: undefined, manageable: !!sub.stripe_customer_id } });
+      }
       // solo SE la chiave è configurata (mai il valore): serve a capire «Claude non configurato» senza un account
-      return res.end(JSON.stringify({ limits: { user: limits(env).user }, configured: Boolean(env.ANTHROPIC_API_KEY), model }));
+      return res.end(JSON.stringify(out));
     }
     if (req.method !== "POST") return fail(405, "bad_request", "Usa POST.");
     if (!env.SUPABASE_URL || !env.SUPABASE_KEY) return fail(503, "sampling_disabled", "Server non configurato.");

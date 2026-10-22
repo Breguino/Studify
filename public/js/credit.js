@@ -6,8 +6,9 @@ export const HEAVY_JOBS = new Set(["/api/module", "/api/module-extend", "/api/di
 
 export const LOW = 0.8; // da qui in su si avvisa prima di una richiesta lunga
 
-/** { spent, limit } in dollari → stato del credito; null se il limite non è noto. */
-export function creditState({ spent, limit } = {}) {
+/** { spent, limit } in dollari → stato del credito; null se il limite non è noto. Con `upsell` (abbonamenti attivi,
+ *  piano Gratis) il testo ricorda che con un abbonamento il credito è più alto. */
+export function creditState({ spent, limit, upsell = false } = {}) {
   if (!(limit > 0) || !Number.isFinite(spent)) return null;
   const used = Math.max(0, spent / limit);
   const pct = Math.min(100, Math.round(used * 100));
@@ -17,5 +18,6 @@ export function creditState({ spent, limit } = {}) {
     : level === "low"
       ? `Credito di Claude quasi finito: ${pct}% usato questo mese. Una richiesta con molti materiali potrebbe non arrivare in fondo.`
       : `Credito di Claude del mese: ${pct}% usato.`;
-  return { used, pct, level, text };
+  const more = upsell && level !== "ok" ? " Con un abbonamento il credito è più alto: Account → Abbonamento." : "";
+  return { used, pct, level, text: text + more };
 }

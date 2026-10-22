@@ -52,6 +52,15 @@ if (new URLSearchParams(location.search).has("eliminato")) {
   history.replaceState(null, "", location.pathname);
   queueMicrotask(() => document.getElementById("toasts")?.append(Object.assign(document.createElement("div"), { className: "toast ok", role: "status", textContent: "Account eliminato, con tutti i dati salvati online." })));
 }
+// ritorno dalla pagina di pagamento di Stripe (o link «Scegli un piano» della landing)
+const billingParam = new URLSearchParams(location.search).get("abbonamento");
+if (billingParam) {
+  history.replaceState(null, "", location.pathname + location.hash);
+  const say = { ok: ["Pagamento riuscito: l'abbonamento si attiva entro qualche secondo.", "ok"], annullato: ["Pagamento annullato: non ti è stato addebitato nulla.", "info"] }[billingParam];
+  if (say) queueMicrotask(() => document.getElementById("toasts")?.append(Object.assign(document.createElement("div"), { className: `toast ${say[1]}`, role: "status", textContent: say[0] })));
+  if (billingParam === "ok") core.creditChanged?.();
+  if (billingParam === "scegli") gate.ready.then(() => gate.account());
+}
 gate.start(initialHash);
 boot();
 // installabile e apribile senza connessione (web/sw.js); se il browser non lo permette, l'app funziona lo stesso

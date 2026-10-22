@@ -146,11 +146,28 @@ export async function rpc({ url, key, auth, fetchFn = (...a) => fetch(...a) }, n
   return text ? JSON.parse(text) : null;
 }
 
-/** Credito di Claude del mese: { spent, limit } in dollari (limit null se il server non lo dice). */
+/**
+ * Credito di Claude del mese e piano: { spent, limit, plan, billing, subscription, upsell } (limit null se il server non
+ * lo dice). Il server legge il piano con il token dell'utente: il limite è quello del suo piano.
+ */
 export async function creditUsage({ url, key, auth, fetchFn = (...a) => fetch(...a) }) {
-  const [row] = (await rpc({ url, key, auth, fetchFn }, "ai_spend_this_month")) ?? [];
-  const limit = (await (await fetchFn("/api/claude")).json().catch(() => ({})))?.limits?.user ?? null;
-  return { spent: Number(row?.mine ?? 0), limit };
+  const token = await auth.accessToken().catch(() => null);
+  const [rows, info] = await Promise.all([
+    rpc({ url, key, auth, fetchFn }, "ai_spend_this_month"),
+    fetchFn("/api/claude", { headers: token ? { Authorization: `Bearer ${token}` } : {} }).then((r) => r.json()).catch(() => ({})),
+  ]);
+  const plan = info?.plan ?? "free";
+  const billing = info?.billing === true;
+  return { spent: Number(rows?.[0]?.mine ?? 0), limit: info?.limits?.user ?? null, plan, billing, subscription: info?.subscription ?? null, upsell: billing && plan === "free" };
+}
+
+/** /api/billing: { action: "checkout", plan, interval, startNow } o { action: "portal" } → url della pagina di Stripe. */
+export async function billingUrl({ auth, fetchFn = (...a) => fetch(...a) }, body) {
+  const token = await auth.accessToken();
+  const r = await fetchFn("/api/billing", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || !data.url) throw Object.assign(new Error(data.message ?? "Il servizio di pagamento non risponde. Riprova tra poco."), { code: data.code });
+  return data.url;
 }
 
 /** Installa window.claude: ogni capability attende che l'utente abbia fatto l'accesso. */

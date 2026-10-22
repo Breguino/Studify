@@ -147,6 +147,10 @@ che crea `dist/harness.html`: la pagina Claude con un `window.claude` finto.
   (due copie dello stesso esame, dopo un'unione tra dispositivi, condividono i file).
 - **Offline (solo web)**: il service worker (`web/sw.js`) mette in cache soltanto `/app` e i moduli `/js/*`, mai le risposte
   di Supabase o di `/api/claude`; i dati offline sono la copia in IndexedDB di `web/offline.js`.
+- **Abbonamenti (solo web)**: spenti finché su Vercel non c'è `BILLING=on` (guida in `docs/abbonamenti.md`). Piani e prezzi mostrati
+  in `public/js/plans.js`, gli stessi per l'account (`web/gate.js`) e la landing. Nelle pagine statiche (landing, termini, privacy)
+  le parti `<!--BILLING-->…<!--/BILLING-->` compaiono solo con gli abbonamenti accesi, `<!--NOBILLING-->…` solo con quelli spenti:
+  le toglie la build. Il pagamento avviene sempre sulle pagine di Stripe: la carta non passa mai da Studify.
 - **Asset da Figma**:
   - piccoli (illustrazioni, loghi): SVG in linea o data URI nel CSS, mai URL esterni;
   - grandi: chiedere prima, perché la pagina Claude è un unico file (oggi circa 2,8 MB).
@@ -208,7 +212,7 @@ web/               versione web: template.html, web.css, entry, auth, gate (acce
                    landing (landing-plan.js: la scheda del piano in cima, con buildPlan dell'app),
                    offline.js (copia locale dello stato, testata), merge.js (unione tra dispositivi, testata)
                    e sw.js (service worker: installabile e offline)
-api/               funzione Vercel /api/claude (_lib.js testato)
+api/               funzioni Vercel /api/claude (_lib.js), /api/billing e /api/stripe-webhook (_billing.js, abbonamenti con Stripe): testate
 server/            server Node senza dipendenze (versione locale con chiave API)
 shared/            prompts.js, normalize.js (server e browser)
 supabase/          schema.sql

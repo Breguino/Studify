@@ -24,3 +24,10 @@ test("credito: solo le richieste lunghe chiedono conferma", () => {
   assert.ok(HEAVY_JOBS.has("/api/module") && HEAVY_JOBS.has("/api/dispensa"));
   assert.ok(!HEAVY_JOBS.has("/api/exam-format-text"), "quella parte da sola alla creazione dell'esame: niente finestre a sorpresa");
 });
+
+test("credito: con gli abbonamenti attivi, sul piano Gratis il testo ricorda l'abbonamento (solo quando serve)", () => {
+  assert.match(creditState({ spent: 3.4, limit: 3, upsell: true }).text, /Account → Abbonamento/);
+  assert.match(creditState({ spent: 2.6, limit: 3, upsell: true }).text, /Account → Abbonamento/);
+  assert.doesNotMatch(creditState({ spent: 1, limit: 3, upsell: true }).text, /Abbonamento/, "credito ancora ampio: nessun invito");
+  assert.doesNotMatch(creditState({ spent: 3.4, limit: 3 }).text, /Abbonamento/);
+});
