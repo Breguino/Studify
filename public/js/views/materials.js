@@ -488,11 +488,10 @@ async function generate(exam) {
     const mod = remapExamRefs(await api.runJob("/api/module", { exam: examInfo(exam), ...sent }, onProgress), examMap);
     resetProgress(exam, mod);
     applyExamBoost(exam);
-    const off = await syncOfficial(exam, onProgress);
-    if (off) toast(officialToast(off), "ok");
+    // un solo avviso: domande ufficiali e capitoli collegati si vedono nel modulo e in «Libri consigliati e dispense»
+    await syncOfficial(exam, onProgress);
     await syncDispense(exam);
-    const books = await syncChapterLinks(exam, onProgress);
-    if (books) toast(`Libri: ${books}`, "ok");
+    await syncChapterLinks(exam, onProgress);
     exam.materials.forEach(markSent);
     toast("Modulo pronto!", "ok");
     toReady(exam);
@@ -800,7 +799,9 @@ export function materialsTab(exam, { first = false } = {}) {
     if (isTutorFile(title.value)) exam.materials.at(-1).tutor = true;
     store.save();
     core.rerender();
-  } }, h("h3", {}, "Incolla appunti, esercizi, temi d'esame o parti di libro"), h("div", { class: "row", style: { gap: "8px", flexWrap: "nowrap" } }, title, pasteRole), text, h("div", {}, h("button", { class: "btn", type: "submit" }, "Aggiungi")));
+  } }, h("div", { class: "row", style: { gap: "8px", flexWrap: "nowrap" } }, title, pasteRole), text, h("div", {}, h("button", { class: "btn", type: "submit" }, "Aggiungi")));
+  // chiuso finché non serve: il pulsante «Incolla un testo» lo apre
+  const pasteBox = h("details", { class: "card paste-card", id: "paste-box" }, h("summary", {}, h("b", {}, "Incolla appunti, esercizi, temi d'esame o parti di libro")), paste);
 
   /* --- carica file --- */
   const input = h("input", { type: "file", multiple: true, accept: `${core.ai.pdf === false && !core.pdfText ? "" : ".pdf,application/pdf,"}.docx,.pptx,.txt,.md,.markdown,.srt,.vtt,.html,.htm,text/plain,image/*,.heic`, hidden: true });
@@ -820,7 +821,7 @@ export function materialsTab(exam, { first = false } = {}) {
     h("div", { class: "row drop-actions" },
       h("button", { class: "btn", type: "button", onclick: () => input.click() }, "Scegli i file"),
       h("button", { class: "btn", type: "button", disabled: !ai, onclick: () => camera.click() }, "Fotografa gli appunti"),
-      h("button", { class: "btn", type: "button", onclick: () => { text.scrollIntoView({ block: "center", behavior: "smooth" }); text.focus({ preventScroll: true }); } }, "Incolla un testo")),
+      h("button", { class: "btn", type: "button", onclick: () => { pasteBox.open = true; text.scrollIntoView({ block: "center", behavior: "smooth" }); text.focus({ preventScroll: true }); } }, "Incolla un testo")),
     ai
       ? h("details", { class: "small photo-tips" }, h("summary", {}, "Appunti a mano: come fare foto che si leggono bene"),
           h("ul", {}, h("li", {}, "Una foto per pagina, in ordine: Claude le trascrive, formule comprese, e segna le parti incerte da controllare accanto alle foto."),
@@ -889,7 +890,10 @@ export function materialsTab(exam, { first = false } = {}) {
           h("div", { class: "row between" }, h("div", {}, h("span", { class: "mat-icon", "aria-hidden": "true" }, icon(m.kind === "web" ? "web" : m.handwritten ? "image" : roleOf(m) === "sbobine" ? "mic" : "file", 18)), h("b", {}, m.title), " ", badge(KIND[m.kind], m.kind === "web" ? "brand" : ""), " ", isPending.has(m.id) ? badge("non ancora nel modulo", "warn") : null, " ", h("span", { class: "muted small" }, kb(m.size)),
               m.kind !== "web" ? h("div", { class: "row", style: { gap: "6px", marginTop: "4px" } }, h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Tipo",
                 h("select", { class: "role-select", "aria-label": `Tipo di ${m.title}`, onchange: async (e) => { m.role = e.target.value; if (m.role === "sbobine" || m.role === "colleghi") withLessons(m); if (m.role === "esami") { if (m.kind === "pdf") await findPdfPapers(m); else preparePapers(m); } if ((m.role === "domande" || m.role === "quiz") && m.kind === "pdf") await pdfToQuestions(m); await syncDispense(exam); store.save(); rerenderSoon(); } },
-                  Object.entries(ROLES).map(([k, t]) => h("option", { value: k, selected: roleOf(m) === k }, t)))),
+                  Object.entries(ROLES).map(([k, t]) => h("option", { value: k, selected: roleOf(m) === k }, t))))) : null,
+              // nel primo esame i dettagli restano chiusi: si arriva prima a «Genera il modulo»; dopo sono aperti
+              m.kind === "web" ? null : h("details", { class: "mat-more", open: !first }, h("summary", { class: "small" }, "Dettagli"),
+              m.kind !== "web" ? h("div", { class: "row", style: { gap: "6px", marginTop: "4px" } },
                 ["sbobine", "colleghi"].includes(roleOf(m)) ? h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } }, "Anno accademico",
                   h("input", { class: "sbobina-year", value: m.year ?? "", placeholder: "es. 2025-26", "aria-label": `Anno accademico di ${m.title}`, style: { width: "100px", padding: "4px 8px" }, onchange: (e) => { m.year = e.target.value.trim(); store.save(); } })) : null,
                 h("label", { class: "small muted", style: { display: "flex", gap: "6px", alignItems: "center", fontWeight: 400 } },
@@ -903,7 +907,7 @@ export function materialsTab(exam, { first = false } = {}) {
               papersRow(exam, m), questionsRow(m), exercisesRow(exam, m), classNotesRow(exam, m), quizRow(exam, m), slidesRow(m), dispenseRow(exam, m),
               roleOf(m) === "colleghi" ? h("div", { class: "small muted" }, "Appunti di colleghi: dicono che cosa ha spiegato e sottolineato il docente, ma sono di seconda mano. L'AI controlla definizioni e formule su dispense, libro e i tuoi appunti, e ti segnala gli argomenti che sono solo qui. Se sono di un altro anno, scrivilo: programma e docente potrebbero essere cambiati.") : null,
               roleOf(m) === "svolti" ? h("div", { class: "small muted" }, "Esercizi svolti dal docente: l'AI ne ricava il metodo in passi (come li risolve lui, con la sua notazione) e crea esercizi dello stesso tipo. Li ritrovi negli argomenti come «Esercizi guidati». Se sono scansioni o appunti a mano, controlla le formule nell'anteprima.") : null,
-              m.kind === "notes" ? (m.handwritten ? handwrittenRow(exam, m) : formulaRow(exam, m)) : null),
+              m.kind === "notes" ? (m.handwritten ? handwrittenRow(exam, m) : formulaRow(exam, m)) : null)),
             h("button", { class: "btn small danger", onclick: () => removeMaterial(exam, m), "aria-label": `Rimuovi ${m.title}` }, "Rimuovi")),
           fileIdOf(m) ? fileStatus(m) : null,
           m.kind === "web" ? h("details", {}, h("summary", { class: "small" }, m.generated ? "Anteprima (bozza dalla conoscenza di Claude, senza fonti)" : `Anteprima e ${m.sources.length} fonti`),
@@ -913,6 +917,12 @@ export function materialsTab(exam, { first = false } = {}) {
     : h("p", { class: "muted" }, "Nessun materiale ancora. Aggiungi appunti, file o fai partire una ricerca online.");
 
   /* --- generazione / aggiornamento --- */
+  // primo esame, dal primo materiale: la generazione resta a portata di dito mentre scorri (barra in basso, position: sticky)
+  const genBar = first && !exam.module && hasContent
+    ? h("div", { class: "gen-bar", role: "region", "aria-label": "Genera il modulo" },
+        h("span", { class: "small" }, h("b", {}, exam.materials.length === 1 ? "1 materiale" : `${exam.materials.length} materiali`), busy ? " · generazione in corso…" : " pronti"),
+        h("button", { class: "btn primary", disabled: busy, onclick: () => (ai ? generate(exam) : generateLocal(exam)) }, ai ? "Genera il modulo" : "Crea modulo base"))
+    : null;
   const toPlan = exam.module ? h("a", { class: "btn", href: `#/exam/${exam.id}/today` }, "Vai al piano") : null;
   let gen;
   if (!exam.module)
@@ -926,8 +936,8 @@ export function materialsTab(exam, { first = false } = {}) {
       ai ? creditLine() : null,
       h("div", { class: "row gen-actions" },
         first ? h("a", { class: "btn ghost", href: `#/exam/${exam.id}/edit` }, "← Indietro") : null,
-        ai ? h("button", { class: "btn primary", disabled: !hasContent || busy, onclick: () => generate(exam) }, "Genera con l'AI") : null,
-        !ai ? h("button", { class: "btn primary", disabled: !hasContent || busy, onclick: () => generateLocal(exam) }, "Crea modulo base") : null));
+        ai && !genBar ? h("button", { class: "btn primary", disabled: !hasContent || busy, onclick: () => generate(exam) }, "Genera con l'AI") : null,
+        !ai && !genBar ? h("button", { class: "btn primary", disabled: !hasContent || busy, onclick: () => generateLocal(exam) }, "Crea modulo base") : null));
   else {
     const regen = ai
       ? h("button", { class: "btn ghost", disabled: !hasContent || busy, onclick: () => generate(exam) }, "Rigenera tutto")
@@ -965,11 +975,11 @@ export function materialsTab(exam, { first = false } = {}) {
 
   return h("div", { class: "materials-layout" },
     h("div", { class: "materials-main stack" },
-      drop, h("div", { class: "card stack paste-card" }, paste),
+      drop, pasteBox,
       formatBox, booksCard(exam),
       h("div", { class: "row between list-head" }, h("h2", {}, exam.materials.length === 1 ? "1 materiale" : `${exam.materials.length} materiali`),
         hasContent ? h("span", { class: "small muted" }, "Il tipo decide come vengono usati: controllalo") : null),
-      list, gen),
+      list, genBar, gen),
     side);
 }
 

@@ -94,6 +94,8 @@ Altri helper di `ui.js` (anche `icon(nome)`, icone SVG a tratto, e `stepper(n)`)
 | `.next-exam`, `.plan-preview` | | fascia indaco (`--hero`): prossimo appello in home, anteprima del piano, modulo pronto |
 | `.stepper` (`stepper(n)` in `ui.js`) | `li.done`, `li.current` | i tre passi del primo esame |
 | `.choices` + `.choice` | `.levels` | scelte a pulsante (radio vere) |
+| `.gen-bar` | | barra fissa in basso con l'azione principale (passo 2 del primo esame: «Genera il modulo») |
+| `details.more-settings`, `details.mat-more` | | campi secondari chiusi (passo 1, dettagli di un materiale): in vista solo l'essenziale |
 | `.side-card`, `.quote-card` | | colonna laterale («Oggi», materiali) |
 | layout | `.row`, `.row.between`, `.stack`, `.grid`, `.cols`, `.spacer`, `.form` | flex/grid |
 | testo | `.muted`, `.small`, `.kbd` | |
