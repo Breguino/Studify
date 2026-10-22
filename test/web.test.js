@@ -163,7 +163,7 @@ test("handler: rifiuto e interruzione → riga d'errore, consumo comunque regist
 test("handler: GET restituisce il limite mensile e se la chiave è configurata (non il valore)", async () => {
   const res = fakeRes();
   await createHandler({ env: ENV, anthropic: fakeAnthropic(), fetchFn: fakeSupabase().fetchFn })(fakeReq({ method: "GET", token: null }), res);
-  assert.deepEqual(JSON.parse(res.chunks.join("")), { limits: { user: 3 }, configured: true, model: "claude-sonnet-5-5" });
+  assert.deepEqual(JSON.parse(res.chunks.join("")), { limits: { user: 3 }, configured: true, model: "claude-sonnet-5-5", billing: false, plan: "free" });
   const res2 = fakeRes();
   await createHandler({ env: { ...ENV, ANTHROPIC_API_KEY: "" }, anthropic: null, fetchFn: fakeSupabase().fetchFn })(fakeReq({ method: "GET", token: null }), res2);
   const body = JSON.parse(res2.chunks.join(""));

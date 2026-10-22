@@ -2,7 +2,8 @@
 // e finestra «Account» (consumo di Claude, cambio password, uscita, eliminazione dell'account).
 import { h, toast } from "../public/js/ui.js";
 import { clearLocalFiles } from "./backend.js";
-import { creditUsage, rpc } from "./claude.js";
+import { activePlan, euro, INTERVALS, PAID, planLine, PLANS, yearSaving } from "../public/js/plans.js";
+import { billingUrl, creditUsage, rpc } from "./claude.js";
 
 export const TERMS_VERSION = "2026-10-05";
 export const PRIVACY_VERSION = "2026-10-13";
@@ -331,10 +332,63 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
     location.replace("/"); // fuori dall'account si torna al sito, non alla schermata d'accesso
   }
 
+  /** Sezione «Abbonamento» dell'account (solo con gli abbonamenti attivi sul server). */
+  function subscriptionBlock(info) {
+    const box = h("section", { class: "stack plans-box", "aria-labelledby": "plan-title" }, h("h3", { id: "plan-title", style: { margin: 0 } }, "Abbonamento"));
+    const plan = activePlan(info.subscription);
+    box.append(h("p", { style: { margin: 0 } }, planLine(info.subscription)));
+    const go = async (btn, body) => {
+      btn.disabled = true;
+      try {
+        location.assign(await billingUrl({ auth }, body)); // pagina di Stripe: i dati della carta non passano da Studify
+      } catch (err) {
+        btn.disabled = false;
+        toast(err.message, "error");
+      }
+    };
+    if (plan !== "free") {
+      if (info.subscription?.manageable) {
+        const b = h("button", { class: "btn", onclick: () => go(b, { action: "portal" }) }, "Gestisci abbonamento");
+        box.append(h("p", { class: "small muted", style: { margin: 0 } }, "Cambia piano o carta, scarica le ricevute o disdici: la disdetta vale dalla fine del periodo già pagato."), h("div", {}, b));
+      }
+      return box;
+    }
+    let interval = "year";
+    const cards = h("div", { class: "plans" });
+    const consent = h("input", { type: "checkbox", name: "start-now", onchange: () => (need.hidden = true) });
+    const need = h("p", { class: "small consent-need", role: "alert", hidden: true }, "Spunta questa conferma per continuare al pagamento.");
+    const drawCards = () => cards.replaceChildren(...PAID.map((id) => {
+      const p = PLANS[id];
+      const btn = h("button", { class: `btn${id === "pro" ? " primary" : ""}`, onclick: () => {
+        if (!consent.checked) return (need.hidden = false, consent.focus()); // messaggio accanto alla casella, non un avviso che la copre
+        go(btn, { action: "checkout", plan: id, interval, startNow: true });
+      } }, `Scegli ${p.name}`);
+      return h("div", { class: "card flat plan" },
+        h("b", {}, p.name),
+        h("p", { class: "plan-price" }, euro(p[interval]), h("small", {}, ` ${INTERVALS[interval]}`)),
+        h("p", { class: "small muted" }, `${p.pitch} Credito di Claude ${p.credit / PLANS.free.credit} volte quello del piano Gratis.`),
+        btn);
+    }));
+    const pick = (v, label) => {
+      const r = h("input", { type: "radio", name: "plan-interval", value: v, checked: v === interval, onchange: () => { interval = v; drawCards(); } });
+      return h("label", { class: "choice" }, r, h("span", {}, label));
+    };
+    drawCards();
+    box.append(
+      h("fieldset", { class: "plan-interval" }, h("legend", { class: "visually-hidden" }, "Periodo"), h("div", { class: "choices" }, pick("month", "Mensile"), pick("year", `Annuale · ${yearSaving("base")} mesi gratis`))),
+      cards,
+      h("label", { class: "check-row small" }, consent, h("span", {}, "Chiedo che l'abbonamento inizi subito. Se recedo entro 14 giorni pago solo la parte già usata.")),
+      need,
+      h("p", { class: "small muted", style: { margin: 0 } }, "Prezzi IVA inclusa. Rinnovo automatico, disdici quando vuoi. Il pagamento avviene su Stripe."));
+    return box;
+  }
+
   async function account() {
     const previous = document.activeElement;
     let limit = null;
     let spent = null;
+    let paidActive = false; // abbonamento che si rinnova: l'account non si elimina finché non è disdetto
+    const planSlot = h("div", { hidden: true });
     const usage = h("p", { class: "muted" }, "Consumo di Claude: …");
     const onKey = (e) => e.key === "Escape" && done();
     const done = () => (dlg.remove(), document.removeEventListener("keydown", onKey), previous?.focus?.());
@@ -361,6 +415,7 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
       h("label", {}, "Scrivi ELIMINA per confermare", h("input", { name: "confirm", autocomplete: "off" })),
       h("button", { class: "btn danger", type: "button", onclick: async () => {
         if (del.querySelector("input").value.trim().toUpperCase() !== "ELIMINA") return toast("Scrivi ELIMINA per confermare.", "error");
+        if (paidActive) return toast("Prima disdici l'abbonamento da «Gestisci abbonamento»: eliminando l'account il pagamento non si fermerebbe da solo.", "error");
         try {
           await beforeLeave({ save: false });
           await rpc({ url, key, auth }, "delete_my_account");
@@ -377,6 +432,7 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
         h("div", { class: "row between" }, h("h2", { id: "acct-title", style: { margin: 0 } }, "Account"), h("button", { class: "btn ghost small", onclick: done, "aria-label": "Chiudi" }, "✕")),
         h("p", { style: { margin: 0 } }, h("b", {}, auth.user?.email ?? "")),
         usage,
+        planSlot,
         h("div", { class: "row" },
           passToggle,
           h("a", { class: "btn small", href: "#/settings", onclick: done }, "Esporta i dati"),
@@ -387,7 +443,13 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
     document.body.append(dlg);
     dlg.querySelector("button")?.focus();
     try {
-      ({ spent, limit } = await creditUsage({ url, key, auth }));
+      const info = await creditUsage({ url, key, auth });
+      ({ spent, limit } = info);
+      paidActive = activePlan(info.subscription) !== "free" && !info.subscription?.cancel_at_period_end;
+      if (info.billing || paidActive) {
+        planSlot.replaceChildren(subscriptionBlock(info));
+        planSlot.hidden = false;
+      }
       usage.textContent = limit ? `Credito di Claude usato questo mese: ${Math.min(100, Math.round((spent / limit) * 100))}%. Si rinnova il primo del mese.` : `Consumo di Claude questo mese: ${spent.toFixed(2)} $.`;
     } catch {
       usage.textContent = "Consumo di Claude: non disponibile.";

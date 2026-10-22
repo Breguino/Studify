@@ -114,7 +114,9 @@ in app, landing, pagine legali e icone.
 | `ANTHROPIC_API_KEY` | – | **Obbligatoria** per le funzioni AI (tipo *Sensitive*). Senza, l'app funziona ma Claude risulta non configurato. |
 | `ANTHROPIC_MODEL` | `claude-sonnet-5-5` | Costa la metà di `claude-opus-5-5` (2/10 $ per milione di token contro 4/20), quindi il credito del mese dura circa il doppio. Per tornare a Opus imposta `claude-opus-5-5`. |
 | `ANTHROPIC_MAX_TOKENS` | `32000` | Tetto di una singola risposta. |
-| `USER_MONTHLY_LIMIT_USD` / `TOTAL_MONTHLY_LIMIT_USD` | `3` / `30` | Credito al mese per utente / per tutto il servizio. |
+| `USER_MONTHLY_LIMIT_USD` / `TOTAL_MONTHLY_LIMIT_USD` | `3` / `30` | Credito al mese per utente (piano Gratis: con gli abbonamenti accesi il predefinito scende a `1`) / per tutto il servizio (vale solo per chi non paga). |
+| `BILLING` | (vuota) | `on` accende gli abbonamenti: prezzi nella landing, sezione «Abbonamento» nell'account, parti sugli abbonamenti in termini e privacy. Spenta, tutto resta gratis come prima. |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_{BASE,PRO}_{MONTH,YEAR}`, `SUPABASE_SERVICE_ROLE_KEY` | — | Solo con `BILLING=on`: chiavi di Stripe, i 4 prezzi e la chiave di servizio di Supabase (la usa solo il webhook). Tutte segrete, solo su Vercel. `BASE_MONTHLY_LIMIT_USD` / `PRO_MONTHLY_LIMIT_USD` (`3` / `8`) cambiano il credito dei piani. Guida passo passo: `docs/abbonamenti.md`. |
 | `SUPABASE_URL` / `SUPABASE_KEY` | progetto `studify` | Solo se cambi progetto (anche `STUDIFY_SUPABASE_URL`/`_KEY` al build). La chiave è quella pubblica: i dati li protegge la RLS. |
 
 **Supabase** (schema in `supabase/schema.sql`): tabelle `docs`, `ai_usage`, `consents` con RLS; funzioni `record_ai_usage`,
@@ -497,7 +499,8 @@ server/           index.js (HTTP, job asincroni, sicurezza) · ai.js (Anthropic 
 shared/           prompts.js, normalize.js: usati sia dal server sia dalla pagina Claude (nessuna dipendenza)
 artifact/         versione pagina Claude: generate.js (sample), backend.js (db), api.js, entry.js, template, fake-claude (prove)
 web/              versione web: entry, auth (Supabase Auth), claude (sample/db/user), gate (accesso e account), backend, template, pagine legali
-api/              funzione Vercel /api/claude (_lib.js: controlli, costi, streaming; testata)
+api/              funzioni Vercel: /api/claude (_lib.js: controlli, costi, streaming), /api/billing e /api/stripe-webhook
+                  (_billing.js: piani, pagamento, portale, webhook); testate
 supabase/         schema.sql (tabelle, RLS, funzioni)
 scripts/          build-artifact.mjs (esbuild: pagina Claude, harness, --web)
 public/js/        logica pura (testata): dates, methods, srs, planner, progress, local-builder, tabular (CSV/xlsx), importers, timetable,
