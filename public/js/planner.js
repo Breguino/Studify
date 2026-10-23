@@ -97,9 +97,15 @@ export function buildPlan({ examDate, examType, level, hoursPerDay, topics, lear
   }
 
   const lastLearnDay = ph.learn - 1;
+  // Chi parte da zero (livello 1-3, nulla studiato) il primo giorno di studio non ha ancora niente da ricordare:
+  // prima studia, poi le flashcard (su quello che ha appena studiato). Negli altri giorni le flashcard vengono prima.
+  const fromScratch = level <= 3 && !Object.values(learned).some(Boolean);
+  const firstLearnDay = learnByDay.findIndex((a) => a.length);
   days.forEach((day, i) => {
     const isLight = day.phase === "light";
-    add(day, { kind: "flash", key: "", title: "Flashcard del giorno", minutes: isLight ? 10 : 15, method: "retrieval" });
+    const flash = { kind: "flash", key: "", title: "Flashcard del giorno", minutes: isLight ? 10 : 15, method: "retrieval" };
+    const studyFirst = fromScratch && i === firstLearnDay;
+    if (!studyFirst) add(day, flash);
 
     if (day.phase === "learn") {
       for (const t of learnByDay[i]) {
@@ -111,6 +117,7 @@ export function buildPlan({ examDate, examType, level, hoursPerDay, topics, lear
         if (t.officialCount)
           add(day, { kind: "quiz", key: `off-${t.id}`, mode: "official", topicIds: [t.id], title: t.officialQuizOnly ? `Quiz del docente su ${t.title}: rispondi senza guardare, poi la sua risposta` : `Esercitazione su ${t.title}: prova da solo, poi la soluzione ${t.officialClassOnly ? "vista in aula" : "ufficiale"}`, minutes: 25, method: "practice" });
       }
+      if (studyFirst) add(day, flash);
       const prev = i > 0 ? learnByDay[i - 1] : [];
       if (prev.length)
         add(day, { kind: "quiz", key: "prev", mode: "topics", topicIds: prev.map((t) => t.id), title: "Quiz sugli argomenti di ieri", minutes: 15, method: "practice" });

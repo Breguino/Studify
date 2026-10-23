@@ -303,3 +303,18 @@ test("piano con lezioni: giorni occupati ricevono meno studio, mai sotto 30 minu
   assert.ok(plain.days.every((d) => d.lessons.length === 0 && d.avail === 180));
   assert.ok(withBusy.days.filter((d) => weekdayOf(d.date) === 1).every((d) => d.minutes <= 30 * 1.15 || d.overload), "il carico che non ci sta è segnalato");
 });
+
+test("planner: chi parte da zero il primo giorno studia prima delle flashcard; dopo, le flashcard vengono prima", () => {
+  const topics = [1, 2, 3, 4].map((n) => ({ id: `t${n}`, title: `Argomento ${n}`, importance: 3, difficulty: 2 }));
+  const base = { examDate: "2026-11-30", examType: "scritto", hoursPerDay: 2, topics, today: "2026-10-22" };
+  const kinds = (plan, i) => plan.days[i].tasks.map((t) => t.kind);
+  const fresh = buildPlan({ ...base, level: 2 });
+  const first = fresh.days.findIndex((d) => d.tasks.some((t) => t.kind === "learn"));
+  assert.equal(kinds(fresh, first)[0], "learn", "primo giorno: si studia subito");
+  assert.ok(kinds(fresh, first).indexOf("flash") > kinds(fresh, first).indexOf("learn"), "le flashcard dopo lo studio");
+  const next = fresh.days.findIndex((d, i) => i > first && d.tasks.some((t) => t.kind === "learn"));
+  assert.equal(kinds(fresh, next)[0], "flash", "dal secondo giorno di studio il ripasso viene prima");
+  assert.equal(kinds(buildPlan({ ...base, level: 4 }), first)[0], "flash", "chi conosce già la materia: flashcard subito");
+  assert.equal(kinds(buildPlan({ ...base, level: 2, learned: { t1: true } }), 0)[0], "flash", "qualcosa è già studiato: flashcard subito");
+  assert.deepEqual(fresh.days[first].tasks.map((t) => t.id).sort(), buildPlan({ ...base, level: 4 }).days[first].tasks.map((t) => t.id).sort(), "stesse attività, cambia solo l'ordine (gli id restano)");
+});

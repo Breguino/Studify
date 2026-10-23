@@ -301,6 +301,14 @@ form[aria-busy="true"] { cursor: progress; }
 .drop-actions { justify-content: center; margin-top: 6px; }
 .photo-tips { text-align: left; max-width: 560px; cursor: auto; } .photo-tips ul { margin: 6px 0 0; padding-left: 18px; }
 .paste-card h3 { font-size: 1rem; margin: 0; }
+.paste-card > summary { cursor: pointer; min-height: 24px; }
+.paste-card[open] > summary { margin-bottom: 12px; }
+.mat-more > summary { color: var(--muted); margin-top: 4px; cursor: pointer; }
+.mat-more[open] > summary { margin-bottom: 6px; }
+/* primo esame: «Genera il modulo» resta in basso mentre scorri i materiali; si ferma sopra la scheda della generazione */
+.gen-bar { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--surface) 94%, transparent); box-shadow: var(--shadow); backdrop-filter: blur(8px); }
+.gen-bar .btn { flex: 0 0 auto; }
+body:has(.gen-bar) #toasts { bottom: 96px; } /* gli avvisi sopra la barra, non sopra il pulsante */
 .list-head { margin-top: 6px; align-items: baseline; } .list-head h2 { margin: 0; }
 .mat-icon { display: inline-grid; place-items: center; width: 30px; height: 30px; margin-right: 10px; vertical-align: middle; border-radius: 8px; background: var(--surface-2); color: var(--muted); }
 .check-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; font-size: .95rem; }
