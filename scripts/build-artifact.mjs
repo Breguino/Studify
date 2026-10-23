@@ -73,13 +73,7 @@ if (web) {
   await mkdir(OUT, { recursive: true });
   // indirizzo pubblico per anteprime social, sitemap e canonical (Vercel lo fornisce durante la build)
   const SITE = (process.env.STUDIFY_SITE_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "https://studify-beta-dun.vercel.app")).replace(/\/$/, "");
-  // Statistiche di visita: Vercel Web Analytics (senza cookie, script dallo stesso dominio). Solo nelle build su Vercel;
-  // STUDIFY_ANALYTICS=off le spegne, STUDIFY_ANALYTICS=/percorso/script.js usa il percorso mostrato nella dashboard.
-  const A = process.env.STUDIFY_ANALYTICS ?? (process.env.VERCEL ? "/_vercel/insights/script.js" : "off");
-  const analytics = A === "off" ? [] : [
-    "<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>",
-    `<script defer src="${A}"></script>`,
-  ];
+  // Vercel Web Analytics ora gestito tramite @vercel/analytics package in web/entry.js
   const esc = (t) => t.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
   const head = ({ path, title, description }) => [
     '<link rel="icon" href="/favicon.svg" type="image/svg+xml">',
@@ -98,7 +92,6 @@ if (web) {
     '<meta property="og:image:height" content="630">',
     '<meta property="og:image:alt" content="Studify: prepara gli esami con i tuoi materiali. Una scheda d\'esame con la preparazione al 42% e una domanda di quiz.">',
     '<meta name="twitter:card" content="summary_large_image">',
-    ...analytics,
   ].join("\n");
   const PAGES = {
     "/": { title: "Studify — prepara gli esami con i tuoi materiali", description: "Appunti, dispense, slide, esami passati e quiz del docente diventano argomenti, flashcard, quiz e un piano di studio fino all'appello. Gratis, nel browser." },
