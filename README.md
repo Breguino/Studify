@@ -112,15 +112,16 @@ in app, landing, pagine legali e icone.
 | Variabile | Default | Note |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | – | **Obbligatoria** per le funzioni AI (tipo *Sensitive*). Senza, l'app funziona ma Claude risulta non configurato. |
+| `SUPABASE_SERVICE_ROLE_KEY` | – | **Obbligatoria** anche lei (tipo *Sensitive*, da Supabase: *Project Settings → API Keys → secret*): con questa la funzione registra il consumo di Claude, che gli utenti non possono scrivere da sé. Senza, Claude risulta non configurato. Mai nel codice né incollata in chat. |
 | `ANTHROPIC_MODEL` | `claude-sonnet-5-5` | Costa la metà di `claude-opus-5-5` (2/10 $ per milione di token contro 4/20), quindi il credito del mese dura circa il doppio. Per tornare a Opus imposta `claude-opus-5-5`. |
 | `ANTHROPIC_MAX_TOKENS` | `32000` | Tetto di una singola risposta. |
 | `USER_MONTHLY_LIMIT_USD` / `TOTAL_MONTHLY_LIMIT_USD` | `3` / `30` | Credito al mese per utente (piano Gratis: con gli abbonamenti accesi il predefinito scende a `1`) / per tutto il servizio (vale solo per chi non paga). |
 | `BILLING` | (vuota) | `on` accende gli abbonamenti: prezzi nella landing, sezione «Abbonamento» nell'account, parti sugli abbonamenti in termini e privacy. Spenta, tutto resta gratis come prima. |
-| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_{BASE,PRO}_{MONTH,YEAR}`, `SUPABASE_SERVICE_ROLE_KEY` | — | Solo con `BILLING=on`: chiavi di Stripe, i 4 prezzi e la chiave di servizio di Supabase (la usa solo il webhook). Tutte segrete, solo su Vercel. `BASE_MONTHLY_LIMIT_USD` / `PRO_MONTHLY_LIMIT_USD` (`3` / `8`) cambiano il credito dei piani. Guida passo passo: `docs/abbonamenti.md`. |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_{BASE,PRO}_{MONTH,YEAR}` | — | Solo con `BILLING=on`: chiavi di Stripe e i 4 prezzi (il webhook scrive gli abbonamenti con `SUPABASE_SERVICE_ROLE_KEY`). Tutte segrete, solo su Vercel. `BASE_MONTHLY_LIMIT_USD` / `PRO_MONTHLY_LIMIT_USD` (`3` / `8`) cambiano il credito dei piani. Guida passo passo: `docs/abbonamenti.md`. |
 | `SUPABASE_URL` / `SUPABASE_KEY` | progetto `studify` | Solo se cambi progetto (anche `STUDIFY_SUPABASE_URL`/`_KEY` al build). La chiave è quella pubblica: i dati li protegge la RLS. |
 
-**Supabase** (schema in `supabase/schema.sql`): tabelle `docs`, `ai_usage`, `consents` con RLS; funzioni `record_ai_usage`,
-`ai_spend_this_month`, `delete_my_account`. In *Authentication → URL Configuration* vanno impostati **Site URL** e
+**Supabase** (schema in `supabase/schema.sql`): tabelle `docs`, `ai_usage`, `consents` con RLS; funzioni `record_ai_usage_for`
+(solo chiave di servizio), `ai_spend_this_month`, `delete_my_account`. In *Authentication → URL Configuration* vanno impostati **Site URL** e
 **Redirect URLs** con l'indirizzo Vercel, altrimenti i link delle email (conferma, recupero password) portano a `localhost`.
 Come Redirect URL conviene `https://<dominio>/**`, che comprende `/app`; se è autorizzata solo la radice, la landing inoltra comunque il link.
 Il server email predefinito di Supabase invia pochissime email l'ora: per un uso reale serve un SMTP proprio

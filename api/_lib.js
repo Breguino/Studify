@@ -101,13 +101,18 @@ export async function monthSpend(env, token, fetchFn = fetch) {
   return { mine: Number(row.mine ?? 0), total: Number(row.total ?? 0) };
 }
 
-export async function recordUsage(env, token, { input, output, cost }, fetchFn = fetch) {
-  const r = await fetchFn(`${env.SUPABASE_URL}/rest/v1/rpc/record_ai_usage`, {
+/**
+ * Registra il consumo con la chiave di servizio (record_ai_usage_for). Con il token dell'utente chiunque avesse un account
+ * potrebbe chiamare la funzione da sé e gonfiare il totale del mese fino al tetto, bloccando tutti gli utenti Gratis.
+ */
+export async function recordUsage(env, userId, { input, output, cost }, fetchFn = fetch) {
+  const k = env.SUPABASE_SERVICE_ROLE_KEY;
+  const r = await fetchFn(`${env.SUPABASE_URL}/rest/v1/rpc/record_ai_usage_for`, {
     method: "POST",
-    headers: sb(env, token),
-    body: JSON.stringify({ p_input: input, p_output: output, p_cost: Number(cost.toFixed(6)) }),
+    headers: { apikey: k, Authorization: `Bearer ${k}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ p_user: userId, p_input: input, p_output: output, p_cost: Number(cost.toFixed(6)) }),
   });
-  if (!r.ok) throw new Error(`record_ai_usage: ${r.status}`);
+  if (!r.ok) throw new Error(`record_ai_usage_for: ${r.status}`);
 }
 
 /**
@@ -157,7 +162,7 @@ export function createHandler({ env, anthropic, fetchFn = fetch, log = console.e
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       res.setHeader("Cache-Control", "no-store");
-      const out = { limits: { user: limits(env).user }, configured: Boolean(env.ANTHROPIC_API_KEY), model, billing: billingOn(env), plan: "free" };
+      const out = { limits: { user: limits(env).user }, configured: Boolean(env.ANTHROPIC_API_KEY && env.SUPABASE_SERVICE_ROLE_KEY), model, billing: billingOn(env), plan: "free" };
       const token = /^Bearer (.+)$/.exec(req.headers?.authorization ?? "")?.[1];
       if (token && env.SUPABASE_URL && await getUser(env, token, fetchFn).catch(() => null)) {
         const { plan, limit, sub } = await userPlan(env, token, fetchFn);
@@ -167,7 +172,8 @@ export function createHandler({ env, anthropic, fetchFn = fetch, log = console.e
       return res.end(JSON.stringify(out));
     }
     if (req.method !== "POST") return fail(405, "bad_request", "Usa POST.");
-    if (!env.SUPABASE_URL || !env.SUPABASE_KEY) return fail(503, "sampling_disabled", "Server non configurato.");
+    // senza la chiave di servizio il consumo non si registrerebbe: meglio fermarsi che lasciare il credito senza limiti
+    if (!env.SUPABASE_URL || !env.SUPABASE_KEY || !env.SUPABASE_SERVICE_ROLE_KEY) return fail(503, "sampling_disabled", "Server non configurato.");
     let auth, body;
     try {
       auth = await authorize(env, req.headers?.authorization, fetchFn);
@@ -208,7 +214,7 @@ export function createHandler({ env, anthropic, fetchFn = fetch, log = console.e
       // il consumo si registra anche se la risposta si è interrotta: i token sono stati pagati
       const input = usage.input_tokens + usage.cache_creation_input_tokens + usage.cache_read_input_tokens;
       if (input || usage.output_tokens) {
-        await recordUsage(env, auth.token, { input, output: usage.output_tokens, cost: costUsd(usage.model, usage) }, fetchFn).catch(log);
+        await recordUsage(env, auth.user.id, { input, output: usage.output_tokens, cost: costUsd(usage.model, usage) }, fetchFn).catch(log);
       }
       res.end();
     }
