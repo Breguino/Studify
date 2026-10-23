@@ -26,7 +26,9 @@ export function taskRow(exam, task, { now = false, compact = false } = {}) {
   check.addEventListener("change", () => {
     justDone = check.checked ? task.id : null;
     setDone(exam, task, check.checked);
+    const y = scrollY;
     core.rerender(); // ridisegna subito: dopo, le righe nuove non si animano più
+    scrollTo(0, y); // il ridisegno torna in cima: qui si resta dov'eri, a vedere la barra che si muove
     justDone = null;
   });
   const meta = compact

@@ -380,6 +380,10 @@ Prove: `test/web.test.js` (funzione, accesso, `sample`, `db`, controlli di regis
    - **Movimento** (solo senza «movimento ridotto»): la carta nuova entra come se la distribuissi, la risposta compare dal basso,
      nel quiz l'alternativa giusta fa un piccolo scatto e quella sbagliata trema, e l'attività appena spuntata si colora di verde.
      Ogni animazione dura meno di mezzo secondo e parte solo in quel momento, non a ogni ridisegno della pagina.
+     **Nella home** si muove quello che è cambiato: alla prima apertura il numero dei giorni sale, la settimana entra in fila
+     e le barre si riempiono; poi una barra va dal valore di prima a quello nuovo (dopo un quiz la preparazione, a ogni spunta
+     la sessione di oggi), e all'ultima attività del giorno «Fatto per oggi» fa un piccolo scatto. Tornare alla home senza
+     novità non muove niente, e spuntare un'attività non riporta più la pagina in cima.
    - **Promemoria nel calendario** (colonna laterale di «Oggi»): «Scarica per il calendario» crea un file `.ics` con una sessione
      per ogni giorno di studio, all'ora scelta (predefinita 18:00, salvata nell'esame) e con le attività nella descrizione, più il giorno
      dell'appello. Si apre con Google Calendar, Calendario di Apple o Outlook, che mandano l'avviso anche ad app chiusa: è il modo

@@ -194,7 +194,9 @@ I pulsanti con solo l'icona hanno sempre un `aria-label` in italiano.
   (`.countdown.intro` all'apertura, `.step-art.play` scorrendo, in `web/landing.css`): mostrano come funziona l'app, non decorano.
   Nell'app («Movimento nello studio» in `public/styles.css`) le viste ridisegnano da capo, quindi un'animazione va su una classe
   messa solo nel momento giusto: `.flashcard:not(.revealed)` (carta nuova), `.options.revealed` (correzione del quiz),
-  `.task.just-done` (attività appena spuntata, `justDone` in `views/tasks.js`). Sotto il mezzo secondo, sempre con movimento ridotto rispettato.
+  `.task.just-done` (attività appena spuntata, `justDone` in `views/tasks.js`). Nella home si muove ciò che è cambiato:
+  `bar(valore, { from })` mette `.bar.grow` e va dal valore visto prima (`lastShown` in `views/home.js`, memoria della sessione),
+  `.home.intro` solo alla prima apertura, `.callout.just-finished` quando si chiude la giornata. Sotto il mezzo secondo, sempre con movimento ridotto rispettato.
 - **Stampa**: `@media print`, per la dispensa e le prove d'esame.
 - **Accessibilità**:
   - focus visibile (`:focus-visible` con l'anello `--brand`);
