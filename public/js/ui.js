@@ -42,12 +42,17 @@ export function toast(msg, kind = "info") {
 
 export const pct = (x) => (x == null ? "—" : `${Math.round(x * 100)}%`);
 
-export function bar(value, { label, tone } = {}) {
+/** `from`: il valore mostrato prima. Se è diverso, la barra si muove da lì al valore nuovo (CSS .bar.grow). */
+export function bar(value, { label, tone, from } = {}) {
   const v = Math.max(0, Math.min(1, value ?? 0));
+  const f = from == null ? null : Math.max(0, Math.min(1, from));
+  const grow = f != null && v > 0 && Math.abs(f - v) >= 0.005;
+  const fill = h("div", { style: { width: `${v * 100}%` } });
+  if (grow) fill.style.setProperty("--from", String(f / v)); // scala di partenza rispetto alla larghezza finale
   return h(
     "div",
-    { class: `bar ${tone ?? ""}`, role: "progressbar", "aria-valuenow": Math.round(v * 100), "aria-valuemin": 0, "aria-valuemax": 100, "aria-label": label ?? "avanzamento" },
-    h("div", { style: { width: `${v * 100}%` } }),
+    { class: `bar ${tone ?? ""}${grow ? " grow" : ""}`, role: "progressbar", "aria-valuenow": Math.round(v * 100), "aria-valuemin": 0, "aria-valuemax": 100, "aria-label": label ?? "avanzamento" },
+    fill,
   );
 }
 

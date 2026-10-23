@@ -33,6 +33,18 @@ async function createDemo() {
   }
 }
 
+// Movimento della home: si muove quello che è cambiato da quando l'hai vista (in questa apertura dell'app), non tutto
+// a ogni ridisegno. La prima volta le barre si riempiono da zero e la settimana entra in fila (.home.intro); poi una barra
+// si muove solo se il valore è cambiato (un quiz, un'attività spuntata), e «Fatto per oggi» fa festa solo quando arriva.
+const shown = new Map(); // chiave → valore mostrato l'ultima volta
+let introDone = false;
+/** Il valore mostrato l'ultima volta (0 se è la prima) e da adesso quello nuovo. */
+function lastShown(key, value) {
+  const prev = shown.get(key);
+  shown.set(key, value);
+  return prev ?? 0;
+}
+
 const appello = (exam) => exam.appelli?.find((a) => a.date === exam.date);
 
 function dateLine(exam) {
@@ -41,10 +53,10 @@ function dateLine(exam) {
 }
 
 /** Preparazione stimata: barra e percentuale, o a parole finché non c'è nessun dato. */
-function readinessLine(ready, cls = "") {
+function readinessLine(ready, cls = "", from) {
   return ready == null
     ? h("div", { class: `small muted ${cls}` }, "Preparazione: si misura con quiz e flashcard")
-    : h("div", { class: `progress-line ${cls}` }, h("span", { class: "small muted" }, "Preparazione"), bar(ready, { label: "preparazione stimata" }), h("b", { class: "small" }, pct(ready)));
+    : h("div", { class: `progress-line ${cls}` }, h("span", { class: "small muted" }, "Preparazione"), bar(ready, { label: "preparazione stimata", from }), h("b", { class: "small" }, pct(ready)));
 }
 
 function examCard(exam) {
@@ -64,7 +76,7 @@ function examCard(exam) {
         h("b", {}, dl > 0 ? `${exam.dateTentative ? "~" : ""}${dl}` : dl === 0 ? "oggi" : "—"),
         h("span", {}, dl > 0 ? (dl === 1 ? "giorno" : "giorni") : dl === 0 ? "l'esame" : "passato"))),
     exam.module
-      ? [readinessLine(ready),
+      ? [readinessLine(ready, "", ready == null ? undefined : lastShown(`ready-${exam.id}`, ready)),
           h("div", { class: "small muted" }, waiting ? `Studio dal ${fmtDate(plan.start)} (${plan.days.length} giorni)` : s?.tasks.length ? `Oggi: ${s.doneCount}/${s.tasks.length} attività, ${s.minutes} min` : "Oggi: nessuna attività", due ? ` · ${due} flashcard da ripassare` : "")]
       : [h("div", {}, badge("Modulo da creare", "warn")), h("span", { class: "small muted" }, "Carica dispense ed esami passati: il piano parte dai materiali.")],
   );
@@ -95,7 +107,7 @@ function nextExamHero(exam) {
     exam.module && ready != null
       ? h("div", { class: "next-ready" },
           h("div", { class: "row between" }, h("span", {}, "Preparazione stimata"), h("b", {}, pct(ready))),
-          bar(ready, { label: "preparazione stimata" }),
+          bar(ready, { label: "preparazione stimata", from: lastShown(`ready-${exam.id}`, ready) }),
           h("span", { class: "next-note" }, "Dai quiz e dalle flashcard, pesati per l'importanza degli argomenti."))
       : null,
     week.length > 1 ? h("ol", { class: "week", "aria-label": "I prossimi giorni" }, week.map((d) => h("li", { class: d.kind }, h("span", {}, d.day), h("b", {}, cell(d))))) : null);
@@ -112,16 +124,21 @@ function nextExamHero(exam) {
       due ? h("a", { class: "btn primary next-cta", href: `${href}/flash` }, `Ripassa ${due} flashcard`) : h("a", { class: "btn next-cta", href }, "Apri il piano")];
   } else if (!s?.tasks.length)
     side = [h("h3", {}, "Oggi niente in programma"), h("p", { class: "muted" }, "Il piano non ha attività per oggi."), h("a", { class: "btn next-cta", href }, "Apri il piano")];
-  else
+  else {
+    const frac = s.minutes ? s.doneMinutes / s.minutes : 0;
+    const dayKey = `${exam.id}-${today()}`;
+    const justFinished = shown.get(`done-${dayKey}`) === false && !s.next; // l'ultima attività spuntata adesso
+    shown.set(`done-${dayKey}`, !s.next);
     side = [
       h("div", { class: "row between" }, h("span", { class: "kicker" }, `Oggi · ${s.minutes} min`), h("span", { class: "small muted" }, `${s.doneCount} di ${s.tasks.length} fatte`)),
-      bar(s.minutes ? s.doneMinutes / s.minutes : 0, { tone: "good", label: "sessione di oggi" }),
+      bar(frac, { tone: "good", label: "sessione di oggi", from: lastShown(`today-${dayKey}`, frac) }),
       h("div", { class: "stack next-tasks" }, s.tasks.map((t) => taskRow(exam, t, { compact: true }))),
       s.next
         ? h("a", { class: "btn primary next-cta", href: taskHref(exam, s.next) ?? href }, `Inizia: ${s.next.title}`)
-        : h("div", { class: "callout good" }, h("b", {}, "Fatto per oggi."), " Domani il piano riparte da dove sei arrivato."),
+        : h("div", { class: `callout good${justFinished ? " just-finished" : ""}` }, h("b", {}, "Fatto per oggi."), " Domani il piano riparte da dove sei arrivato."),
       h("a", { class: "small next-link", href }, "Apri il piano di oggi →"),
     ];
+  }
   return h("section", { class: "next-exam", "aria-label": `Prossimo appello: ${exam.name}` }, main, h("div", { class: "next-side card" }, side));
 }
 
@@ -138,9 +155,11 @@ export function homeView() {
   const next = nextExam(exams, t);
   const others = exams.filter((e) => e !== next);
   const later = [...others.filter((e) => e.date >= t), ...others.filter((e) => e.date < t).reverse()];
+  const intro = exams.length > 0 && !introDone;
+  if (exams.length) introDone = true;
   return h(
     "div",
-    { class: "stack home" },
+    { class: `stack home${intro ? " intro" : ""}` },
     h("div", { class: "row between page-head" },
       h("div", {}, h("span", { class: "page-date" }, capital(fmtDayLong(t))), h("h1", {}, "I tuoi esami")),
       h("div", { class: "row" }, h("a", { class: `btn ghost${exams.length ? " import-moved" : ""}`, href: "#/import" }, "Importa CSV / Excel"), exams.length ? h("a", { class: "btn primary", href: "#/new" }, "+ Nuovo esame") : null)), // senza esami c'è già «Aggiungi un esame» al centro

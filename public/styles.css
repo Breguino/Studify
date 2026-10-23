@@ -466,7 +466,20 @@ td { font-variant-numeric: tabular-nums; } td a { font-weight: 600; text-decorat
   .callout.q-why { animation: st-rise .32s cubic-bezier(.2, .8, .2, 1) .1s both; }
   .task.just-done { animation: st-done .5s ease both; }
   .task.just-done .t-check { animation: st-pop .38s cubic-bezier(.3, 1.6, .5, 1) both; }
+  /* home: una barra va dal valore visto prima a quello nuovo (bar(…, { from })); la prima volta da zero */
+  .bar.grow > div { transform-origin: left center; animation: st-grow .45s cubic-bezier(.2, .8, .2, 1) both; }
+  /* home, prima apertura: il numero dei giorni sale, la settimana entra in fila, poi le schede degli altri esami.
+     «backwards»: finita l'entrata, l'elemento torna alle sue regole (il sollevarsi delle schede al passaggio) */
+  .home.intro .next-count b { animation: st-rise .35s cubic-bezier(.2, .8, .2, 1) backwards; }
+  .home.intro .week li { animation: st-rise .28s cubic-bezier(.2, .8, .2, 1) backwards; }
+  .home.intro .week li:nth-child(2) { animation-delay: 30ms; } .home.intro .week li:nth-child(3) { animation-delay: 60ms; }
+  .home.intro .week li:nth-child(4) { animation-delay: 90ms; } .home.intro .week li:nth-child(5) { animation-delay: 120ms; }
+  .home.intro .week li:nth-child(6) { animation-delay: 150ms; } .home.intro .week li:nth-child(7) { animation-delay: 180ms; }
+  .home.intro .grid > * { animation: st-rise .32s cubic-bezier(.2, .8, .2, 1) .08s backwards; }
+  .home.intro .grid > :nth-child(2) { animation-delay: .12s; } .home.intro .grid > :nth-child(n+3) { animation-delay: .16s; }
+  .callout.just-finished { animation: st-pop .45s cubic-bezier(.3, 1.3, .5, 1) both; }
 }
+@keyframes st-grow { from { transform: scaleX(var(--from, 0)); } }
 @keyframes st-deal { from { opacity: 0; transform: translateX(28px) rotate(1.5deg); } }
 @keyframes st-rise { from { opacity: 0; transform: translateY(8px); } }
 @keyframes st-pop { from { transform: scale(.94); } 55% { transform: scale(1.03); } }
