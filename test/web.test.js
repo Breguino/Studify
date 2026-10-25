@@ -8,7 +8,7 @@ import { createDb, createSample, parseJsonText } from "../web/claude.js";
 import { initialMode, looksLikeBot, MIN_FILL_MS, privacyOutdated, signupInvalid, signupProblems } from "../web/gate.js";
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
-const ENV = { SUPABASE_URL: "https://sb.test", SUPABASE_KEY: "pk", ANTHROPIC_API_KEY: "sk-test", USER_MONTHLY_LIMIT_USD: "3", TOTAL_MONTHLY_LIMIT_USD: "30" };
+const ENV = { SUPABASE_URL: "https://sb.test", SUPABASE_KEY: "pk", ANTHROPIC_API_KEY: "sk-test", SUPABASE_SERVICE_ROLE_KEY: "service-key", USER_MONTHLY_LIMIT_USD: "3", TOTAL_MONTHLY_LIMIT_USD: "30" };
 
 /* ------------------------------- /api/claude ------------------------------- */
 
@@ -70,7 +70,7 @@ function fakeSupabase({ spent = 0, total = 0, user = { id: "u1", email: "a@b.it"
     calls.push({ url, init });
     if (url.endsWith("/auth/v1/user")) return init.headers.Authorization === "Bearer user-jwt" && user ? json(200, user) : json(401, { msg: "bad jwt" });
     if (url.endsWith("/rpc/ai_spend_this_month")) return json(200, [{ mine: spent, total }]);
-    if (url.endsWith("/rpc/record_ai_usage")) return new Response(null, { status: 204 });
+    if (url.endsWith("/rpc/record_ai_usage_for")) return new Response(null, { status: init.headers.Authorization === "Bearer service-key" ? 204 : 403 });
     return json(404, {});
   };
   return { fetchFn, calls };
@@ -108,10 +108,10 @@ test("handler: risposta in streaming NDJSON e consumo registrato con il costo", 
   assert.match(res.headers["content-type"], /ndjson/);
   assert.deepEqual(res.lines(), [{ type: "text", delta: "Ciao" }, { type: "text", delta: " mondo" }, { type: "done", truncated: false }]);
   assert.equal(anthropic.seen[0].model, "claude-sonnet-5-5", "predefinito: Sonnet 5.5");
-  const rec = sb.calls.find((c) => c.url.endsWith("record_ai_usage"));
+  const rec = sb.calls.find((c) => c.url.endsWith("record_ai_usage_for"));
   assert.ok(rec, "consumo registrato");
-  assert.equal(rec.init.headers.Authorization, "Bearer user-jwt", "registrato con il token dell'utente (RLS), senza chiave di servizio");
-  assert.deepEqual(JSON.parse(rec.init.body), { p_input: 1000, p_output: 500, p_cost: 0.014 });
+  assert.equal(rec.init.headers.Authorization, "Bearer service-key", "registrato con la chiave di servizio: l'utente non può scriverlo da sé");
+  assert.deepEqual(JSON.parse(rec.init.body), { p_user: "u1", p_input: 1000, p_output: 500, p_cost: 0.014 }, "per l'utente verificato dal token");
 });
 
 test("handler: modello e max_tokens dalle variabili d'ambiente; risposta troncata segnalata", async () => {
@@ -130,6 +130,7 @@ test("handler: senza accesso 401, credito esaurito 429, senza chiave 503 — Cla
     [fakeReq(), { spent: 3.01 }, ENV, 429, "quota_exceeded"],
     [fakeReq(), { total: 30 }, ENV, 429, "quota_exceeded"],
     [fakeReq(), {}, { ...ENV, ANTHROPIC_API_KEY: "" }, 503, "sampling_disabled"],
+    [fakeReq(), {}, { ...ENV, SUPABASE_SERVICE_ROLE_KEY: "" }, 503, "sampling_disabled"], // il consumo non si registrerebbe
     [fakeReq({ body: { prompt: "" } }), {}, ENV, 400, "bad_request"],
   ]) {
     const anthropic = fakeAnthropic();
@@ -155,7 +156,7 @@ test("handler: rifiuto e interruzione → riga d'errore, consumo comunque regist
   await createHandler({ env: ENV, anthropic: fakeAnthropic({ fail: Object.assign(new Error("Your credit balance is too low"), { status: 400 }) }), fetchFn: fakeSupabase().fetchFn, log: (m) => logged.push(String(m)) })(fakeReq(), res);
   assert.deepEqual(res.lines().at(-1), { type: "error", code: "billing" });
   assert.match(logged.join(" "), /billing \(400\)/, "l'errore finisce nei log di Vercel");
-  const rec = JSON.parse(sb.calls.find((c) => c.url.endsWith("record_ai_usage")).init.body);
+  const rec = JSON.parse(sb.calls.find((c) => c.url.endsWith("record_ai_usage_for")).init.body);
   assert.equal(rec.p_input, 1000, "i token d'ingresso già pagati sono registrati anche se lo stream si interrompe");
   assert.ok(res.writableEnded);
 });
@@ -168,6 +169,9 @@ test("handler: GET restituisce il limite mensile e se la chiave è configurata (
   await createHandler({ env: { ...ENV, ANTHROPIC_API_KEY: "" }, anthropic: null, fetchFn: fakeSupabase().fetchFn })(fakeReq({ method: "GET", token: null }), res2);
   const body = JSON.parse(res2.chunks.join(""));
   assert.equal(body.configured, false, "dice se la chiave manca");
+  const res3 = fakeRes();
+  await createHandler({ env: { ...ENV, SUPABASE_SERVICE_ROLE_KEY: "" }, anthropic: fakeAnthropic(), fetchFn: fakeSupabase().fetchFn })(fakeReq({ method: "GET", token: null }), res3);
+  assert.equal(JSON.parse(res3.chunks.join("")).configured, false, "senza chiave di servizio Claude risulta non configurato");
   assert.ok(!JSON.stringify(body).includes("sk-"), "mai il valore della chiave");
 });
 

@@ -16,7 +16,8 @@ create policy "docs: inserimento proprio" on public.docs for insert to authentic
 create policy "docs: modifica propria" on public.docs for update to authenticated using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 create policy "docs: cancellazione propria" on public.docs for delete to authenticated using (user_id = (select auth.uid()));
 
--- 2. Consumo di Claude per utente e mese: scritto solo da record_ai_usage (chiamata dalla funzione Vercel con il token dell'utente).
+-- 2. Consumo di Claude per utente e mese: scritto solo da record_ai_usage_for, chiamata dalla funzione Vercel con la chiave
+--    di servizio (SUPABASE_SERVICE_ROLE_KEY). Gli utenti non possono scriverlo: altrimenti chiunque gonfierebbe il totale del mese.
 create table public.ai_usage (
   user_id uuid not null references auth.users (id) on delete cascade,
   month date not null,
@@ -29,20 +30,22 @@ create table public.ai_usage (
 alter table public.ai_usage enable row level security;
 create policy "ai_usage: lettura propria" on public.ai_usage for select to authenticated using (user_id = (select auth.uid()));
 
--- security definer voluto: l'utente può solo AGGIUNGERE consumo a sé stesso (mai valori negativi).
-create or replace function public.record_ai_usage(p_input bigint, p_output bigint, p_cost numeric)
+-- solo la chiave di servizio (la funzione Vercel, dopo aver verificato il token dell'utente); mai valori negativi.
+create or replace function public.record_ai_usage_for(p_user uuid, p_input bigint, p_output bigint, p_cost numeric)
 returns void language plpgsql security definer set search_path = '' as $$
 begin
-  if auth.uid() is null then raise exception 'non autenticato'; end if;
+  if p_user is null then raise exception 'utente mancante'; end if;
   if p_input < 0 or p_output < 0 or p_cost < 0 then raise exception 'valori non validi'; end if;
   insert into public.ai_usage (user_id, month, requests, input_tokens, output_tokens, cost_usd)
-  values (auth.uid(), date_trunc('month', now())::date, 1, p_input, p_output, p_cost)
+  values (p_user, date_trunc('month', now())::date, 1, p_input, p_output, p_cost)
   on conflict (user_id, month) do update set
     requests = public.ai_usage.requests + 1,
     input_tokens = public.ai_usage.input_tokens + excluded.input_tokens,
     output_tokens = public.ai_usage.output_tokens + excluded.output_tokens,
     cost_usd = public.ai_usage.cost_usd + excluded.cost_usd;
 end $$;
+-- la versione precedente, chiamabile dagli utenti con il loro token: da togliere nei progetti già creati
+drop function if exists public.record_ai_usage(bigint, bigint, numeric);
 
 -- security definer voluto: la propria spesa e il totale del servizio (per il tetto complessivo), senza i dati degli altri.
 create or replace function public.ai_spend_this_month()
@@ -52,9 +55,9 @@ returns table (mine numeric, total numeric) language sql stable security definer
     coalesce((select sum(cost_usd) from public.ai_usage where month = date_trunc('month', now())::date), 0)
 $$;
 
-revoke all on function public.record_ai_usage(bigint, bigint, numeric) from public, anon;
+revoke all on function public.record_ai_usage_for(uuid, bigint, bigint, numeric) from public, anon, authenticated;
 revoke all on function public.ai_spend_this_month() from public, anon;
-grant execute on function public.record_ai_usage(bigint, bigint, numeric) to authenticated;
+grant execute on function public.record_ai_usage_for(uuid, bigint, bigint, numeric) to service_role;
 grant execute on function public.ai_spend_this_month() to authenticated;
 
 -- 3. Consenso a termini e privacy (copia dei metadati dell'account, scritta dall'app al primo accesso).

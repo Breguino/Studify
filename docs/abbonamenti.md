@@ -38,7 +38,7 @@ I prezzi mostrati stanno in `public/js/plans.js`; quelli addebitati sono i «Pri
    | `STRIPE_SECRET_KEY` | la chiave segreta di test (`sk_test_…`, *Sviluppatori → Chiavi API*) |
    | `STRIPE_WEBHOOK_SECRET` | il segreto del webhook (`whsec_…`) |
    | `STRIPE_PRICE_BASE_MONTH`, `STRIPE_PRICE_BASE_YEAR`, `STRIPE_PRICE_PRO_MONTH`, `STRIPE_PRICE_PRO_YEAR` | i 4 id `price_…` |
-   | `SUPABASE_SERVICE_ROLE_KEY` | da Supabase, *Project Settings → API Keys → secret / service_role* |
+   | `SUPABASE_SERVICE_ROLE_KEY` | già presente: la usa anche `/api/claude` per registrare il consumo (vedi README) |
 
    La chiave di servizio di Supabase e quella di Stripe sono **segrete**: vanno solo su Vercel, mai nel codice e mai
    incollate in chat. Il webhook, per le anteprime protette da Vercel, ha bisogno dell'URL di produzione o di un
