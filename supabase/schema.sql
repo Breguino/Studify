@@ -47,18 +47,21 @@ end $$;
 -- la versione precedente, chiamabile dagli utenti con il loro token: da togliere nei progetti già creati
 drop function if exists public.record_ai_usage(bigint, bigint, numeric);
 
--- security definer voluto: la propria spesa e il totale del servizio (per il tetto complessivo), senza i dati degli altri.
+-- security definer voluto: la propria spesa; il totale del servizio (per il tetto complessivo) solo alla chiave di
+-- servizio, cioè alla funzione Vercel. A un utente il totale torna vuoto: quanto spende Studify non gli serve.
 create or replace function public.ai_spend_this_month()
 returns table (mine numeric, total numeric) language sql stable security definer set search_path = '' as $$
   select
     coalesce((select cost_usd from public.ai_usage where user_id = auth.uid() and month = date_trunc('month', now())::date), 0),
-    coalesce((select sum(cost_usd) from public.ai_usage where month = date_trunc('month', now())::date), 0)
+    case when coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') = 'service_role'
+      then coalesce((select sum(cost_usd) from public.ai_usage where month = date_trunc('month', now())::date), 0)
+    end
 $$;
 
 revoke all on function public.record_ai_usage_for(uuid, bigint, bigint, numeric) from public, anon, authenticated;
 revoke all on function public.ai_spend_this_month() from public, anon;
 grant execute on function public.record_ai_usage_for(uuid, bigint, bigint, numeric) to service_role;
-grant execute on function public.ai_spend_this_month() to authenticated;
+grant execute on function public.ai_spend_this_month() to authenticated, service_role;
 
 -- 3. Consenso a termini e privacy (copia dei metadati dell'account, scritta dall'app al primo accesso).
 create table public.consents (
