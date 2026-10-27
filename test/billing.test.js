@@ -20,7 +20,8 @@ function fakeNet({ sub = null, spent = 0, total = 0 } = {}) {
     calls.push({ url, init });
     if (url.endsWith("/auth/v1/user")) return init.headers.Authorization === "Bearer jwt" ? json(200, { id: "u1", email: "a@b.it" }) : json(401, {});
     if (url.includes("/rest/v1/subscriptions")) return json(200, sub ? [sub] : []);
-    if (url.endsWith("/rpc/ai_spend_this_month")) return json(200, [{ mine: spent, total }]);
+    if (url.endsWith("/rpc/ai_spend_this_month")) // come su Supabase: il totale solo alla chiave di servizio
+      return json(200, [init.headers.Authorization === "Bearer service" ? { mine: 0, total } : { mine: spent, total: null }]);
     if (url.endsWith("/rpc/billing_upsert")) return new Response(null, { status: 204 });
     if (url.endsWith("/v1/checkout/sessions")) return json(200, { url: "https://checkout.stripe.com/c/1" });
     if (url.endsWith("/v1/billing_portal/sessions")) return json(200, { url: "https://billing.stripe.com/p/1" });

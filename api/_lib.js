@@ -93,12 +93,19 @@ export async function getUser(env, token, fetchFn = fetch) {
   return u?.id ? u : null;
 }
 
-/** Spesa del mese: { mine, total } in dollari. */
+/**
+ * Spesa del mese: { mine, total } in dollari. La propria con il token dell'utente; il totale del servizio solo con la
+ * chiave di servizio (all'utente ai_spend_this_month non lo dice: quanto spende Studify non è affar suo).
+ */
 export async function monthSpend(env, token, fetchFn = fetch) {
-  const r = await fetchFn(`${env.SUPABASE_URL}/rest/v1/rpc/ai_spend_this_month`, { method: "POST", headers: sb(env, token), body: "{}" });
-  if (!r.ok) throw new HttpError(503, "server_error", "Non riesco a leggere il consumo.");
-  const row = (await r.json())?.[0] ?? {};
-  return { mine: Number(row.mine ?? 0), total: Number(row.total ?? 0) };
+  const k = env.SUPABASE_SERVICE_ROLE_KEY;
+  const call = async (headers) => {
+    const r = await fetchFn(`${env.SUPABASE_URL}/rest/v1/rpc/ai_spend_this_month`, { method: "POST", headers, body: "{}" });
+    if (!r.ok) throw new HttpError(503, "server_error", "Non riesco a leggere il consumo.");
+    return (await r.json())?.[0] ?? {};
+  };
+  const [own, all] = await Promise.all([call(sb(env, token)), call({ apikey: k, Authorization: `Bearer ${k}`, "Content-Type": "application/json" })]);
+  return { mine: Number(own.mine ?? 0), total: Number(all.total ?? 0) };
 }
 
 /**

@@ -121,7 +121,7 @@ in app, landing, pagine legali e icone.
 | `SUPABASE_URL` / `SUPABASE_KEY` | progetto `studify` | Solo se cambi progetto (anche `STUDIFY_SUPABASE_URL`/`_KEY` al build). La chiave è quella pubblica: i dati li protegge la RLS. |
 
 **Supabase** (schema in `supabase/schema.sql`): tabelle `docs`, `ai_usage`, `consents` con RLS; funzioni `record_ai_usage_for`
-(solo chiave di servizio), `ai_spend_this_month`, `delete_my_account`. In *Authentication → URL Configuration* vanno impostati **Site URL** e
+(solo chiave di servizio), `ai_spend_this_month` (all'utente la sua spesa; il totale del mese solo alla chiave di servizio), `delete_my_account`. In *Authentication → URL Configuration* vanno impostati **Site URL** e
 **Redirect URLs** con l'indirizzo Vercel, altrimenti i link delle email (conferma, recupero password) portano a `localhost`.
 Come Redirect URL conviene `https://<dominio>/**`, che comprende `/app`; se è autorizzata solo la radice, la landing inoltra comunque il link.
 Il server email predefinito di Supabase invia pochissime email l'ora: per un uso reale serve un SMTP proprio

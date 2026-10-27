@@ -69,7 +69,8 @@ function fakeSupabase({ spent = 0, total = 0, user = { id: "u1", email: "a@b.it"
   const fetchFn = async (url, init = {}) => {
     calls.push({ url, init });
     if (url.endsWith("/auth/v1/user")) return init.headers.Authorization === "Bearer user-jwt" && user ? json(200, user) : json(401, { msg: "bad jwt" });
-    if (url.endsWith("/rpc/ai_spend_this_month")) return json(200, [{ mine: spent, total }]);
+    if (url.endsWith("/rpc/ai_spend_this_month")) // come su Supabase: il totale solo alla chiave di servizio
+      return json(200, [init.headers.Authorization === "Bearer service-key" ? { mine: 0, total } : { mine: spent, total: null }]);
     if (url.endsWith("/rpc/record_ai_usage_for")) return new Response(null, { status: init.headers.Authorization === "Bearer service-key" ? 204 : 403 });
     return json(404, {});
   };
