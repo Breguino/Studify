@@ -63,7 +63,8 @@ test("piani: frase per l'account (rinnovo, disdetta, pagamento non riuscito)", (
 
 test("credito per piano: senza abbonamenti attivi resta quello di sempre (3 $)", () => {
   assert.equal(planLimit({}, "free"), 3);
-  assert.equal(planLimit({ BILLING: "on" }, "free"), 1);
+  assert.equal(planLimit({ BILLING: "on" }, "free"), 0.5);
+  assert.equal(planLimit({}, "pro"), 5);
   assert.equal(planLimit({ BILLING: "on", USER_MONTHLY_LIMIT_USD: "2" }, "free"), 2);
   assert.equal(planLimit({}, "base"), 3);
   assert.equal(planLimit({ PRO_MONTHLY_LIMIT_USD: "12" }, "pro"), 12);
@@ -106,9 +107,9 @@ test("evento → riga: utente dai metadati, piano dal prezzo, fine periodo (anch
 test("credito: l'abbonato Pro ha il suo limite e non è fermato dal tetto di chi non paga", async () => {
   const env = { ...ENV, TOTAL_MONTHLY_LIMIT_USD: "30" };
   await assert.rejects(authorize(env, "Bearer jwt", fakeNet({ spent: 1.2 }).fetchFn), { code: "quota_exceeded", message: /Con un abbonamento il credito è più alto/ });
-  const ok = await authorize(env, "Bearer jwt", fakeNet({ spent: 5, total: 40, sub: paid() }).fetchFn);
+  const ok = await authorize(env, "Bearer jwt", fakeNet({ spent: 4.5, total: 40, sub: paid() }).fetchFn);
   assert.equal(ok.plan, "pro");
-  await assert.rejects(authorize(env, "Bearer jwt", fakeNet({ spent: 8.1, sub: paid() }).fetchFn), { code: "quota_exceeded" });
+  await assert.rejects(authorize(env, "Bearer jwt", fakeNet({ spent: 5.1, sub: paid() }).fetchFn), { code: "quota_exceeded" });
   await assert.rejects(authorize(env, "Bearer jwt", fakeNet({ spent: 0, total: 31 }).fetchFn), { code: "quota_exceeded" }, "Gratis: vale il tetto complessivo");
 });
 
@@ -124,7 +125,7 @@ test("GET /api/claude con il token: piano, credito del piano e abbonamento senza
   const b = res.body;
   assert.equal(b.billing, true);
   assert.equal(b.plan, "pro");
-  assert.equal(b.limits.user, 8);
+  assert.equal(b.limits.user, 5);
   assert.equal(b.subscription.manageable, true);
   assert.ok(!JSON.stringify(b).includes("cus_1"), "l'id cliente resta sul server");
 });

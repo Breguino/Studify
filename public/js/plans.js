@@ -1,11 +1,12 @@
 // Piani di Studify (versione web): nomi, prezzi mostrati e credito di Claude al mese. Funzioni pure, testate.
 // I prezzi veri sono quelli dei «Price» su Stripe (variabili STRIPE_PRICE_* su Vercel): questi servono solo a mostrarli
-// e vanno tenuti uguali. Il credito in dollari è il tetto di spesa per Claude (api/_billing.js lo applica).
+// e vanno tenuti uguali. Il credito in dollari è il tetto di spesa per Claude (api/_billing.js lo applica): scelto perché
+// ogni piano resti in attivo anche se il credito si usa tutto (prezzo senza IVA e commissioni di Stripe > credito).
 
 export const PLANS = {
-  free: { id: "free", name: "Gratis", month: 0, year: 0, credit: 1, pitch: "Per provare Studify con un esame." },
+  free: { id: "free", name: "Gratis", month: 0, year: 0, credit: 0.5, pitch: "Per provare Studify con un esame." },
   base: { id: "base", name: "Base", month: 4.99, year: 49, credit: 3, pitch: "Per un semestre con qualche esame." },
-  pro: { id: "pro", name: "Pro", month: 9.99, year: 99, credit: 8, pitch: "Per chi prepara molti esami o carica tanti materiali." },
+  pro: { id: "pro", name: "Pro", month: 9.99, year: 99, credit: 5, pitch: "Per chi prepara molti esami o carica tanti materiali." },
 };
 export const PAID = ["base", "pro"];
 export const INTERVALS = { month: "al mese", year: "all'anno" };
