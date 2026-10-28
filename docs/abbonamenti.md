@@ -6,9 +6,9 @@ al mese, nessun prezzo nella landing.
 
 | Piano | Mensile | Annuale | Credito di Claude al mese |
 |---|---|---|---|
-| Gratis | 0 € | — | 1 $ (con gli abbonamenti accesi) |
+| Gratis | 0 € | — | 0,50 $ (con gli abbonamenti accesi) |
 | Base | 4,99 € | 49 € | 3 $ |
-| Pro | 9,99 € | 99 € | 8 $ |
+| Pro | 9,99 € | 99 € | 5 $ |
 
 I prezzi mostrati stanno in `public/js/plans.js`; quelli addebitati sono i «Price» che crei su Stripe: **devono coincidere**.
 
