@@ -358,3 +358,34 @@ test("pagina Claude: esercizi delle esercitazioni assegnati agli argomenti, 15 p
   assert.match(prompts[0], /ESERCIZI DA ASSEGNARE[\s\S]*Rispondi SOLO con un oggetto JSON/);
   assert.equal(r.assign.length, 20, "id inventati scartati");
 });
+
+test("cache dei prompt: dispensa e carte per argomento mandano la parte fissa, uguale in ogni richiesta", async () => {
+  const calls = [];
+  const sample = async (prompt, opts) => (calls.push({ prompt, opts }), { text: "Capitolo\n\n## Soluzioni\n1. ok", truncated: false });
+  sample.cache = true; // come il sito web
+  await writeDispensa({ exam, materials: [{ kind: "notes", role: "appunti", title: "L1", text: "appunti su A e B" }], research: null,
+    outline: [{ title: "A" }, { title: "B" }], topics: [{ id: "t1", title: "A", importance: 2 }, { id: "t2", title: "B", importance: 2 }], length: "sintetica", solutions: true }, () => {}, sample);
+  const fixed = calls.map((c) => c.prompt.slice(0, c.opts.cachePrefix));
+  assert.equal(fixed[0], fixed[1], "stessa parte fissa nei due capitoli: la seconda la legge dalla cache");
+  assert.match(fixed[0], /appunti su A e B/, "i materiali sono nella parte fissa");
+  assert.doesNotMatch(fixed[0], /capitolo|«A»|"A"/i, "il compito del capitolo no");
+
+  const { sample: plain, calls: prompts } = fakeSample();
+  const json = plain.json;
+  const optsSeen = [];
+  plain.json = async (prompt, opts) => (optsSeen.push({ prompt, opts }), json(prompt));
+  plain.cache = true;
+  await generateModule({ exam, materials: [{ kind: "notes", title: "L1", text: "appunti" }], research: null }, () => {}, plain);
+  const perTopic = optsSeen.filter((c) => c.prompt.includes("<argomento>"));
+  assert.ok(perTopic.length > 1 && prompts.length > 1);
+  const heads = new Set(perTopic.map((c) => c.prompt.slice(0, c.opts.cachePrefix)));
+  assert.equal(heads.size, 1, "tutti gli argomenti hanno la stessa parte fissa (regole e contesto dell'esame)");
+  assert.ok([...heads][0].endsWith("\n\n") && !/<argomento>/.test([...heads][0]));
+
+  const noCache = fakeSample(); // pagina Claude: la capability non lo accetta, non si passa
+  const seen = [];
+  const j2 = noCache.sample.json;
+  noCache.sample.json = async (prompt, opts) => (seen.push(opts), j2(prompt));
+  await generateModule({ exam, materials: [{ kind: "notes", title: "L1", text: "appunti" }], research: null }, () => {}, noCache.sample);
+  assert.ok(seen.every((o) => !o || !("cachePrefix" in o)));
+});

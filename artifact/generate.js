@@ -15,6 +15,14 @@ export const getSample = async () => {
   }
 };
 
+/**
+ * Opzioni di `sample` con l'inizio del prompt (`fixed`, uguale in più richieste: regole, materiali) in cache, dove la
+ * capability lo accetta (sito web: /api/claude). Le richieste dopo la prima lo pagano un decimo.
+ */
+const cacheOpts = (sample, fixed, opts) => (sample.cache ? { ...opts, cachePrefix: fixed.length } : opts);
+/** Regole e contesto dell'esame: l'inizio comune alle richieste per argomento dello stesso modulo. */
+const rulesFor = (exam) => `${RULES}\n\n${examContext(exam)}\n\n`;
+
 /** Errori di `sample` → messaggi per l'utente. */
 export function explain(e) {
   if (e instanceof Error) return e;
@@ -101,12 +109,13 @@ const methodsBlock = (methods) => (methods.length
  */
 async function methodsStep({ sample, exam, t, worked }) {
   if (!worked || !(Array.isArray(t.methodNames) && t.methodNames.length)) return [];
-  const prompt = `${RULES}\n\n${examContext(exam)}\n\n${worked}\n\n<argomento>\n${JSON.stringify({ title: t.title, summary: t.summary })}\n</argomento>
+  const fixed = `${rulesFor(exam)}${worked}\n\n`;
+  const prompt = `${fixed}<argomento>\n${JSON.stringify({ title: t.title, summary: t.summary })}\n</argomento>
 Compito: METODI DEL DOCENTE DA RICAVARE per questo argomento, dai materiali di tipo esercizi svolti qui sopra, per questi tipi di esercizio: ${t.methodNames.slice(0, 3).map((n) => `«${n}»`).join(", ")}.
 Segui le regole sugli esercizi svolti dal docente (passaggi generici; problem e solution COPIATI da un esercizio svolto vero).
 Rispondi SOLO con un oggetto JSON: {"methods": [{"name": string, "steps": [string] (3-8), "problem": string, "solution": string, "source": string}]}`;
   try {
-    const r = await sample.json(prompt, { modelTier: "default" });
+    const r = await sample.json(prompt, cacheOpts(sample, fixed, { modelTier: "default" }));
     return Array.isArray(r?.methods) ? r.methods.slice(0, 3) : [];
   } catch (e) {
     if (isFatal(e)) throw explain(e);
@@ -141,11 +150,7 @@ async function examQuestionsStep({ sample, exam, topics, lines, onProgress }) {
   const missed = [...lines.keys()].filter((id) => !assigned.has(id));
   let done = 0;
   const parts = await pool(jobs, CONCURRENCY, async ({ t, ids }) => {
-    const prompt = `${RULES}
-
-${examContext(exam)}
-
-<argomento>
+    const prompt = `${rulesFor(exam)}<argomento>
 ${JSON.stringify({ title: t.title, summary: t.summary, keyConcepts: t.keyConcepts, mustKnow: t.mustKnow, excerpt: t.excerpt ?? "" })}
 </argomento>
 <domande_esame_argomento>
@@ -156,7 +161,7 @@ Compito: DOMANDE D'ESAME DA PREPARARE. Per ogni domanda distinta dell'elenco cre
 Rispondi SOLO con un oggetto JSON: {"questions": [{"kind": "open"|"problem", "prompt": string, "options": [], "correctIndex": -1, "modelAnswer": string,
 "explanation": string, "rubric": [string] (3-6), "followUp": string, "examRefs": [string]}]}`;
     try {
-      const r = await sample.json(prompt, { modelTier: "default" });
+      const r = await sample.json(prompt, cacheOpts(sample, rulesFor(exam), { modelTier: "default" }));
       return { t, ids, questions: Array.isArray(r?.questions) ? r.questions : [] };
     } catch (e) {
       if (isFatal(e)) throw explain(e);
@@ -208,9 +213,9 @@ export async function generateModule({ exam, materials, research }, onProgress =
   const perTopic = await pool(topics, CONCURRENCY, async (t) => {
     onProgress(0, `Passo 2: carte e domande — argomento ${Math.min(done + 1, topics.length)}/${topics.length}…`);
     t.methods = await methodsStep({ sample, exam, t, worked });
-    const prompt = `${RULES}\n\n${examContext(exam)}\n\n<argomento>\n${JSON.stringify({ title: t.title, summary: t.summary, keyConcepts: t.keyConcepts, mustKnow: t.mustKnow, excerpt: t.excerpt ?? "" })}\n</argomento>\n${exerciseBlock(t)}${methodsBlock(t.methods)}\nCompito: crea flashcard e domande SOLO su questo argomento, fedeli all'estratto e al riassunto (non aggiungere fatti che non vi compaiono).\n${TOPIC_SHAPE(type, { cards: "6-9 flashcard", questions: t.methods.length ? "4-7 domande" : "3-5 domande" }, t.methods)}`;
+    const prompt = `${rulesFor(exam)}<argomento>\n${JSON.stringify({ title: t.title, summary: t.summary, keyConcepts: t.keyConcepts, mustKnow: t.mustKnow, excerpt: t.excerpt ?? "" })}\n</argomento>\n${exerciseBlock(t)}${methodsBlock(t.methods)}\nCompito: crea flashcard e domande SOLO su questo argomento, fedeli all'estratto e al riassunto (non aggiungere fatti che non vi compaiono).\n${TOPIC_SHAPE(type, { cards: "6-9 flashcard", questions: t.methods.length ? "4-7 domande" : "3-5 domande" }, t.methods)}`;
     try {
-      const r = await sample.json(prompt, { modelTier: "default" });
+      const r = await sample.json(prompt, cacheOpts(sample, rulesFor(exam), { modelTier: "default" }));
       return { flashcards: Array.isArray(r?.flashcards) ? r.flashcards : [], questions: Array.isArray(r?.questions) ? r.questions : [] };
     } catch (e) {
       if (isFatal(e)) throw explain(e);
@@ -293,9 +298,9 @@ export async function extendModule({ exam, materials, research, existing }, onPr
     const old = known.has(t.id);
     t.methods = await methodsStep({ sample, exam, t, worked });
     const have = old ? (existing.flashcards ?? []).filter((c) => c.topicId === t.id).map((c) => `- ${c.front}`).join("\n") : "";
-    const prompt = `${RULES}\n\n${examContext(exam)}\n\n<argomento>\n${JSON.stringify({ title: t.title, summary: t.summary, keyConcepts: t.keyConcepts, mustKnow: t.mustKnow, excerpt: t.excerpt ?? "" })}\n</argomento>\n${exerciseBlock(t)}${methodsBlock(t.methods)}${old ? `<carte_esistenti>\n${have}\n</carte_esistenti>\n` : ""}\nCompito: crea flashcard e domande SOLO ${old ? "sui contenuti NUOVI dell'estratto, senza ripetere le carte esistenti (nemmeno con parole diverse)" : "su questo argomento"}, fedeli all'estratto e al riassunto (non aggiungere fatti che non vi compaiono).\n${TOPIC_SHAPE(type, old ? { cards: "2-5 flashcard", questions: t.methods.length ? "3-6 domande" : "1-3 domande" } : { cards: "6-9 flashcard", questions: t.methods.length ? "4-7 domande" : "3-5 domande" }, t.methods)}`;
+    const prompt = `${rulesFor(exam)}<argomento>\n${JSON.stringify({ title: t.title, summary: t.summary, keyConcepts: t.keyConcepts, mustKnow: t.mustKnow, excerpt: t.excerpt ?? "" })}\n</argomento>\n${exerciseBlock(t)}${methodsBlock(t.methods)}${old ? `<carte_esistenti>\n${have}\n</carte_esistenti>\n` : ""}\nCompito: crea flashcard e domande SOLO ${old ? "sui contenuti NUOVI dell'estratto, senza ripetere le carte esistenti (nemmeno con parole diverse)" : "su questo argomento"}, fedeli all'estratto e al riassunto (non aggiungere fatti che non vi compaiono).\n${TOPIC_SHAPE(type, old ? { cards: "2-5 flashcard", questions: t.methods.length ? "3-6 domande" : "1-3 domande" } : { cards: "6-9 flashcard", questions: t.methods.length ? "4-7 domande" : "3-5 domande" }, t.methods)}`;
     try {
-      const r = await sample.json(prompt, { modelTier: "default" });
+      const r = await sample.json(prompt, cacheOpts(sample, rulesFor(exam), { modelTier: "default" }));
       return { flashcards: Array.isArray(r?.flashcards) ? r.flashcards : [], questions: Array.isArray(r?.questions) ? r.questions : [] };
     } catch (e) {
       if (isFatal(e)) throw explain(e);
@@ -366,13 +371,14 @@ export async function writeDispensa({ exam, materials, research, outline, topics
   if (!body.trim()) throw new Error("Per la dispensa servono materiali testuali (qui i PDF si usano come testo: caricali di nuovo se mancano).");
   if (body.length > MAX_MATERIAL_CHARS) throw new Error(`Materiali troppo estesi per una volta (${Math.round(body.length / 1000)}k caratteri, max ${MAX_MATERIAL_CHARS / 1000}k): scegli meno pagine o lezioni.`);
   const chapters = [];
+  const fixed = `${DISPENSA_SYSTEM}\n\nMateriali dello studente:\n\n${body}\n\n`; // uguale in ogni capitolo: in cache
   for (const [k, topic] of topics.entries()) {
     onProgress(0, `Scrivo il capitolo ${k + 1}/${topics.length}: ${topic.title}…`, { chapters: [...chapters] });
     try {
-      const { text, truncated } = await sample(`${DISPENSA_SYSTEM}\n\nMateriali dello studente:\n\n${body}\n\n${chapterPrompt({ exam, topic, outline, hints: topic.hints ?? [], examQuestions: topic.examQuestions ?? [], length, solutions })}`, {
+      const { text, truncated } = await sample(`${fixed}${chapterPrompt({ exam, topic, outline, hints: topic.hints ?? [], examQuestions: topic.examQuestions ?? [], length, solutions })}`, cacheOpts(sample, fixed, {
         modelTier: "default",
         onText: ({ text: t }) => onProgress(t.length, `Scrivo il capitolo ${k + 1}/${topics.length}: ${topic.title}… ~${Math.round(t.length / 1000)}k caratteri`),
-      });
+      }));
       const ch = { topicId: topic.id, title: topic.title, ...splitChapter(text) };
       if (truncated) ch.body += "\n\n> Il capitolo è stato interrotto perché troppo lungo: riscrivilo in versione «sintetica».";
       chapters.push(ch);

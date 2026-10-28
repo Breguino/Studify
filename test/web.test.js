@@ -385,3 +385,29 @@ test("informativa aggiornata: l'avviso compare una volta a chi si era iscritto p
   assert.equal(privacyOutdated({ terms_version: "2026-10-05" }, "2026-10-13"), true, "versione mancante: avviso");
   assert.equal(privacyOutdated({}, "2026-10-13"), false, "senza consenso registrato (account di prova): niente avviso");
 });
+
+test("cache dei prompt: cachePrefix diventa un blocco a sé con il punto di cache; valori sbagliati rifiutati", () => {
+  const prompt = "REGOLE E MATERIALI|compito del capitolo";
+  const body = readBody({ prompt, cachePrefix: 19 });
+  assert.equal(body.cachePrefix, 19);
+  const content = messageParams(body, { model: "m", maxTokens: 1 }).messages[0].content;
+  assert.deepEqual(content, [
+    { type: "text", text: "REGOLE E MATERIALI|", cache_control: { type: "ephemeral" } },
+    { type: "text", text: "compito del capitolo" },
+  ]);
+  assert.equal(content.map((b) => b.text).join(""), prompt, "il testo mandato a Claude non cambia");
+  assert.equal(messageParams(readBody({ prompt }), { model: "m", maxTokens: 1 }).messages[0].content.length, 1, "senza cachePrefix: un blocco solo, nessuna cache");
+  for (const bad of [0, -1, 1.5, "5", prompt.length, prompt.length + 10])
+    assert.throws(() => readBody({ prompt, cachePrefix: bad }), (e) => e.code === "bad_request", String(bad));
+});
+
+test("sample: inoltra cachePrefix e dice di accettarlo (sample.cache)", async () => {
+  const bodies = [];
+  const fetchFn = async (url, init) => (bodies.push(JSON.parse(init.body)), ndjson([{ type: "text", delta: "{}" }, { type: "done", truncated: false }]));
+  const sample = createSample({ auth: fakeAuth, fetchFn });
+  assert.equal(sample.cache, true);
+  await sample.json("FISSOvariabile", { cachePrefix: 5 });
+  await sample("x");
+  assert.equal(bodies[0].cachePrefix, 5);
+  assert.equal("cachePrefix" in bodies[1], false);
+});

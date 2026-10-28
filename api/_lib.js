@@ -46,11 +46,14 @@ export function readBody(body) {
     bytes += img.data.length;
   }
   if (bytes > MAX_IMAGE_BYTES) throw new HttpError(413, "prompt_too_large", "Immagini troppo pesanti.");
-  return { prompt, images, json: body.json === true };
+  // dove finisce la parte fissa del prompt (regole, materiali), ripetuta uguale in più richieste: va in cache
+  const cachePrefix = body.cachePrefix;
+  if (cachePrefix != null && !(Number.isInteger(cachePrefix) && cachePrefix > 0 && cachePrefix < prompt.length)) throw new HttpError(400, "bad_request", "Richiesta non valida.");
+  return { prompt, images, json: body.json === true, ...(cachePrefix ? { cachePrefix } : {}) };
 }
 
 /** Parametri della richiesta a Claude (Messages API). */
-export function messageParams({ prompt, images, json }, { model, maxTokens }) {
+export function messageParams({ prompt, images, json, cachePrefix }, { model, maxTokens }) {
   return {
     model,
     max_tokens: maxTokens,
@@ -61,7 +64,11 @@ export function messageParams({ prompt, images, json }, { model, maxTokens }) {
       role: "user",
       content: [
         ...images.map((img) => ({ type: "image", source: { type: "base64", media_type: img.mediaType, data: img.data } })),
-        { type: "text", text: prompt },
+        // con cachePrefix la parte fissa è un blocco a sé con il punto di cache: le richieste che la ripetono
+        // (capitoli della dispensa, argomenti dello stesso modulo) la pagano un decimo
+        ...(cachePrefix
+          ? [{ type: "text", text: prompt.slice(0, cachePrefix), cache_control: { type: "ephemeral" } }, { type: "text", text: prompt.slice(cachePrefix) }]
+          : [{ type: "text", text: prompt }]),
       ],
     }],
   };

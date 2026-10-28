@@ -48,7 +48,7 @@ export function createSample({ auth, endpoint = "/api/claude", fetchFn = (...a) 
       r = await fetchFn(endpoint, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, images, json }),
+        body: JSON.stringify({ prompt, images, json, ...(Number.isInteger(opts.cachePrefix) ? { cachePrefix: opts.cachePrefix } : {}) }),
         signal: opts.signal,
       });
     } catch (e) {
@@ -90,6 +90,7 @@ export function createSample({ auth, endpoint = "/api/claude", fetchFn = (...a) 
   const sample = (prompt, opts) => run(prompt, opts);
   sample.json = async (prompt, opts) => parseJsonText((await run(prompt, opts, true)).text);
   sample.limits = async () => LIMITS;
+  sample.cache = true; // accetta `cachePrefix` (la capability della pagina Claude no: lì non si passa)
   return sample;
 }
 
