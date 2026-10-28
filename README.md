@@ -113,7 +113,7 @@ in app, landing, pagine legali e icone.
 |---|---|---|
 | `ANTHROPIC_API_KEY` | – | **Obbligatoria** per le funzioni AI (tipo *Sensitive*). Senza, l'app funziona ma Claude risulta non configurato. |
 | `SUPABASE_SERVICE_ROLE_KEY` | – | **Obbligatoria** anche lei (tipo *Sensitive*, da Supabase: *Project Settings → API Keys → secret*): con questa la funzione registra il consumo di Claude, che gli utenti non possono scrivere da sé. Senza, Claude risulta non configurato. Mai nel codice né incollata in chat. |
-| `ANTHROPIC_MODEL` | `claude-sonnet-5-5` | Costa la metà di `claude-opus-5-5` (2/10 $ per milione di token contro 4/20), quindi il credito del mese dura circa il doppio. Per tornare a Opus imposta `claude-opus-5-5`. |
+| `ANTHROPIC_MODEL` | `claude-sonnet-5-5` | Costa la metà di `claude-opus-5-5` (2/10 $ per milione di token contro 4/20), quindi il credito del mese dura circa il doppio. Per tornare a Opus imposta `claude-opus-5-5`. La parte fissa dei prompt ripetuti (regole e contesto dell'esame per ogni argomento, materiali per ogni capitolo della dispensa, esercizi svolti) va in cache (`cachePrefix`): dalla seconda richiesta costa un decimo. |
 | `ANTHROPIC_MAX_TOKENS` | `32000` | Tetto di una singola risposta. |
 | `USER_MONTHLY_LIMIT_USD` / `TOTAL_MONTHLY_LIMIT_USD` | `3` / `30` | Credito al mese per utente (piano Gratis: con gli abbonamenti accesi il predefinito scende a `1`) / per tutto il servizio (vale solo per chi non paga). |
 | `BILLING` | (vuota) | `on` accende gli abbonamenti: prezzi nella landing, sezione «Abbonamento» nell'account, parti sugli abbonamenti in termini e privacy. Spenta, tutto resta gratis come prima. |
