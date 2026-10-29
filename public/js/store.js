@@ -128,7 +128,12 @@ export function logActivity(exam, n = 1) {
 
 export async function exportAll() {
   const files = {};
-  for (const e of state.exams) for (const m of e.materials) if (m.fileId) files[m.fileId] = await getFile(m.fileId);
+  // PDF e foto degli appunti a mano; i dati binari della sola sessione (pdfFileId, Blob della pagina Claude) non vanno in JSON
+  for (const e of state.exams) for (const m of e.materials) for (const id of [m.fileId, ...(m.imageIds ?? [])]) {
+    if (!id || id in files) continue;
+    const data = await getFile(id);
+    if (typeof data === "string") files[id] = data;
+  }
   return JSON.stringify({ app: "studify", version: VERSION, state, files });
 }
 
