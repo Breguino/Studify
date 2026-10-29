@@ -9,6 +9,9 @@ export const PLANS = {
   pro: { id: "pro", name: "Pro", month: 9.99, year: 99, credit: 5, pitch: "Per chi prepara molti esami o carica tanti materiali." },
 };
 export const PAID = ["base", "pro"];
+
+/** Valore di BILLING su Vercel → abbonamenti accesi? «on», ma anche «On», «true», «1», «sì»: un errore di battitura non li spegne. */
+export const isBillingOn = (value) => /^(on|true|1|yes|s[iì])$/i.test(String(value ?? "").trim());
 export const INTERVALS = { month: "al mese", year: "all'anno" };
 
 /** 4.99 → «4,99 €», 49 → «49 €». */

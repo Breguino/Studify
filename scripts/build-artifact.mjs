@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { euro, PAID, PLANS, yearSaving } from "../public/js/plans.js";
+import { euro, isBillingOn, PAID, PLANS, yearSaving } from "../public/js/plans.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const harness = process.argv.includes("--harness");
@@ -108,7 +108,7 @@ if (web) {
     "/404.html": { title: "Pagina non trovata — Studify", description: "Questa pagina di Studify non esiste." },
   };
   // Abbonamenti (BILLING=on su Vercel): tengono le parti <!--BILLING-->…<!--/BILLING--> e tolgono <!--NOBILLING-->…; spenti, il contrario.
-  const billing = process.env.BILLING === "on";
+  const billing = isBillingOn(process.env.BILLING); // la stessa regola di /api/claude
   const billingBlocks = (html) => html
     .replace(billing ? /<!--NOBILLING-->[\s\S]*?<!--\/NOBILLING-->/g : /<!--BILLING-->[\s\S]*?<!--\/BILLING-->/g, "")
     .replace(/<!--\/?(NO)?BILLING-->/g, "")
