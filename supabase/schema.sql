@@ -165,7 +165,16 @@ create table public.subscriptions (
 alter table public.subscriptions enable row level security;
 create policy "subscriptions: lettura propria" on public.subscriptions for select to authenticated using (user_id = (select auth.uid()));
 
--- Gli eventi di Stripe possono arrivare in ritardo o due volte: si scrive solo se l'evento non è più vecchio di quello salvato.
+-- Gli eventi di Stripe possono arrivare in ritardo o due volte. Per lo stesso abbonamento si scrive solo se l'evento non è
+-- più vecchio di quello salvato. Per un abbonamento diverso (uno vecchio disdetto, o pagato due volte) conta chi addebita:
+-- un abbonamento che addebita vince su uno finito anche se il suo evento è più vecchio, e uno finito non prende mai il
+-- posto di uno che addebita. Tra due dello stesso tipo vince l'evento più recente.
+-- VERSIONE DA RIESEGUIRE A MANO nei progetti creati prima di questa regola (create or replace: nient'altro cambia).
+create or replace function public.billing_charging(p_status text)
+returns boolean language sql immutable set search_path = '' as $$
+  select p_status in ('active', 'trialing', 'past_due', 'unpaid', 'paused')
+$$;
+revoke all on function public.billing_charging(text) from public, anon, authenticated;
 create or replace function public.billing_upsert(
   p_user_id uuid, p_plan text, p_interval text, p_status text, p_period_end timestamptz, p_cancel_at_period_end boolean,
   p_customer text, p_subscription text, p_event_at timestamptz)
@@ -177,7 +186,13 @@ returns void language sql security definer set search_path = '' as $$
     current_period_end = excluded.current_period_end, cancel_at_period_end = excluded.cancel_at_period_end,
     stripe_customer_id = coalesce(excluded.stripe_customer_id, public.subscriptions.stripe_customer_id),
     stripe_subscription_id = excluded.stripe_subscription_id, event_at = excluded.event_at, updated_at = now()
-  where public.subscriptions.event_at <= excluded.event_at
+  where case
+    when public.subscriptions.stripe_subscription_id is not distinct from excluded.stripe_subscription_id
+      then public.subscriptions.event_at <= excluded.event_at
+    when public.billing_charging(excluded.status) <> public.billing_charging(public.subscriptions.status)
+      then public.billing_charging(excluded.status)
+    else public.subscriptions.event_at <= excluded.event_at
+  end
 $$;
 revoke all on function public.billing_upsert(uuid, text, text, text, timestamptz, boolean, text, text, timestamptz) from public, anon, authenticated;
 grant execute on function public.billing_upsert(uuid, text, text, text, timestamptz, boolean, text, text, timestamptz) to service_role;

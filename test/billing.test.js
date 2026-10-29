@@ -15,7 +15,7 @@ const json = (status, body) => new Response(JSON.stringify(body), { status, head
 const fakeRes = () => ({ statusCode: 0, headers: {}, chunks: [], setHeader(k, v) { this.headers[k] = v; }, write(c) { this.chunks.push(c); }, end(c) { if (c) this.chunks.push(c); this.ended = true; }, get body() { return JSON.parse(this.chunks.join("")); } });
 
 /** Supabase e Stripe finti: registrano le chiamate. */
-function fakeNet({ sub = null, spent = 0, total = 0 } = {}) {
+function fakeNet({ sub = null, spent = 0, total = 0, customers = [], stripeSubs = [] } = {}) {
   const calls = [];
   const fetchFn = async (url, init = {}) => {
     calls.push({ url, init });
@@ -27,6 +27,8 @@ function fakeNet({ sub = null, spent = 0, total = 0 } = {}) {
     if (url.endsWith("/v1/checkout/sessions")) return json(200, { url: "https://checkout.stripe.com/c/1" });
     if (url.endsWith("/v1/billing_portal/sessions")) return json(200, { url: "https://billing.stripe.com/p/1" });
     if (url.includes("/v1/subscriptions/")) return json(200, stripeSub());
+    if (url.includes("/v1/customers?")) return json(200, { data: customers });
+    if (url.includes("/v1/subscriptions?")) return json(200, { data: stripeSubs.filter((x) => url.includes(`customer=${x.customer}`)) });
     return json(404, {});
   };
   return { fetchFn, calls };
@@ -182,6 +184,27 @@ test("billing: piano non valido, già abbonato, portale", async () => {
   assert.equal(res4.body.code, "no_subscription");
 });
 
+test("billing: tornato dal pagamento prima della conferma, non si paga una seconda volta", async () => {
+  // la riga in Supabase dice ancora «Gratis» (il webhook non è arrivato), ma Stripe ha già l'abbonamento
+  const net = fakeNet({ customers: [{ id: "cus_9" }], stripeSubs: [stripeSub({ customer: "cus_9", status: "active" })] });
+  const res = fakeRes();
+  await createBillingHandler({ env: ENV, fetchFn: net.fetchFn })(req({ body: { action: "checkout", plan: "base", interval: "month", startNow: true } }), res);
+  assert.equal(res.statusCode, 409);
+  assert.match(res.body.message, /appena pagato/);
+  assert.ok(!net.calls.some((c) => c.url.endsWith("/v1/checkout/sessions")), "nessuna seconda pagina di pagamento");
+  assert.match(net.calls.find((c) => c.url.includes("/v1/customers?")).url, /email=a%40b\.it/);
+});
+
+test("billing: cliente già noto a Stripe (abbonamento finito) → si riusa, niente secondo cliente", async () => {
+  const net = fakeNet({ customers: [{ id: "cus_9" }], stripeSubs: [stripeSub({ customer: "cus_9", status: "canceled" })] });
+  const res = fakeRes();
+  await createBillingHandler({ env: ENV, fetchFn: net.fetchFn })(req({ body: { action: "checkout", plan: "pro", interval: "year", startNow: true } }), res);
+  assert.equal(res.statusCode, 200);
+  const form = new URLSearchParams(net.calls.find((c) => c.url.endsWith("/v1/checkout/sessions")).init.body);
+  assert.equal(form.get("customer"), "cus_9");
+  assert.equal(form.get("customer_email"), null);
+});
+
 /* ------------------------------- webhook ------------------------------- */
 
 const hook = (event, secret = "whsec_x") => {
@@ -208,6 +231,20 @@ test("webhook: abbonamento aggiornato → riga salvata con la chiave di servizio
   assert.equal(row.p_plan, "pro");
   assert.equal(row.p_cancel_at_period_end, true);
   assert.equal(row.p_event_at, new Date(1_790_000_000 * 1000).toISOString());
+});
+
+test("webhook: un secondo abbonamento attivo per lo stesso utente finisce nei log, per il rimborso", async () => {
+  const net = fakeNet({ sub: { stripe_subscription_id: "sub_vecchio", status: "active" } });
+  const logged = [];
+  const res = fakeRes();
+  await createWebhookHandler({ env: ENV, fetchFn: net.fetchFn, log: (m) => logged.push(m) })(hook({ type: "customer.subscription.created", created: 1_790_000_000, data: { object: stripeSub({ id: "sub_nuovo" }) } }), res);
+  assert.equal(res.statusCode, 200);
+  assert.match(logged.join(" "), /DUE ABBONAMENTI ATTIVI.*sub_vecchio e sub_nuovo/);
+  const check = net.calls.find((c) => c.url.includes("/rest/v1/subscriptions?user_id=eq.u1"));
+  assert.equal(check.init.headers.Authorization, "Bearer service", "letto con la chiave di servizio");
+  const quiet = [];
+  await createWebhookHandler({ env: ENV, fetchFn: fakeNet({ sub: { stripe_subscription_id: "sub_1", status: "active" } }).fetchFn, log: (m) => quiet.push(m) })(hook({ type: "customer.subscription.updated", created: 1_790_000_000, data: { object: stripeSub() } }), fakeRes());
+  assert.deepEqual(quiet, [], "lo stesso abbonamento aggiornato: nessun avviso");
 });
 
 test("webhook: pagamento completato → legge l'abbonamento da Stripe; eventi d'altro tipo ignorati", async () => {

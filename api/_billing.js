@@ -87,6 +87,9 @@ export function subscriptionRow(env, sub, eventAt) {
   };
 }
 
+// Stati in cui Stripe addebita ancora (o ritenta): un secondo abbonamento accanto a uno di questi è un doppio addebito.
+const CHARGING = new Set(["active", "trialing", "past_due", "unpaid", "paused"]);
+
 export const HANDLED_EVENTS = new Set(["customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted", "checkout.session.completed"]);
 
 /* ------------------------------ rete ------------------------------ */
@@ -109,6 +112,22 @@ export async function stripe(env, method, path, body, fetchFn = fetch) {
   return data;
 }
 
+/**
+ * Abbonamenti di Stripe che addebitano ancora, per il cliente salvato e per l'email dell'account. Si chiede a Stripe e non
+ * solo alla riga in Supabase, perché il webhook può non essere ancora arrivato: chi torna dal pagamento e clicca di nuovo
+ * pagherebbe due volte. Restituisce anche i clienti trovati, da riusare (un solo cliente: il portale li mostra tutti).
+ */
+export async function chargingSubscriptions(env, { customerId, email }, fetchFn = fetch) {
+  const customers = new Set(customerId ? [customerId] : []);
+  if (email) for (const c of (await stripe(env, "GET", `customers?email=${encodeURIComponent(email)}&limit=10`, null, fetchFn)).data ?? []) customers.add(c.id);
+  const subs = [];
+  for (const c of customers) {
+    const list = await stripe(env, "GET", `subscriptions?customer=${encodeURIComponent(c)}&status=all&limit=20`, null, fetchFn);
+    subs.push(...(list.data ?? []).filter((x) => CHARGING.has(x.status)));
+  }
+  return { customers: [...customers], subs };
+}
+
 const sbUser = (env, token) => ({ apikey: env.SUPABASE_KEY, Authorization: `Bearer ${token}`, "Content-Type": "application/json" });
 
 /** Abbonamento dell'utente (con il suo token: RLS fa vedere solo la propria riga), o null. Tabella assente → null. */
@@ -127,6 +146,19 @@ export async function saveSubscription(env, row, fetchFn = fetch) {
     body: JSON.stringify(row),
   });
   if (!r.ok) throw new Error(`billing_upsert: ${r.status}`);
+}
+
+/** Due abbonamenti che addebitano per lo stesso utente (pagato due volte): nei log, perché il gestore ne rimborsi uno. */
+async function warnIfDouble(env, row, fetchFn, log) {
+  if (!CHARGING.has(row.p_status)) return;
+  const k = env.SUPABASE_SERVICE_ROLE_KEY;
+  const r = await fetchFn(`${env.SUPABASE_URL}/rest/v1/subscriptions?user_id=eq.${encodeURIComponent(row.p_user_id)}&select=stripe_subscription_id,status`, {
+    headers: { apikey: k, Authorization: `Bearer ${k}` },
+  }).catch(() => null);
+  const saved = r?.ok ? (await r.json().catch(() => []))?.[0] : null;
+  if (saved?.stripe_subscription_id && saved.stripe_subscription_id !== row.p_subscription && CHARGING.has(saved.status)) {
+    log(`stripe-webhook: DUE ABBONAMENTI ATTIVI per l'utente ${row.p_user_id}: ${saved.stripe_subscription_id} e ${row.p_subscription}. Disdici e rimborsa uno dei due dalla Dashboard di Stripe.`);
+  }
 }
 
 const siteUrl = (env, req) => (env.SITE_URL || `https://${req.headers?.host ?? "localhost"}`).replace(/\/$/, "");
@@ -188,12 +220,15 @@ export function createBillingHandler({ env, fetchFn = fetch, log = console.error
         if (!price) throw new HttpError(400, "bad_request", "Piano non valido.");
         if (body.startNow !== true) throw new HttpError(400, "consent_required", "Conferma di voler iniziare subito l'abbonamento.");
         if (activePlan(sub) !== "free") throw new HttpError(409, "already_subscribed", "Hai già un abbonamento: cambialo da «Gestisci abbonamento».");
+        const found = await chargingSubscriptions(env, { customerId: sub?.stripe_customer_id, email: user.email }, fetchFn);
+        if (found.subs.length) throw new HttpError(409, "already_subscribed", "Hai già un abbonamento attivo. Se hai appena pagato, la conferma arriva tra pochi secondi: ricarica la pagina.");
+        const customer = sub?.stripe_customer_id ?? found.customers[0];
         const s = await stripe(env, "POST", "checkout/sessions", {
           mode: "subscription",
           "line_items[0][price]": price,
           "line_items[0][quantity]": 1,
           client_reference_id: user.id,
-          ...(sub?.stripe_customer_id ? { customer: sub.stripe_customer_id } : { customer_email: user.email }),
+          ...(customer ? { customer } : { customer_email: user.email }),
           subscription_data: { metadata: { user_id: user.id, start_now_consent: new Date().toISOString() } },
           metadata: { user_id: user.id },
           allow_promotion_codes: "true",
@@ -247,6 +282,7 @@ export function createWebhookHandler({ env, fetchFn = fetch, log = console.error
         log(`stripe-webhook: ${ev.type} senza utente o con un prezzo sconosciuto`);
         return send(res, 200, { ignored: "non nostro" });
       }
+      await warnIfDouble(env, row, fetchFn, log);
       await saveSubscription(env, row, fetchFn);
       return send(res, 200, { ok: true });
     } catch (e) {
