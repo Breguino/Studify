@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { activePlan, euro, planLine, PLANS, yearSaving } from "../public/js/plans.js";
 import { isBillingOn } from "../public/js/plans.js";
 import {
-  billingSetup, createBillingHandler, createWebhookHandler, planFromPrice, planLimit, signForTest, subscriptionRow, verifyStripeSignature,
+  billingSetup, createBillingHandler, usd, createWebhookHandler, planFromPrice, planLimit, signForTest, subscriptionRow, verifyStripeSignature,
 } from "../api/_billing.js";
 import { authorize, createHandler } from "../api/_lib.js";
 
@@ -264,4 +264,20 @@ test("diagnosi degli abbonamenti in GET /api/claude: solo presente/assente, mai 
   const b = res.body;
   assert.deepEqual(b.setup, { billing: "on", stripeKey: "test", webhookSecret: true, prices: [], serviceKey: true });
   assert.ok(!/SEGRETO|price_|whsec_|sk_test_|"service"/.test(JSON.stringify(b)), "nessun valore delle variabili esce dal server");
+});
+
+test("credito: variabili scritte male non tolgono il limite (mai NaN)", () => {
+  assert.equal(usd("3", 1), 3);
+  assert.equal(usd("1,5", 1), 1.5);
+  assert.equal(usd("2 $", 1), 2);
+  assert.equal(usd("$4", 1), 4);
+  for (const bad of ["", " ", "tre", "1$5x", "-2", undefined, null]) assert.equal(usd(bad, 7), 7, String(bad));
+  assert.equal(planLimit({ USER_MONTHLY_LIMIT_USD: "1$" }, "free"), 1);
+  assert.equal(planLimit({ USER_MONTHLY_LIMIT_USD: "boh" }, "free"), 3, "non valida: il predefinito, non NaN");
+  assert.equal(planLimit({ PRO_MONTHLY_LIMIT_USD: "5,5" }, "pro"), 5.5);
+});
+
+test("credito: TOTAL_MONTHLY_LIMIT_USD scritto male non disattiva il tetto complessivo", async () => {
+  const env = { ...ENV, TOTAL_MONTHLY_LIMIT_USD: "trenta" };
+  await assert.rejects(authorize(env, "Bearer jwt", fakeNet({ spent: 0, total: 31 }).fetchFn), { code: "quota_exceeded" });
 });

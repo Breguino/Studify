@@ -51,6 +51,30 @@ export function explain(e) {
 const FATAL = new Set(["not_granted", "sampling_disabled", "rate_limited", "quota_exceeded", "session_expired", "billing", "invalid_key", "model_unavailable", "offline"]);
 const isFatal = (e) => FATAL.has(e?.code);
 
+/**
+ * Immagini divise in gruppi che `sample` accetta in una richiesta: al più `limits.images.maxCount` (e `maxPer`) e non oltre
+ * `maxInputBytes` (sito web: 3 immagini, 3 MB). `start` è l'indice della prima immagine del gruppo.
+ */
+export function imageGroups(images, limits, maxPer = Infinity) {
+  const max = Math.max(1, Math.min(maxPer, limits?.images?.maxCount ?? maxPer));
+  const bytes = limits?.images?.maxInputBytes ?? Infinity;
+  const groups = [];
+  let cur = [], size = 0, start = 0;
+  images.forEach((img, k) => {
+    const s = img?.size ?? 0;
+    if (cur.length && (cur.length >= max || size + s > bytes)) {
+      groups.push({ start, imgs: cur });
+      cur = [];
+      size = 0;
+      start = k;
+    }
+    cur.push(img);
+    size += s;
+  });
+  if (cur.length) groups.push({ start, imgs: cur });
+  return groups;
+}
+
 /** Esegue `fn` su ogni elemento con al più `n` richieste in volo. */
 async function pool(items, n, fn) {
   let i = 0;
@@ -339,9 +363,7 @@ export async function transcribePages({ images, firstPage, title = "", handwritt
   if (!sample) throw new Error("Claude non è disponibile in questa pagina.");
   const limits = await sample.limits?.().catch(() => null);
   if (!limits?.images) throw new Error(handwritten ? "Qui Claude non può leggere immagini: gli appunti a mano non si possono trascrivere." : "Qui Claude non può leggere le immagini delle pagine: le formule restano quelle del testo del PDF.");
-  const per = Math.max(1, Math.min(PAGES_PER_CALL, limits.images.maxCount ?? PAGES_PER_CALL));
-  const groups = [];
-  for (let k = 0; k < images.length; k += per) groups.push({ start: k, imgs: images.slice(k, k + per) });
+  const groups = imageGroups(images, limits, PAGES_PER_CALL);
   let done = 0;
   const parts = await pool(groups, CONCURRENCY, async ({ start, imgs }) => {
     const from = firstPage + start;
@@ -383,8 +405,16 @@ export async function writeDispensa({ exam, materials, research, outline, topics
       if (truncated) ch.body += "\n\n> Il capitolo è stato interrotto perché troppo lungo: riscrivilo in versione «sintetica».";
       chapters.push(ch);
     } catch (e) {
-      if (isFatal(e) && !chapters.length) throw explain(e);
-      chapters.push({ topicId: topic.id, title: topic.title, body: "", solutions: "", error: explain(e).message });
+      if (isFatal(e) && !chapters.some((c) => !c.error)) throw explain(e);
+      const error = explain(e).message;
+      chapters.push({ topicId: topic.id, title: topic.title, body: "", solutions: "", error });
+      if (isFatal(e)) {
+        // credito finito, troppe richieste, senza rete…: gli altri capitoli fallirebbero allo stesso modo. Ci si ferma,
+        // si tengono quelli scritti e i restanti restano da scrivere con lo stesso avviso (riprova più tardi).
+        for (const t of topics.slice(k + 1)) chapters.push({ topicId: t.id, title: t.title, body: "", solutions: "", error });
+        onProgress(0, `Capitoli pronti: ${chapters.filter((c) => !c.error).length}/${topics.length}`, { chapters: [...chapters] });
+        break;
+      }
     }
     onProgress(0, `Capitoli pronti: ${k + 1}/${topics.length}`, { chapters: [...chapters] });
   }
@@ -599,24 +629,35 @@ export async function importRows({ kind, text, images, today }, onProgress = () 
   if (!IMPORT_HEADERS[kind]) throw new Error("Tipo di importazione non valido.");
   if (text && text.length > MAX_MATERIAL_CHARS) throw new Error("Il documento è troppo lungo per questa versione: importa poche pagine alla volta o usa un CSV.");
   const withImages = !text?.trim() && images?.length;
+  let groups = [null];
   if (withImages) {
     const limits = await sample.limits?.().catch(() => null);
     if (!limits?.images) throw new Error("Questo PDF è una scansione e qui Claude non può leggere immagini: usa un PDF con testo selezionabile o un CSV.");
+    groups = imageGroups(images, limits); // sito web: al più 3 pagine per richiesta, le altre nelle richieste dopo
   }
   onProgress(0, withImages ? "Claude legge le pagine scansionate…" : "Claude legge il documento…");
-  const prompt = `Sei un assistente che legge documenti universitari e li trasforma in tabelle.
+  const pagesNote = (g) => (groups.length > 1 ? ` Sono le pagine ${g.start + 1}-${g.start + g.imgs.length} di ${images.length}.` : "");
+  const promptFor = (g) => `Sei un assistente che legge documenti universitari e li trasforma in tabelle.
 ${IMPORT_RULES(kind, today)}
 Rispondi SOLO con un oggetto JSON: {"found": boolean, "rows": [[${IMPORT_HEADERS[kind].map((h) => `"${h}"`).join(", ")}]], "notes": [string]}
 Le righe contengono SOLO i valori (senza intestazione), ogni riga con ${IMPORT_HEADERS[kind].length} stringhe.
 
-${withImages ? "Il documento è nelle immagini allegate (pagine in ordine)." : `<documento>\n${text}\n</documento>`}`;
-  let raw;
-  try {
-    raw = await sample.json(prompt, { modelTier: "default", ...(withImages ? { images } : {}) });
-  } catch (e) {
-    throw explain(e);
+${withImages ? `Il documento è nelle immagini allegate (pagine in ordine).${pagesNote(g)}` : `<documento>\n${text}\n</documento>`}`;
+  const out = { found: false, rows: [IMPORT_HEADERS[kind]], notes: [] };
+  for (const [k, g] of groups.entries()) {
+    if (groups.length > 1) onProgress(0, `Claude legge le pagine scansionate… ${k + 1}/${groups.length}`);
+    let raw;
+    try {
+      raw = await sample.json(promptFor(g), { modelTier: "default", ...(g ? { images: g.imgs } : {}) });
+    } catch (e) {
+      throw explain(e);
+    }
+    const part = normalizeImportRows(raw, IMPORT_HEADERS[kind]);
+    out.found ||= part.found;
+    out.rows.push(...part.rows.slice(1));
+    out.notes.push(...part.notes);
   }
-  const out = normalizeImportRows(raw, IMPORT_HEADERS[kind]);
+  out.notes = [...new Set(out.notes)].slice(0, 10);
   if (!out.found) throw new Error("Nel documento non ho trovato dati di questo tipo: controlla di aver scelto il tipo giusto.");
   return out;
 }

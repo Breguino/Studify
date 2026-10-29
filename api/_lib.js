@@ -1,7 +1,7 @@
 // Parte pura della funzione /api/claude (Vercel): controlli, costi e chiamate a Supabase.
 // I file con «_» in api/ non diventano endpoint.
 import { activePlan } from "../public/js/plans.js";
-import { billingOn, billingSetup, planLimit, readSubscription } from "./_billing.js";
+import { billingOn, billingSetup, planLimit, readSubscription, usd } from "./_billing.js";
 
 export const MAX_PROMPT_BYTES = 262_144; // come la capability `sample` delle pagine Claude
 export const MAX_IMAGES = 3; // il corpo di una richiesta a Vercel non può superare 4,5 MB
@@ -135,7 +135,7 @@ export async function recordUsage(env, userId, { input, output, cost }, fetchFn 
  */
 export const limits = (env) => ({
   user: planLimit(env, "free"),
-  total: Number(env.TOTAL_MONTHLY_LIMIT_USD ?? 30),
+  total: usd(env.TOTAL_MONTHLY_LIMIT_USD, 30),
 });
 
 /** Piano e credito dell'utente: { plan, limit, sub }. */

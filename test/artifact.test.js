@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { analyzePastExams, assignExercises, gradeExam, examFormatFromText, explain, extendModule, generateModule, transcribePages, writeDispensa, generateNotes, gradeAnswer, parseCurriculum } from "../artifact/generate.js";
+import { analyzePastExams, assignExercises, gradeExam, examFormatFromText, explain, extendModule, generateModule, imageGroups, importRows, transcribePages, writeDispensa, generateNotes, gradeAnswer, parseCurriculum } from "../artifact/generate.js";
 import { decodeState, encodeState, split } from "../artifact/backend.js";
 
 const demo = JSON.parse(readFileSync(new URL("../public/demo/module.json", import.meta.url), "utf8"));
@@ -130,7 +130,7 @@ test("pagina Claude: importazione da PDF — testo, scansione con immagini, limi
   assert.equal(seen.o.images, undefined);
   const blobs = [new Blob(["x"])];
   await importRows({ kind: "esami", text: "", images: blobs, today: "2026-10-01" }, () => {}, mk({ images: { maxCount: 8 } }));
-  assert.equal(seen.o.images, blobs, "scansione: pagine passate come immagini");
+  assert.deepEqual(seen.o.images, blobs, "scansione: pagine passate come immagini");
   assert.match(seen.p, /immagini allegate/);
   await assert.rejects(importRows({ kind: "esami", text: "", images: blobs, today: "2026-10-01" }, () => {}, mk({})), /scansione.*non può leggere immagini/);
   await assert.rejects(importRows({ kind: "esami", text: "x".repeat(210_000) }, () => {}, mk({})), /troppo lungo/);
@@ -388,4 +388,47 @@ test("cache dei prompt: dispensa e carte per argomento mandano la parte fissa, u
   noCache.sample.json = async (prompt, opts) => (seen.push(opts), j2(prompt));
   await generateModule({ exam, materials: [{ kind: "notes", title: "L1", text: "appunti" }], research: null }, () => {}, noCache.sample);
   assert.ok(seen.every((o) => !o || !("cachePrefix" in o)));
+});
+
+test("immagini a gruppi: al più maxCount per richiesta e non oltre maxInputBytes", () => {
+  const img = (size) => ({ size });
+  const six = [1, 2, 3, 4, 5, 6].map(() => img(10));
+  assert.deepEqual(imageGroups(six, { images: { maxCount: 3 } }).map((g) => [g.start, g.imgs.length]), [[0, 3], [3, 3]]);
+  assert.deepEqual(imageGroups(six, { images: { maxCount: 8 } }, 2).map((g) => g.imgs.length), [2, 2, 2], "maxPer più stretto vince");
+  assert.deepEqual(imageGroups([img(2e6), img(2e6), img(5e5)], { images: { maxCount: 3, maxInputBytes: 3e6 } }).map((g) => g.imgs.length), [1, 2], "byte: un'immagine grande va da sola");
+  assert.deepEqual(imageGroups([img(4e6)], { images: { maxCount: 3, maxInputBytes: 3e6 } }).map((g) => g.imgs.length), [1], "un'immagine oltre il limite va comunque (decide il server)");
+});
+
+test("importazione: 6 pagine scansionate con il limite del sito (3) → due richieste, righe unite", async () => {
+  const calls = [];
+  const s = async () => ({ text: "" });
+  s.limits = async () => ({ images: { maxCount: 3, maxInputBytes: 3_000_000 } });
+  s.json = async (p, o) => {
+    calls.push({ p, n: o.images.length });
+    return { found: true, notes: ["nota"], rows: [[`Esame ${calls.length}`, "14/01/2027", "09:00", "Aula 3", "Scritto", "9", "1"]] };
+  };
+  const pages = [1, 2, 3, 4, 5, 6].map(() => new Blob(["x"]));
+  const r = await importRows({ kind: "esami", text: "", images: pages, today: "2026-10-01" }, () => {}, s);
+  assert.deepEqual(calls.map((c) => c.n), [3, 3], "mai più di 3 immagini in una richiesta");
+  assert.match(calls[1].p, /pagine 4-6 di 6/);
+  assert.deepEqual(r.rows.slice(1).map((x) => x[0]), ["Esame 1", "Esame 2"]);
+  assert.deepEqual(r.notes, ["nota"], "note uguali una volta sola");
+});
+
+test("dispensa: credito finito al secondo capitolo → ci si ferma, il primo resta, gli altri da riscrivere", async () => {
+  let n = 0;
+  const sample = async () => {
+    n++;
+    if (n === 2) throw { code: "quota_exceeded", message: "Hai usato tutto il credito di Claude di questo mese." };
+    return { text: "Capitolo\n\n## Soluzioni\n1. ok", truncated: false };
+  };
+  const topics = ["A", "B", "C", "D"].map((title, i) => ({ id: `t${i + 1}`, title, importance: 2 }));
+  const r = await writeDispensa({ exam, materials: [{ kind: "notes", role: "appunti", title: "L1", text: "appunti" }], research: null,
+    outline: topics.map((t) => ({ title: t.title })), topics, length: "sintetica", solutions: true }, () => {}, sample);
+  assert.equal(n, 2, "nessuna richiesta dopo il credito finito");
+  assert.deepEqual(r.chapters.map((c) => [c.title, !!c.error]), [["A", false], ["B", true], ["C", true], ["D", true]]);
+  assert.match(r.chapters[3].error, /credito/);
+  const none = async () => { throw { code: "quota_exceeded", message: "finito" }; };
+  await assert.rejects(writeDispensa({ exam, materials: [{ kind: "notes", role: "appunti", title: "L1", text: "appunti" }], research: null,
+    outline: [], topics, length: "sintetica", solutions: true }, () => {}, none), /finito/, "nessun capitolo scritto: errore subito");
 });

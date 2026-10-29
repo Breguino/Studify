@@ -23,11 +23,21 @@ export function billingSetup(env) {
   };
 }
 
+/**
+ * Dollari da una variabile d'ambiente: «3», «1,5», «2 $» → numero; vuota o non valida → `fallback`. Mai NaN: con NaN
+ * il controllo del credito (`speso >= limite`) sarebbe sempre falso e lascerebbe passare tutto.
+ */
+export function usd(value, fallback) {
+  if (value == null || String(value).trim() === "") return fallback;
+  const n = Number(String(value).replace(/[$€\s]/g, "").replace(",", "."));
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
 /** Credito di Claude al mese (dollari) per un piano. Senza abbonamenti attivi resta USER_MONTHLY_LIMIT_USD (3 $). */
 export function planLimit(env, plan) {
-  if (plan === "base") return Number(env.BASE_MONTHLY_LIMIT_USD ?? PLANS.base.credit);
-  if (plan === "pro") return Number(env.PRO_MONTHLY_LIMIT_USD ?? PLANS.pro.credit);
-  return Number(env.USER_MONTHLY_LIMIT_USD ?? (billingOn(env) ? PLANS.free.credit : 3));
+  if (plan === "base") return usd(env.BASE_MONTHLY_LIMIT_USD, PLANS.base.credit);
+  if (plan === "pro") return usd(env.PRO_MONTHLY_LIMIT_USD, PLANS.pro.credit);
+  return usd(env.USER_MONTHLY_LIMIT_USD, billingOn(env) ? PLANS.free.credit : 3);
 }
 
 /** Variabile d'ambiente con l'id del Price di Stripe per piano e periodo (es. STRIPE_PRICE_BASE_YEAR). */
