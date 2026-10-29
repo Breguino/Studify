@@ -65,6 +65,10 @@ I prezzi mostrati stanno in `public/js/plans.js`; quelli addebitati sono i «Pri
       L'app lo controlla già, ma così vale anche se qualcuno aggira l'app.
 - [ ] **Una generazione vera misurata**: prima di far pagare, verifica in Supabase (`ai_usage`) quanto costa davvero un
       modulo, e che il credito di ogni piano basti per quello che prometti.
+- [ ] **Un solo abbonamento per persona, anche su Stripe**: in *Impostazioni → Checkout e Payment Links → Abbonamenti*
+      scegli di mandare al portale chi ha già un abbonamento (serve il portale clienti attivo, con il link d'accesso).
+      Studify lo controlla già prima di aprire il pagamento, ma due pagine di pagamento aperte insieme in due schede
+      passerebbero entrambe quel controllo; questa impostazione di Stripe ferma anche quel caso. Va accesa sia in test sia in live.
 - [ ] **Chiavi live**: su Stripe passa in modalità live, ricrea prezzi e webhook (gli id cambiano), e metti le chiavi
       `sk_live_…` e i nuovi `price_…` su Vercel, ambiente «Production», con `BILLING=on`.
 
@@ -74,7 +78,14 @@ I prezzi mostrati stanno in `public/js/plans.js`; quelli addebitati sono i «Pri
 - `api/_billing.js`: limiti per piano, pagamento (`/api/billing`), portale e webhook (`/api/stripe-webhook`).
   Nessuna libreria: API REST di Stripe con `fetch`.
 - `supabase/schema.sql` (parte 5): tabella `subscriptions`, leggibile solo dal proprietario; la scrive solo il webhook
-  con la chiave di servizio, attraverso `billing_upsert`, che ignora gli eventi più vecchi di quello salvato.
+  con la chiave di servizio, attraverso `billing_upsert`. Per lo stesso abbonamento ignora gli eventi più vecchi di quello
+  salvato; per un abbonamento diverso conta chi addebita ancora: la fine di un abbonamento vecchio, arrivata in ritardo,
+  non toglie il piano a chi ne paga uno nuovo.
+- Prima di aprire il pagamento, `/api/billing` chiede a Stripe se l'account ha già un abbonamento che addebita (per il
+  cliente salvato e per l'email), perché la riga in Supabase arriva solo con il webhook: chi torna dal pagamento e
+  clicca di nuovo non paga due volte. Se c'è già un cliente Stripe con quell'email, si riusa.
+- Se nonostante tutto arrivano due abbonamenti attivi per lo stesso utente, il webhook lo scrive nei log di Vercel
+  («DUE ABBONAMENTI ATTIVI»): disdicine e rimborsane uno dalla Dashboard di Stripe.
 - `/api/claude`: il credito del mese è quello del piano. Il tetto complessivo (`TOTAL_MONTHLY_LIMIT_USD`) vale solo per
   il piano Gratis, così chi paga non resta bloccato dagli altri.
 - Un account con un abbonamento che si rinnova non si può eliminare: prima va disdetto, altrimenti Stripe
