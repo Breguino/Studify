@@ -6,7 +6,7 @@ al mese, nessun prezzo nella landing.
 
 | Piano | Mensile | Annuale | Credito di Claude al mese |
 |---|---|---|---|
-| Gratis | 0 € | — | 0,50 $ (con gli abbonamenti accesi) |
+| Gratis | 0 € | — | 1 $ (con gli abbonamenti accesi: un modulo intero costa circa 0,55-0,70 $) |
 | Base | 4,99 € | 49 € | 3 $ |
 | Pro | 9,99 € | 99 € | 5 $ |
 
