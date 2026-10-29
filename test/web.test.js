@@ -356,6 +356,38 @@ test("db: documenti sulla tabella docs (upsert, lettura, cancellazione) con il t
   await assert.rejects(expired.get(), (e) => e.code === "session_expired");
 });
 
+test("db: l'indice si scrive solo se online c'è ancora la revisione attesa (una richiesta, niente doppi vincitori)", async () => {
+  const calls = [];
+  let row = null; // la riga dell'indice su Supabase
+  const fetchFn = async (url, init = {}) => {
+    calls.push({ url, init });
+    const body = init.body ? JSON.parse(init.body) : null;
+    if (init.method === "POST") { // ignore-duplicates: se c'è già, nessuna riga
+      if (row) return json(201, []);
+      row = body.data;
+      return json(201, [{ doc_id: body.doc_id }]);
+    }
+    if (init.method === "PATCH") {
+      const want = /data->>rev=([^&]+)/.exec(url)[1];
+      const ok = row && (want === "is.null" ? row.rev == null : `eq.${row.rev}` === want);
+      if (ok) row = body.data;
+      return json(200, ok ? [{ doc_id: "studify-index" }] : []);
+    }
+    return json(200, row ? [{ data: row }] : []);
+  };
+  const doc = createDb({ url: "https://sb.test", key: "pk", auth: fakeAuth, fetchFn }).collection("x").doc("studify-index");
+  assert.equal(await doc.swap(null, { rev: 1 }), true, "primo indice");
+  assert.match(calls.at(-1).init.headers.Prefer, /ignore-duplicates/);
+  assert.equal(await doc.swap(null, { rev: 1 }), false, "un altro dispositivo l'ha già creato");
+  assert.equal(await doc.swap(1, { rev: 2 }), true);
+  assert.equal(calls.at(-1).init.method, "PATCH");
+  assert.match(calls.at(-1).url, /doc_id=eq\.studify-index&data->>rev=eq\.1&select=doc_id$/);
+  assert.equal(await doc.swap(1, { rev: 2 }), false, "revisione superata");
+  row = { v: 1, keys: {} }; // indice del formato di prima, senza revisione
+  assert.equal(await doc.swap(0, { rev: 1 }), true);
+  assert.match(calls.at(-1).url, /data->>rev=is\.null/);
+});
+
 test("schermata d'accesso: quella scelta dalla landing, altrimenti accesso per chi torna e registrazione per i nuovi", () => {
   assert.equal(initialMode({ search: "?entra=registrati", returning: true }), "signup");
   assert.equal(initialMode({ search: "?entra=accedi" }), "login");
