@@ -209,12 +209,12 @@ I pulsanti con solo l'icona hanno sempre un `aria-label` in italiano.
 
 ```
 public/            index.html, styles.css (token e componenti), demo/
-public/js/         logica pura e testata (dates, srs, planner, career, …) + store, ui, nav, core, app (router)
+public/js/         logica pura e testata (dates, srs, planner, career, merge: unione tra dispositivi, …) + store, ui, nav, core, app (router)
 public/js/views/   una vista per schermata (home, hub, quiz, flash, materials, career, …)
 artifact/          versione pagina Claude: template.html, entry, generate (Claude via `sample`), backend (`db`), fake-claude (prove)
 web/               versione web: template.html, web.css, entry, auth, gate (accesso/account), claude.js, backend, termini/privacy,
                    landing (landing-plan.js: la scheda del piano in cima, con buildPlan dell'app),
-                   offline.js (copia locale dello stato, testata), merge.js (unione tra dispositivi, testata)
+                   offline.js (copia locale dello stato, testata)
                    e sw.js (service worker: installabile e offline)
 api/               funzioni Vercel /api/claude (_lib.js), /api/billing e /api/stripe-webhook (_billing.js, abbonamenti con Stripe): testate
 server/            server Node senza dipendenze (versione locale con chiave API)

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mergeStates } from "../web/merge.js";
+import { mergeStates } from "../public/js/merge.js";
 
 const ex = (id, name, extra = {}) => ({ id, name, materials: [], ...extra });
 const st = (...exams) => ({ version: 1, profile: null, exams });
@@ -23,17 +23,37 @@ test("unione: esami diversi cambiati sui due dispositivi, si tengono entrambe le
   assert.equal(r.changed, true, "il telefono aveva studiato Fisica: la copia locale va aggiornata");
 });
 
-test("unione: stesso esame cambiato su tutti e due, la locale diventa una copia (niente si perde)", () => {
-  const base = st(ex("a", "Analisi"));
-  const local = st(ex("a", "Analisi", { learned: { t1: true } }));
-  const remote = st(ex("a", "Analisi", { learned: { t2: true } }));
+test("unione: stesso campo dello stesso esame cambiato su tutti e due, la locale diventa una copia (niente si perde)", () => {
+  const base = st(ex("a", "Analisi", { date: "2026-12-01" }));
+  const local = st(ex("a", "Analisi", { date: "2026-12-15", learned: { t1: true } }));
+  const remote = st(ex("a", "Analisi", { date: "2027-01-10" }));
   const r = mergeStates({ base, local, remote });
   assert.equal(r.state.exams.length, 2);
   assert.deepEqual(r.state.exams[0], remote.exams[0], "online al suo posto");
   assert.equal(r.state.exams[1].name, "Analisi (da questo dispositivo)");
   assert.notEqual(r.state.exams[1].id, "a");
+  assert.equal(r.state.exams[1].date, "2026-12-15");
   assert.deepEqual(r.state.exams[1].learned, { t1: true });
   assert.deepEqual(r.conflicts, ["Analisi"]);
+});
+
+test("unione: stesso esame, campi diversi o solo progressi: si tiene tutto, senza copie", () => {
+  const card = (reps) => ({ reps, ease: 2.5, due: "2026-11-02" });
+  const base = st(ex("a", "Analisi", { date: "2026-12-01", srs: { c0: card(1) }, learned: {}, done: {}, activity: { "2026-10-29": 4 }, plan: { builtOn: "2026-10-28" } }));
+  // qui: ripassate due carte, cambiata la data; sul telefono: un'altra carta, un argomento studiato, un'attività spuntata
+  const local = st(ex("a", "Analisi", { date: "2026-12-15", srs: { c0: card(2), c1: card(1) }, learned: {}, done: {}, activity: { "2026-10-29": 7 }, plan: { builtOn: "2026-10-29", x: 1 } }));
+  const remote = st(ex("a", "Analisi", { date: "2026-12-01", srs: { c0: card(1), c2: card(1) }, learned: { t1: true }, done: { k1: true }, activity: { "2026-10-29": 6 }, plan: { builtOn: "2026-10-29", x: 2 } }));
+  const r = mergeStates({ base, local, remote });
+  assert.deepEqual(r.conflicts, []);
+  assert.equal(r.state.exams.length, 1);
+  const e = r.state.exams[0];
+  assert.equal(e.date, "2026-12-15", "cambiata solo qui");
+  assert.deepEqual(Object.keys(e.srs).sort(), ["c0", "c1", "c2"]);
+  assert.equal(e.srs.c0.reps, 2);
+  assert.deepEqual(e.learned, { t1: true });
+  assert.deepEqual(e.done, { k1: true });
+  assert.equal(e.activity["2026-10-29"], 9, "4 di partenza, +3 qui, +2 sul telefono");
+  assert.equal(e.plan, null, "piano rifatto dai dati uniti");
 });
 
 test("unione: esami nuovi da tutte e due le parti, cancellazioni rispettate", () => {

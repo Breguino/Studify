@@ -45,9 +45,13 @@ export async function flush() {
   }
 }
 addEventListener("pagehide", flush);
-// versione web: unione con le modifiche fatte su un altro dispositivo (web/offline.js), mentre l'app era aperta
+// unione con le modifiche fatte su un altro dispositivo mentre l'app era aperta (artifact/backend.js, web/offline.js)
 addEventListener("studify:merged", (e) => { state.exams = e.detail.exams; state.profile = e.detail.profile; });
-addEventListener("visibilitychange", () => document.visibilityState === "hidden" && flush());
+addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") flush();
+  // di nuovo in vista (l'app è rimasta aperta mentre si studiava su un altro dispositivo): si riprende quel lavoro
+  else if (persistent) backend.refresh?.(state)?.catch?.(() => {});
+});
 
 export const putFile = (id, data) => backend.putFile(id, data);
 export const getFile = (id) => backend.getFile(id);

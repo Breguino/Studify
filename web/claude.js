@@ -128,6 +128,24 @@ export function createDb({ url, key, auth, fetchFn = (...a) => fetch(...a), clos
         if (closed()) return;
         await rest(`docs?${q}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
       },
+      /**
+       * Scrive solo se online il documento ha ancora la revisione `rev` (null: il documento non c'è ancora; 0: c'è ma
+       * senza revisione, formato di prima). Una sola richiesta: due dispositivi non possono vincere tutti e due.
+       */
+      async swap(rev, data) {
+        if (closed()) return true;
+        const updated_at = new Date().toISOString();
+        const body = JSON.stringify(rev == null ? { user_id: auth.user.id, doc_id: id, data, updated_at } : { data, updated_at });
+        const keepalive = body.length < 60_000; // come `set`: arriva anche se la pagina si chiude
+        const r = rev == null
+          ? await rest("docs?on_conflict=user_id,doc_id&select=doc_id", {
+            method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=representation" }, body, keepalive,
+          })
+          : await rest(`docs?${q}&data->>rev=${rev === 0 ? "is.null" : `eq.${rev}`}&select=doc_id`, {
+            method: "PATCH", headers: { Prefer: "return=representation" }, body, keepalive,
+          });
+        return (await r.json()).length === 1;
+      },
     };
   };
   // Il percorso della collezione (data/users/<id>) è implicito: le righe sono già dell'utente.

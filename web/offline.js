@@ -2,12 +2,14 @@
 // (in treno, in aula senza rete). Le modifiche restano in locale, segnate come «da inviare», e partono appena
 // l'archivio online risponde di nuovo.
 // La copia ricorda anche `base`, l'ultima versione in comune con l'online: se nel frattempo lo stesso account è
-// cambiato da un altro dispositivo, le due versioni si uniscono esame per esame (web/merge.js) invece di sovrascriversi.
+// cambiato da un altro dispositivo, le due versioni si uniscono esame per esame (public/js/merge.js) invece di sovrascriversi.
 // Senza una copia locale (primo accesso in questo browser) non si inventa nulla: resta il comportamento di prima.
-import { mergeStates } from "./merge.js";
+import { EMPTY_STATE, mergeStates } from "../public/js/merge.js";
 
 /**
- * `cloud`: il backend online ({ init, write }); `local`: { get(uid), set(uid, record) }, il record è { state, dirty, base };
+ * `cloud`: il backend online ({ init, write, refresh? }: `write` lancia un errore con code "conflict" e lo stato online
+ * riletto in `remote` se un altro dispositivo ha salvato prima, `refresh` dà quell'errore se online è cambiato);
+ * `local`: { get(uid), set(uid, record) }, il record è { state, dirty, base };
  * `uid`: funzione asincrona con l'id dell'utente;
  * `notify("offline"|"synced"|"conflict", nomi)`: un avviso per chi studia;
  * `onMerge(state)`: lo stato unito con modifiche arrivate da un altro dispositivo, da mettere al posto di quello in memoria.
@@ -44,23 +46,38 @@ export function withLocalCopy({ cloud, local, uid, notify = () => {}, onMerge = 
   }
 
   // Prima di scrivere online si rilegge l'indice: senza, un'interruzione lascerebbe online un indice con meno esami.
-  // Se l'indice è stato appena riletto (si torna online), prima si uniscono le modifiche fatte altrove.
+  // Se l'indice è stato appena riletto (si torna online, o un altro dispositivo ha salvato), prima si uniscono le
+  // modifiche fatte altrove, sempre con lo stato più recente di qui: l'app lo sostituisce con quello unito.
   /** Prova a mettere online `state`; true se ci è riuscito. */
   async function push(state, n) {
-    try {
-      if (!(await ensureCloud())) throw new Error("archivio online non raggiungibile");
-      if (fresh) {
-        const m = merged(state, fresh);
-        fresh = null;
-        if (m.changed) {
-          state = m.state;
-          onMerge(structuredClone(state));
+    for (let tries = 0; ; tries++) {
+      try {
+        if (!(await ensureCloud())) throw new Error("archivio online non raggiungibile");
+        if (fresh) {
+          if (pending && n !== seq) { // modifiche più recenti arrivate intanto: si unisce quelle
+            state = pending;
+            n = seq;
+          }
+          const m = merged(state, fresh);
+          fresh = null;
+          if (m.changed) {
+            state = m.state;
+            pending = state;
+            onMerge(structuredClone(state));
+            await keep(state, true);
+          }
         }
+        await cloud.write(state);
+        break;
+      } catch (e) {
+        if (e?.code === "conflict" && tries < 3) { // un altro dispositivo ha salvato prima: si unisce e si riprova
+          fresh = e.remote;
+          base ??= e.base ?? null;
+          continue;
+        }
+        goOffline();
+        return false;
       }
-      await cloud.write(state);
-    } catch {
-      goOffline();
-      return false;
     }
     setBase(state); // ora online c'è questo
     if (n === seq) { // nessuna modifica più recente nel frattempo: la copia locale è in pari
@@ -73,6 +90,14 @@ export function withLocalCopy({ cloud, local, uid, notify = () => {}, onMerge = 
     }
     return true;
   }
+
+  // Un salvataggio online alla volta: due insieme si unirebbero ciascuno con una foto vecchia dell'altro.
+  let flight = Promise.resolve();
+  const sync = (state, n) => {
+    const p = flight.then(() => push(state, n));
+    flight = p.catch(() => {});
+    return p;
+  };
 
   return {
     async init() {
@@ -90,10 +115,10 @@ export function withLocalCopy({ cloud, local, uid, notify = () => {}, onMerge = 
           const { state } = merged(copy.state, r.state);
           pending = state;
           offline = true; // l'avviso «di nuovo online» arriva quando la scrittura riesce
-          await push(state, seq);
+          await sync(state, seq);
           return { state: structuredClone(state), persistent: true };
         }
-        setBase(r.state);
+        setBase(r.state ?? EMPTY_STATE); // online ancora vuoto: tutto ciò che arriva da un altro dispositivo è nuovo
         if (r.state) await keep(r.state, false);
         return r;
       }
@@ -110,7 +135,7 @@ export function withLocalCopy({ cloud, local, uid, notify = () => {}, onMerge = 
       const n = ++seq;
       pending = snap;
       await keep(snap, true);
-      await push(snap, n);
+      await sync(snap, n);
     },
 
     /**
@@ -126,7 +151,17 @@ export function withLocalCopy({ cloud, local, uid, notify = () => {}, onMerge = 
 
     /** Al ritorno della connessione: invia ciò che è rimasto in locale. */
     async retry() {
-      if (pending) await push(pending, seq);
+      if (pending) await sync(pending, seq);
+    },
+
+    /** Tornando sull'app rimasta aperta: se un altro dispositivo ha salvato, si prende il suo lavoro (unito a quello di qui). */
+    async refresh() {
+      if (offline || !cloudReady || !cloud.refresh) return;
+      const c = await cloud.refresh();
+      if (!c) return;
+      fresh = c.remote;
+      const s = pending ?? base;
+      if (s) await sync(s, seq);
     },
 
     get offline() {
