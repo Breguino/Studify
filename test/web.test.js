@@ -239,6 +239,97 @@ test("accesso: sessione salvata, token rinnovato quando scade, sessione persa se
   assert.equal(storage.m.has("studify-session"), false);
 });
 
+/** Supabase Auth finto con i refresh token usa-e-getta, come quello vero: riusarne uno già usato è un rifiuto. */
+function rotatingAuth() {
+  let n = 1;
+  const valid = new Set(["R1"]);
+  const net = { refreshes: 0, gate: null };
+  net.fetchFn = async (url, init) => {
+    if (!url.includes("grant_type=refresh_token")) return json(404, {});
+    const { refresh_token: rt } = JSON.parse(init.body);
+    net.refreshes++;
+    if (net.gate) await net.gate; // per far partire due rinnovi insieme
+    if (!valid.delete(rt)) return json(400, { error_code: "refresh_token_already_used" });
+    n++;
+    valid.add(`R${n}`);
+    return json(200, { access_token: `A${n}`, refresh_token: `R${n}`, expires_in: 3600, user: { id: "u1" } });
+  };
+  return net;
+}
+const tabsOn = (storage, net, t, extra = {}) => {
+  const listeners = [];
+  const tab = createAuth({ url: "https://sb.test", key: "pk", fetchFn: net.fetchFn, storage, now: () => t.now, onStorage: (fn) => listeners.push(fn), ...extra });
+  tab.fireStorage = () => listeners.forEach((fn) => fn());
+  return tab;
+};
+const signedIn = (t) => {
+  const storage = memStorage();
+  storage.setItem("studify-session", JSON.stringify({ access_token: "A1", refresh_token: "R1", expires_at: t.now / 1000 + 3600, user: { id: "u1" } }));
+  return storage;
+};
+
+test("due schede aperte: quando la prima rinnova la sessione, la seconda non esce", async () => {
+  const t = { now: 1_000_000_000_000 };
+  const storage = signedIn(t);
+  const net = rotatingAuth();
+  const a = tabsOn(storage, net, t);
+  const b = tabsOn(storage, net, t);
+  t.now += 3590 * 1000;
+  assert.equal(await a.accessToken(), "A2");
+  assert.equal(await b.accessToken(), "A2", "la seconda scheda usa il token rinnovato dalla prima");
+  assert.equal(net.refreshes, 1, "con il codice di prima: un secondo rinnovo con R1, rifiutato, e uscita");
+  assert.ok(b.session && a.session);
+});
+
+test("due schede che rinnovano nello stesso istante (senza Web Locks): il rifiuto della seconda non fa uscire", async () => {
+  const t = { now: 1_000_000_000_000 };
+  const storage = signedIn(t);
+  const net = rotatingAuth();
+  let open;
+  net.gate = new Promise((r) => (open = r));
+  const a = tabsOn(storage, net, t);
+  const b = tabsOn(storage, net, t);
+  t.now += 3590 * 1000;
+  const pa = a.accessToken();
+  const pb = b.accessToken();
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(net.refreshes, 2, "tutte e due hanno chiesto il rinnovo con R1");
+  open();
+  const [ta, tb] = await Promise.all([pa, pb]);
+  assert.equal(ta, "A2");
+  assert.equal(tb, "A2", "la seconda, rifiutata, prende il token salvato dalla prima");
+  assert.ok(JSON.parse(storage.getItem("studify-session")).refresh_token === "R2", "la sessione salvata resta quella buona");
+});
+
+test("con Web Locks una scheda alla volta rinnova: un solo rinnovo", async () => {
+  const t = { now: 1_000_000_000_000 };
+  const storage = signedIn(t);
+  const net = rotatingAuth();
+  let tail = Promise.resolve();
+  const locks = { request: (name, fn) => { const p = tail.then(fn); tail = p.catch(() => {}); return p; } }; // come navigator.locks
+  const a = tabsOn(storage, net, t, { locks });
+  const b = tabsOn(storage, net, t, { locks });
+  t.now += 3590 * 1000;
+  const [ta, tb] = await Promise.all([a.accessToken(), b.accessToken()]);
+  assert.deepEqual([ta, tb, net.refreshes], ["A2", "A2", 1]);
+});
+
+test("uscita o un altro account in un'altra scheda: questa smette di usare la sessione", async () => {
+  const t = { now: 1_000_000_000_000 };
+  const storage = signedIn(t);
+  const net = rotatingAuth();
+  const a = tabsOn(storage, net, t);
+  const seen = [];
+  a.onChange((s) => seen.push(s?.access_token ?? null));
+  storage.setItem("studify-session", JSON.stringify({ access_token: "A9", refresh_token: "R9", expires_at: t.now / 1000 + 3600, user: { id: "u1" } }));
+  a.fireStorage();
+  assert.equal(a.session.access_token, "A9", "rinnovata altrove: si prende");
+  storage.setItem("studify-session", JSON.stringify({ access_token: "X1", refresh_token: "Y1", expires_at: t.now / 1000 + 3600, user: { id: "u2" } }));
+  a.fireStorage();
+  assert.equal(a.session, null, "un altro account: niente dati del primo con il token del secondo");
+  assert.deepEqual(seen, ["A9", null]);
+});
+
 test("registrazione: metadati del consenso e indirizzo di ritorno; conferma email richiesta", async () => {
   let sent;
   const fetchFn = async (url, init) => ((sent = { url, body: JSON.parse(init.body), headers: init.headers }), json(200, { id: "u9", email: "n@b.it" }));

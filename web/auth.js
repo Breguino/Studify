@@ -1,5 +1,8 @@
 // Accesso con Supabase Auth (API REST, senza librerie): registrazione con conferma dell'email, accesso,
 // rinnovo della sessione, recupero della password, uscita. La sessione resta in localStorage.
+// Più schede aperte condividono la sessione. Supabase accetta ogni refresh token una volta sola: se due schede rinnovano
+// ognuna con la sua copia, la seconda viene rifiutata e prima faceva uscire tutte. Ora una scheda rinnova alla volta
+// (Web Locks), e prima di rinnovare (o di arrendersi a un rifiuto) guarda se un'altra scheda l'ha già fatto.
 
 const KEY = "studify-session";
 
@@ -18,6 +21,7 @@ const MESSAGES = {
   otp_expired: "Il link è scaduto o è già stato usato: richiedine uno nuovo.",
   session_not_found: "Sessione scaduta: accedi di nuovo.",
   refresh_token_not_found: "Sessione scaduta: accedi di nuovo.",
+  refresh_token_already_used: "Sessione scaduta: accedi di nuovo.",
 };
 
 export class AuthError extends Error {
@@ -48,15 +52,33 @@ export function parseAuthHash(hash) {
   return null;
 }
 
-export function createAuth({ url, key, fetchFn = (...a) => fetch(...a), storage = globalThis.localStorage, now = () => Date.now() }) {
-  let session = null;
-  try {
-    session = JSON.parse(storage?.getItem(KEY) ?? "null");
-  } catch {
-    session = null;
-  }
+export function createAuth({
+  url, key, fetchFn = (...a) => fetch(...a), storage = globalThis.localStorage, now = () => Date.now(),
+  locks = globalThis.navigator?.locks, onStorage = (fn) => globalThis.addEventListener?.("storage", (e) => e.key === KEY && fn()),
+}) {
+  const stored = () => {
+    try {
+      return JSON.parse(storage?.getItem(KEY) ?? "null");
+    } catch {
+      return null;
+    }
+  };
+  let session = stored();
   const listeners = new Set();
   let refreshing = null;
+  const fresh = (s) => !!s?.access_token && s.expires_at - 60 > now() / 1000;
+  // una scheda alla volta rinnova (le altre aspettano e poi trovano il token nuovo); senza Web Locks, si procede
+  const exclusive = (fn) => (locks?.request ? locks.request("studify-auth-refresh", fn) : fn());
+
+  /** Sessione cambiata da un'altra scheda: la si prende senza riscriverla. Un altro account o l'uscita: niente sessione. */
+  function adopt(s) {
+    const same = s?.access_token && (!session?.user?.id || !s.user?.id || s.user.id === session.user.id);
+    const next = same ? s : null;
+    if (next?.access_token === session?.access_token) return;
+    session = next;
+    for (const fn of listeners) fn(session);
+  }
+  onStorage(() => adopt(stored()));
 
   async function call(path, { method = "POST", body, token } = {}) {
     let r;
@@ -138,14 +160,24 @@ export function createAuth({ url, key, fetchFn = (...a) => fetch(...a), storage 
     /** Token valido per le richieste (rinnovato se sta per scadere); null senza sessione. */
     async accessToken() {
       if (!session) return null;
-      if (session.expires_at - 60 > now() / 1000) return session.access_token;
-      refreshing ??= call("token?grant_type=refresh_token", { body: { refresh_token: session.refresh_token } })
-        .then((data) => save(data))
-        .catch((e) => {
-          if (e.code !== "network") save(null); // token revocato o scaduto: si torna al login
+      if (fresh(session)) return session.access_token;
+      refreshing ??= exclusive(async () => {
+        // un'altra scheda può aver già rinnovato mentre si aspettava il turno: il suo token vale anche qui
+        const other = stored();
+        if (other?.refresh_token && other.refresh_token !== session?.refresh_token) adopt(other);
+        if (!session || fresh(session)) return;
+        const used = session.refresh_token;
+        try {
+          save(await call("token?grant_type=refresh_token", { body: { refresh_token: used } }));
+        } catch (e) {
+          if (e.code === "network") throw e;
+          // rifiutato perché già usato da un'altra scheda, che intanto ha salvato quello nuovo: niente uscita
+          const now2 = stored();
+          if (now2?.refresh_token && now2.refresh_token !== used) return adopt(now2);
+          save(null); // token revocato o scaduto davvero: si torna al login
           throw e;
-        })
-        .finally(() => (refreshing = null));
+        }
+      }).finally(() => (refreshing = null));
       await refreshing;
       return session?.access_token ?? null;
     },
