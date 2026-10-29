@@ -2,10 +2,26 @@
 // Parte pura e testata; le chiamate di rete hanno `fetchFn` iniettabile. Nessuna dipendenza: API REST di Stripe con fetch.
 // Tutto è spento finché su Vercel non c'è BILLING=on: fino ad allora il credito resta quello di sempre per tutti.
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { activePlan, PAID, PLANS } from "../public/js/plans.js";
+import { activePlan, isBillingOn, PAID, PLANS } from "../public/js/plans.js";
 import { getUser, HttpError } from "./_lib.js";
 
-export const billingOn = (env) => env.BILLING === "on";
+export const billingOn = (env) => isBillingOn(env.BILLING);
+
+const PRICE_VARS = ["STRIPE_PRICE_BASE_MONTH", "STRIPE_PRICE_BASE_YEAR", "STRIPE_PRICE_PRO_MONTH", "STRIPE_PRICE_PRO_YEAR"];
+/**
+ * Che cosa manca per gli abbonamenti, senza mai un valore: solo presente/assente (e test/live dal prefisso della chiave).
+ * La dice GET /api/claude, così si capisce da fuori perché il pagamento non parte.
+ */
+export function billingSetup(env) {
+  const key = String(env.STRIPE_SECRET_KEY ?? "");
+  return {
+    billing: env.BILLING == null || env.BILLING === "" ? "assente" : billingOn(env) ? "on" : "valore non riconosciuto",
+    stripeKey: !key ? "assente" : key.startsWith("sk_test_") ? "test" : key.startsWith("sk_live_") ? "live" : key.startsWith("rk_") ? "chiave limitata" : "non riconosciuta",
+    webhookSecret: Boolean(env.STRIPE_WEBHOOK_SECRET),
+    prices: PRICE_VARS.filter((k) => !env[k]),
+    serviceKey: Boolean(env.SUPABASE_SERVICE_ROLE_KEY),
+  };
+}
 
 /** Credito di Claude al mese (dollari) per un piano. Senza abbonamenti attivi resta USER_MONTHLY_LIMIT_USD (3 $). */
 export function planLimit(env, plan) {

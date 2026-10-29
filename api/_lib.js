@@ -1,7 +1,7 @@
 // Parte pura della funzione /api/claude (Vercel): controlli, costi e chiamate a Supabase.
 // I file con «_» in api/ non diventano endpoint.
 import { activePlan } from "../public/js/plans.js";
-import { billingOn, planLimit, readSubscription } from "./_billing.js";
+import { billingOn, billingSetup, planLimit, readSubscription } from "./_billing.js";
 
 export const MAX_PROMPT_BYTES = 262_144; // come la capability `sample` delle pagine Claude
 export const MAX_IMAGES = 3; // il corpo di una richiesta a Vercel non può superare 4,5 MB
@@ -176,7 +176,7 @@ export function createHandler({ env, anthropic, fetchFn = fetch, log = console.e
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       res.setHeader("Cache-Control", "no-store");
-      const out = { limits: { user: limits(env).user }, configured: Boolean(env.ANTHROPIC_API_KEY && env.SUPABASE_SERVICE_ROLE_KEY), model, billing: billingOn(env), plan: "free" };
+      const out = { limits: { user: limits(env).user }, configured: Boolean(env.ANTHROPIC_API_KEY && env.SUPABASE_SERVICE_ROLE_KEY), model, billing: billingOn(env), plan: "free", setup: billingSetup(env) };
       const token = /^Bearer (.+)$/.exec(req.headers?.authorization ?? "")?.[1];
       if (token && env.SUPABASE_URL && await getUser(env, token, fetchFn).catch(() => null)) {
         const { plan, limit, sub } = await userPlan(env, token, fetchFn);

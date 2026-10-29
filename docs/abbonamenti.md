@@ -44,6 +44,9 @@ I prezzi mostrati stanno in `public/js/plans.js`; quelli addebitati sono i «Pri
    incollate in chat. Il webhook, per le anteprime protette da Vercel, ha bisogno dell'URL di produzione o di un
    «Protection Bypass»; per una prova semplice puoi mettere le variabili anche su «Production» con `BILLING=on`
    per qualche minuto, e toglierle subito dopo.
+   **Controllo:** apri `https://<il tuo sito>/api/claude`. In `setup` vedi che cosa trova il sito, senza i valori:
+   `billing` deve essere `"on"` (vale anche `On`, `true`, `1`), `stripeKey` `"test"`, `webhookSecret` `true`, `prices` vuoto
+   (altrimenti elenca i prezzi che mancano), `serviceKey` `true`. Le variabili valgono solo dopo un *Redeploy*.
 6. **Prova.** Apri l'app → *Account* → scegli Base o Pro → spunta la conferma → paga con la carta di test
    `4242 4242 4242 4242`, una data futura qualsiasi e un CVC qualsiasi. Tornato nell'app, l'account deve dire
    «Piano Base mensile · si rinnova il …», e «Gestisci abbonamento» deve aprire il portale di Stripe.

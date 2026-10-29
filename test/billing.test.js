@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { activePlan, euro, planLine, PLANS, yearSaving } from "../public/js/plans.js";
+import { isBillingOn } from "../public/js/plans.js";
 import {
-  createBillingHandler, createWebhookHandler, planFromPrice, planLimit, signForTest, subscriptionRow, verifyStripeSignature,
+  billingSetup, createBillingHandler, createWebhookHandler, planFromPrice, planLimit, signForTest, subscriptionRow, verifyStripeSignature,
 } from "../api/_billing.js";
 import { authorize, createHandler } from "../api/_lib.js";
 
@@ -247,4 +248,20 @@ test("webhook: corpo grezzo letto dal flusso della richiesta", async () => {
   const res = fakeRes();
   await createWebhookHandler({ env: ENV, fetchFn: fakeNet().fetchFn })(stream, res);
   assert.equal(res.body.ignored, "invoice.paid");
+});
+
+test("BILLING: accesi anche con On, true, 1, sì; spenti con tutto il resto", () => {
+  for (const v of ["on", "On", "ON", " on ", "true", "TRUE", "1", "yes", "sì", "si"]) assert.equal(isBillingOn(v), true, v);
+  for (const v of [undefined, null, "", "off", "0", "false", "no", "onn"]) assert.equal(isBillingOn(v), false, String(v));
+});
+
+test("diagnosi degli abbonamenti in GET /api/claude: solo presente/assente, mai un valore", async () => {
+  assert.deepEqual(billingSetup({}), { billing: "assente", stripeKey: "assente", webhookSecret: false, prices: ["STRIPE_PRICE_BASE_MONTH", "STRIPE_PRICE_BASE_YEAR", "STRIPE_PRICE_PRO_MONTH", "STRIPE_PRICE_PRO_YEAR"], serviceKey: false });
+  assert.equal(billingSetup({ BILLING: "acceso" }).billing, "valore non riconosciuto");
+  assert.equal(billingSetup({ STRIPE_SECRET_KEY: "sk_live_x" }).stripeKey, "live");
+  const res = fakeRes();
+  await createHandler({ env: { ...ENV, STRIPE_SECRET_KEY: "sk_test_SEGRETO", STRIPE_WEBHOOK_SECRET: "whsec_SEGRETO" }, anthropic: null, fetchFn: fakeNet().fetchFn })(req({ method: "GET", token: null }), res);
+  const b = res.body;
+  assert.deepEqual(b.setup, { billing: "on", stripeKey: "test", webhookSecret: true, prices: [], serviceKey: true });
+  assert.ok(!/SEGRETO|price_|whsec_|sk_test_|"service"/.test(JSON.stringify(b)), "nessun valore delle variabili esce dal server");
 });
