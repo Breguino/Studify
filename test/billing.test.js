@@ -64,7 +64,7 @@ test("piani: frase per l'account (rinnovo, disdetta, pagamento non riuscito)", (
 
 test("credito per piano: senza abbonamenti attivi resta quello di sempre (3 $)", () => {
   assert.equal(planLimit({}, "free"), 3);
-  assert.equal(planLimit({ BILLING: "on" }, "free"), 0.5);
+  assert.equal(planLimit({ BILLING: "on" }, "free"), 1); // un modulo intero costa circa 0,55-0,70 $: con meno si fermerebbe a metà
   assert.equal(planLimit({}, "pro"), 5);
   assert.equal(planLimit({ BILLING: "on", USER_MONTHLY_LIMIT_USD: "2" }, "free"), 2);
   assert.equal(planLimit({}, "base"), 3);
