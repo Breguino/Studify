@@ -47,6 +47,61 @@ end $$;
 -- la versione precedente, chiamabile dagli utenti con il loro token: da togliere nei progetti già creati
 drop function if exists public.record_ai_usage(bigint, bigint, numeric);
 
+-- 2b. Richieste a Claude in corso: il costo stimato è «prenotato» prima di chiamare Claude e saldato alla fine.
+--     Senza, il consumo si registra solo a risposta finita: tante richieste partite insieme passerebbero tutte il
+--     controllo del credito e lo supererebbero di molto. Una prenotazione più vecchia di 10 minuti (la funzione Vercel
+--     dura al massimo 5) non conta più: una richiesta interrotta non blocca il credito. Solo la chiave di servizio.
+create table if not exists public.ai_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  reserved_usd numeric(12, 6) not null check (reserved_usd >= 0),
+  started_at timestamptz not null default now()
+);
+alter table public.ai_requests enable row level security; -- nessuna policy: gli utenti non la vedono
+create index if not exists ai_requests_user on public.ai_requests (user_id);
+
+-- Prenota `p_reserve` dollari se il credito lo permette (spesa del mese + prenotazioni aperte sotto il limite) e se l'utente
+-- non ha già `p_max_open` richieste in corso. `p_total_limit` (solo per il piano Gratis): il tetto di tutto il servizio.
+-- Restituisce l'id della prenotazione, oppure il motivo del no: busy, quota, pending (credito già prenotato), total.
+-- Il lucchetto rende il controllo e la prenotazione un passo solo, anche con molte richieste insieme.
+create or replace function public.begin_ai_request(p_user uuid, p_reserve numeric, p_limit numeric, p_total_limit numeric, p_max_open integer)
+returns table (request_id uuid, reason text) language plpgsql security definer set search_path = '' as $$
+declare
+  v_month date := date_trunc('month', now())::date;
+  v_spent numeric;
+  v_open numeric;
+  v_count integer;
+  v_id uuid;
+begin
+  if p_user is null or p_reserve is null or p_reserve < 0 or p_limit is null then raise exception 'valori non validi'; end if;
+  perform pg_advisory_xact_lock(hashtext('studify.ai_requests'));
+  delete from public.ai_requests where started_at < now() - interval '10 minutes';
+  select coalesce(sum(reserved_usd), 0), count(*) into v_open, v_count from public.ai_requests where user_id = p_user;
+  if v_count >= p_max_open then return query select null::uuid, 'busy'::text; return; end if;
+  select coalesce((select cost_usd from public.ai_usage where user_id = p_user and month = v_month), 0) into v_spent;
+  if v_spent >= p_limit then return query select null::uuid, 'quota'::text; return; end if;
+  if v_spent + v_open >= p_limit then return query select null::uuid, 'pending'::text; return; end if;
+  if p_total_limit is not null and
+     (select coalesce(sum(cost_usd), 0) from public.ai_usage where month = v_month)
+     + (select coalesce(sum(reserved_usd), 0) from public.ai_requests) >= p_total_limit
+  then return query select null::uuid, 'total'::text; return; end if;
+  insert into public.ai_requests (user_id, reserved_usd) values (p_user, p_reserve) returning id into v_id;
+  return query select v_id, null::text;
+end $$;
+
+-- Fine della richiesta: toglie la prenotazione e registra il consumo vero (se c'è stato).
+create or replace function public.finish_ai_request(p_request uuid, p_user uuid, p_input bigint, p_output bigint, p_cost numeric)
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  delete from public.ai_requests where id = p_request and user_id = p_user;
+  if p_input > 0 or p_output > 0 or p_cost > 0 then perform public.record_ai_usage_for(p_user, p_input, p_output, p_cost); end if;
+end $$;
+
+revoke all on function public.begin_ai_request(uuid, numeric, numeric, numeric, integer) from public, anon, authenticated;
+revoke all on function public.finish_ai_request(uuid, uuid, bigint, bigint, numeric) from public, anon, authenticated;
+grant execute on function public.begin_ai_request(uuid, numeric, numeric, numeric, integer) to service_role;
+grant execute on function public.finish_ai_request(uuid, uuid, bigint, bigint, numeric) to service_role;
+
 -- security definer voluto: la propria spesa; il totale del servizio (per il tetto complessivo) solo alla chiave di
 -- servizio, cioè alla funzione Vercel. A un utente il totale torna vuoto: quanto spende Studify non gli serve.
 create or replace function public.ai_spend_this_month()
