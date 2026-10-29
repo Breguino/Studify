@@ -129,6 +129,54 @@ export async function recordUsage(env, userId, { input, output, cost }, fetchFn 
   if (!r.ok) throw new Error(`record_ai_usage_for: ${r.status}`);
 }
 
+// Richieste a Claude in corso nello stesso momento per utente: l'app ne fa al più 2 (artifact/generate.js), 4 lascia
+// spazio a due schede o due dispositivi. Con la prenotazione, è anche il massimo di cui si può sforare il credito.
+export const MAX_OPEN_REQUESTS = 4;
+const OUTPUT_ESTIMATE = 8000; // token di risposta prenotati: più di una risposta tipica, meno del massimo (maxTokens)
+
+/** Costo stimato di una richiesta, da prenotare prima di chiamare Claude: ingresso da quello che c'è, uscita stimata. */
+export function reserveUsd(model, { prompt, images = [] }, maxTokens) {
+  // ~3 byte per token (stima prudente per l'italiano), ~1600 token per immagine
+  const input = Math.ceil(Buffer.byteLength(prompt, "utf8") / 3) + images.length * 1600;
+  return Number(costUsd(model, { input_tokens: input, output_tokens: Math.min(maxTokens, OUTPUT_ESTIMATE) }).toFixed(6));
+}
+
+const service = (env) => ({ apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" });
+
+/**
+ * Prenota il costo stimato in Supabase (begin_ai_request: controllo del credito e prenotazione in un passo solo).
+ * Restituisce l'id della prenotazione; null se la funzione non c'è ancora nel database (schema da aggiornare:
+ * resta il controllo di authorize, che con molte richieste insieme si può superare); HttpError se il credito non basta.
+ */
+export async function reserve(env, { userId, plan, limit, amount }, fetchFn = fetch, log = console.error) {
+  const r = await fetchFn(`${env.SUPABASE_URL}/rest/v1/rpc/begin_ai_request`, {
+    method: "POST",
+    headers: service(env),
+    body: JSON.stringify({ p_user: userId, p_reserve: amount, p_limit: limit, p_total_limit: plan === "free" ? limits(env).total : null, p_max_open: MAX_OPEN_REQUESTS }),
+  });
+  if (r.status === 404) {
+    log("begin_ai_request mancante: esegui la parte 2b di supabase/schema.sql");
+    return null;
+  }
+  if (!r.ok) throw new HttpError(503, "server_error", "Non riesco a leggere il consumo.");
+  const { request_id: id, reason } = (await r.json())?.[0] ?? {};
+  if (id) return id;
+  if (reason === "busy") throw new HttpError(429, "rate_limited", "Troppe richieste a Claude nello stesso momento: aspetta che finiscano quelle in corso.");
+  if (reason === "pending") throw new HttpError(429, "quota_exceeded", "Il credito di Claude di questo mese sta per finire: lo usano già le richieste in corso. Riprova quando sono finite.");
+  if (reason === "total") throw new HttpError(429, "quota_exceeded", "Il credito di Claude di Studify per questo mese è esaurito: riprova il mese prossimo.");
+  throw new HttpError(429, "quota_exceeded", "Hai usato tutto il credito di Claude di questo mese: si rinnova il primo del mese.");
+}
+
+/** Fine della richiesta: toglie la prenotazione e registra il consumo vero (finish_ai_request). */
+export async function finish(env, { id, userId, input, output, cost }, fetchFn = fetch) {
+  const r = await fetchFn(`${env.SUPABASE_URL}/rest/v1/rpc/finish_ai_request`, {
+    method: "POST",
+    headers: service(env),
+    body: JSON.stringify({ p_request: id, p_user: userId, p_input: input, p_output: output, p_cost: Number(cost.toFixed(6)) }),
+  });
+  if (!r.ok) throw new Error(`finish_ai_request: ${r.status}`);
+}
+
 /**
  * Limiti di spesa in dollari al mese (variabili d'ambiente su Vercel). `user` è quello del piano Gratis;
  * gli abbonati hanno il credito del loro piano (api/_billing.js). Il tetto `total` vale solo per chi non paga.
@@ -155,7 +203,7 @@ export async function authorize(env, authHeader, fetchFn = fetch) {
   const upsell = plan === "free" && billingOn(env) ? " Con un abbonamento il credito è più alto: Account → Abbonamento." : "";
   if (spend.mine >= limit) throw new HttpError(429, "quota_exceeded", `Hai usato tutto il credito di Claude di questo mese: si rinnova il primo del mese.${upsell}`);
   if (plan === "free" && spend.total >= limits(env).total) throw new HttpError(429, "quota_exceeded", `Il credito di Claude di Studify per questo mese è esaurito: riprova il mese prossimo.${upsell}`);
-  return { user, token, plan };
+  return { user, token, plan, limit };
 }
 
 /**
@@ -188,11 +236,13 @@ export function createHandler({ env, anthropic, fetchFn = fetch, log = console.e
     if (req.method !== "POST") return fail(405, "bad_request", "Usa POST.");
     // senza la chiave di servizio il consumo non si registrerebbe: meglio fermarsi che lasciare il credito senza limiti
     if (!env.SUPABASE_URL || !env.SUPABASE_KEY || !env.SUPABASE_SERVICE_ROLE_KEY) return fail(503, "sampling_disabled", "Server non configurato.");
-    let auth, body;
+    let auth, body, reservation;
     try {
       auth = await authorize(env, req.headers?.authorization, fetchFn);
       if (!env.ANTHROPIC_API_KEY) throw new HttpError(503, "sampling_disabled", "Claude non è ancora configurato su questo server.");
       body = readBody(req.body);
+      // il controllo di authorize guarda solo la spesa già registrata: la prenotazione conta anche le richieste in corso
+      reservation = await reserve(env, { userId: auth.user.id, plan: auth.plan, limit: auth.limit, amount: reserveUsd(model, body, maxTokens) }, fetchFn, log);
     } catch (e) {
       return e instanceof HttpError ? fail(e.status, e.code, e.message) : (log(e), fail(500, "server_error"));
     }
@@ -227,9 +277,9 @@ export function createHandler({ env, anthropic, fetchFn = fetch, log = console.e
     } finally {
       // il consumo si registra anche se la risposta si è interrotta: i token sono stati pagati
       const input = usage.input_tokens + usage.cache_creation_input_tokens + usage.cache_read_input_tokens;
-      if (input || usage.output_tokens) {
-        await recordUsage(env, auth.user.id, { input, output: usage.output_tokens, cost: costUsd(usage.model, usage) }, fetchFn).catch(log);
-      }
+      const used = { input, output: usage.output_tokens, cost: costUsd(usage.model, usage) };
+      if (reservation) await finish(env, { id: reservation, userId: auth.user.id, ...used }, fetchFn).catch(log);
+      else if (input || usage.output_tokens) await recordUsage(env, auth.user.id, used, fetchFn).catch(log);
       res.end();
     }
   };
