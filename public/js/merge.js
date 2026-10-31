@@ -82,5 +82,26 @@ export function mergeStates({ base, local, remote, copySuffix = "da questo dispo
   return { state, conflicts, changed: !same(state, local) };
 }
 
+// Svuota `target` e ci copia `source`, così chi tiene in mano `target` vede i dati nuovi.
+const refill = (target, source) => {
+  for (const k of Object.keys(target)) if (!(k in source)) delete target[k];
+  return Object.assign(target, source);
+};
+
+/**
+ * Mette lo stato unito al posto di quello in memoria aggiornando gli oggetti che ci sono già (stesso id), invece di
+ * sostituirli: chi ne tiene uno in mano mentre aspetta (una generazione con Claude che dura minuti, una sessione di
+ * ripasso) scrive ancora nello stato vero, e il suo lavoro non finisce in un oggetto che nessuno salva più.
+ */
+export function applyMerged(target, merged) {
+  const live = new Map((target.exams ?? []).map((e) => [e.id, e]));
+  target.exams = merged.exams.map((m) => {
+    const e = live.get(m.id);
+    return !e || e === m ? m : refill(e, m);
+  });
+  const p = target.profile;
+  target.profile = p && merged.profile && p !== merged.profile ? refill(p, merged.profile) : merged.profile;
+}
+
 /** L'avviso per chi studia quando un esame è diventato due copie. */
 export const conflictMessage = (names) => `${names.map((n) => `«${n}»`).join(", ")}: ${names.length === 1 ? "l'hai modificato" : "li hai modificati"} sia qui sia su un altro dispositivo. Ho tenuto la versione online e aggiunto quella di questo dispositivo come copia «(da questo dispositivo)»: tieni quella giusta ed elimina l'altra.`;
