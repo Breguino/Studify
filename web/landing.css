@@ -71,6 +71,59 @@ h2.cd-exam { margin: 0; line-height: 1.3; }
 .cd-task b { min-width: 0; overflow-wrap: anywhere; }
 .cd-note { margin: 0; font-size: .85rem; color: var(--muted); }
 
+/* menu delle pagine pubbliche (generato dalla build): voci in riga su computer, «Menu» a tendina sul telefono */
+.site-nav { gap: 4px; }
+.site-nav .row { gap: 4px; }
+.hero-band .btn[aria-current="page"] { color: #fff; background: rgba(255, 255, 255, .12); }
+.show-sm { display: none; }
+.site-menu { position: relative; }
+.site-menu summary { list-style: none; cursor: pointer; }
+.site-menu summary::-webkit-details-marker { display: none; }
+.site-menu-panel { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; min-width: 200px; display: grid; gap: 2px; padding: 8px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 18px 50px rgba(8, 6, 40, .3); }
+.hero-band .site-menu-panel .btn.ghost { justify-content: flex-start; color: var(--text); }
+.hero-band .site-menu-panel .btn.ghost:hover { background: var(--surface-2); color: var(--text); }
+.hero-band .site-menu-panel .btn[aria-current="page"] { background: var(--brand-soft); color: var(--brand); }
+@media (max-width: 680px) { .show-sm { display: block; } }
+
+/* intestazione delle pagine interne (funzionalità, prezzi) */
+.page-hero { display: grid; gap: 16px; padding-top: 56px; padding-bottom: 72px; }
+.page-hero h1 { font-size: clamp(2.1rem, 5vw, 3.4rem); line-height: 1.05; font-weight: 900; letter-spacing: -.035em; margin: 0; max-width: 16em; }
+.page-hero .lead { font-size: 1.15rem; color: var(--hero-muted); max-width: 36em; margin: 0; }
+.page-hero .kicker { color: var(--hero-muted); }
+.jump { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.jump a { display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px; background: rgba(255, 255, 255, .1); color: #fff; font-weight: 600; font-size: .92rem; text-decoration: none; }
+.jump a:hover { background: rgba(255, 255, 255, .18); }
+
+/* una funzione per sezione: testo da una parte, l'app in piccolo dall'altra (alternati) */
+.feature { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: center; padding-top: 72px; padding-bottom: 72px; scroll-margin-top: 16px; }
+.feature + .feature { border-top: 1px solid var(--line); }
+.feature > div { display: grid; gap: 14px; align-content: start; min-width: 0; }
+.feature.flip > .tour-panel { order: -1; }
+.feature .tour-panel { min-height: 0; }
+.feature .checks { margin-top: 6px; }
+@media (max-width: 820px) {
+  .feature { grid-template-columns: minmax(0, 1fr); gap: 28px; padding-top: 52px; padding-bottom: 52px; }
+  .feature.flip > .tour-panel { order: 0; }
+}
+
+/* prezzi: cosa c'è in ogni piano */
+.plan-table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.plan-table th, .plan-table td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+.plan-table tr:last-child > * { border-bottom: 0; }
+.plan-table thead th { background: var(--surface-2); font-size: .9rem; }
+.plan-table td:not(:first-child), .plan-table th:not(:first-child) { text-align: center; width: 18%; }
+.plan-table tbody th { color: var(--text); font-size: 1rem; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.plan-table td { font-size: .95rem; }
+.plan-table .yes { color: var(--good); font-weight: 800; }
+.plan-table small { display: block; color: var(--muted); font-weight: 400; }
+.table-wrap { overflow-x: auto; }
+@media (max-width: 560px) {
+  .plan-table th, .plan-table td { padding: 10px 8px; }
+  .plan-table tbody th { font-size: .9rem; }
+  .plan-table td { font-size: .85rem; }
+  .plan-table td:not(:first-child), .plan-table th:not(:first-child) { width: 17%; }
+}
+
 /* materiali */
 .chips-band { background: var(--surface); border-bottom: 1px solid var(--line); }
 .chips-row { padding-top: 26px; padding-bottom: 26px; gap: 12px 24px; }
@@ -156,6 +209,14 @@ h2.cd-exam { margin: 0; line-height: 1.3; }
 .mock-score b { font-size: 2.6rem; line-height: 1; font-weight: 900; letter-spacing: -.03em; color: var(--brand); }
 .mock-score span { font-weight: 700; color: var(--muted); }
 .mock-score .badge { margin-left: auto; align-self: center; }
+
+.mock.doc .doc-p { margin: 0; line-height: 1.6; }
+.doc-src { color: var(--brand); font-weight: 600; }
+.doc-lines { display: grid; gap: 7px; }
+.doc-lines i { height: 8px; border-radius: 99px; background: var(--surface-2); }
+.doc-lines i.short { width: 62%; }
+.mock .addition-card { padding: 12px 14px; border-radius: 12px; }
+.mock .art-oral { display: grid; gap: 8px; }
 
 /* «Cosa ottieni»: griglia di schede (bento) */
 .section-band { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }

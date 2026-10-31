@@ -11,6 +11,14 @@
     {
       "source": "/app",
       "destination": "/app.html"
+    },
+    {
+      "source": "/funzionalita",
+      "destination": "/funzionalita.html"
+    },
+    {
+      "source": "/prezzi",
+      "destination": "/prezzi.html"
     }
   ],
   "functions": {
