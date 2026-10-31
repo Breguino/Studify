@@ -162,3 +162,30 @@ test("due dispositivi: offline qui, online sul telefono; al ritorno della rete s
   assert.deepEqual(cloud.stored.exams.map((e) => e.n), [1, 5]);
   assert.deepEqual(merged.at(-1)?.exams.map((e) => e.n), [1, 5], "l'app mostra anche il lavoro del telefono");
 });
+
+test("ritorno della rete: una modifica fatta mentre si unisce non va persa (né online né nell'app)", async () => {
+  const cloud = fakeCloud(two(0, 0));
+  const pcLocal = fakeLocal();
+  await withLocalCopy({ cloud, local: pcLocal, uid: async () => "u1" }).init();
+  cloud.up = false;
+  const merged = [];
+  const pc = withLocalCopy({ cloud, local: pcLocal, uid: async () => "u1", onMerge: (s) => merged.push(s) });
+  await pc.init(); // senza rete: la copia
+  await pc.write(two(1, 0)); // Analisi, offline
+  cloud.up = true;
+  const phone = withLocalCopy({ cloud, local: fakeLocal(), uid: async () => "u1" });
+  await phone.init();
+  await phone.write(two(0, 5)); // intanto il telefono: Fisica
+  // torna la rete: la rilettura online è lenta, e intanto si studia ancora sul computer
+  let open;
+  const slow = new Promise((r) => (open = r));
+  const init = cloud.init;
+  cloud.init = async () => { await slow; return init(); };
+  const back = pc.retry();
+  await pc.stage(two(2, 0)); // ancora Analisi, mentre l'unione aspetta
+  open();
+  await back;
+  await pc.retry(); // l'eventuale salvataggio ancora in sospeso
+  assert.deepEqual(cloud.stored.exams.map((e) => e.n), [2, 5], "online: l'ultima modifica di qui e il lavoro del telefono");
+  assert.deepEqual(merged.at(-1)?.exams.map((e) => e.n), [2, 5], "l'app riceve l'unione con l'ultima modifica, non quella vecchia");
+});

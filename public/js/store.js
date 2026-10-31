@@ -3,6 +3,7 @@
 import { MissingFileError } from "./files.js";
 import { backend } from "./backend.js";
 import { today } from "./dates.js";
+import { applyMerged } from "./merge.js";
 
 const VERSION = 1;
 
@@ -46,7 +47,7 @@ export async function flush() {
 }
 addEventListener("pagehide", flush);
 // unione con le modifiche fatte su un altro dispositivo mentre l'app era aperta (artifact/backend.js, web/offline.js)
-addEventListener("studify:merged", (e) => { state.exams = e.detail.exams; state.profile = e.detail.profile; });
+addEventListener("studify:merged", (e) => applyMerged(state, e.detail)); // gli oggetti restano gli stessi (public/js/merge.js)
 addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") flush();
   // di nuovo in vista (l'app è rimasta aperta mentre si studiava su un altro dispositivo): si riprende quel lavoro

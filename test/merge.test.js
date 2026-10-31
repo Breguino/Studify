@@ -88,3 +88,23 @@ test("unione: lo stesso esame con i campi in un altro ordine non è una modifica
   assert.deepEqual(r.conflicts, []);
   assert.equal(r.state, local, "online fermo: vale la copia locale, con il materiale nuovo");
 });
+
+test("unione nell'app: gli esami restano gli stessi oggetti, così una generazione in corso non scrive nel vuoto", async () => {
+  const { applyMerged } = await import("../public/js/merge.js");
+  const analisi = ex("a", "Analisi", { learned: {}, old: 1 });
+  const fisica = ex("b", "Fisica");
+  const profile = { university: "Bologna" };
+  const state = st(analisi, fisica);
+  state.profile = profile;
+  const held = state.exams[0]; // come la generazione del modulo, che aspetta Claude con l'esame in mano
+  // arriva l'unione: Analisi con un argomento studiato altrove, Fisica cancellata, Chimica nuova, profilo cambiato
+  applyMerged(state, { ...st(ex("a", "Analisi", { learned: { t1: true } }), ex("c", "Chimica")), profile: { university: "Padova" } });
+  assert.equal(state.exams[0], held, "stesso oggetto di prima");
+  assert.deepEqual(held.learned, { t1: true }, "con i dati uniti");
+  assert.equal("old" in held, false, "i campi tolti dall'unione spariscono");
+  assert.deepEqual(state.exams.map((e) => e.id), ["a", "c"]);
+  assert.equal(state.profile, profile);
+  assert.equal(profile.university, "Padova");
+  held.module = { topics: ["nuovo"] }; // la generazione finisce adesso
+  assert.deepEqual(state.exams[0].module, { topics: ["nuovo"] }, "il modulo generato è nello stato che si salva");
+});
