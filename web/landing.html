@@ -101,25 +101,99 @@
 
   <section id="come" class="wrap section">
     <span class="kicker">Come funziona</span>
-    <h2 class="section-title">Dai materiali al giorno dell'esame, in tre passi.</h2>
-    <div class="steps">
-      <div class="card flat step">
-        <div class="step-art art-files" aria-hidden="true"><span>Dispense.pdf</span><span>Lezione 4.vtt</span><span>Esame 2024</span></div>
-        <span class="step-n">1</span>
-        <h3>Carica i tuoi materiali</h3>
-        <p class="muted">PDF, Word, PowerPoint, foto degli appunti scritti a mano, trascrizioni delle lezioni, esami degli anni passati.</p>
+    <h2 class="section-title">Dai materiali al giorno dell'esame.</h2>
+    <p class="section-lead">Tu porti i materiali del corso. Studify li trasforma in quello che serve per studiare, e ogni giorno ti dice cosa fare.</p>
+    <!-- Su computer, con JavaScript: passi a sinistra, l'app a destra (script in fondo). Sul telefono e senza JavaScript:
+         ogni passo con la sua immagine sotto. Le immagini sono l'app ridisegnata in piccolo, non screenshot. -->
+    <div class="tour" data-tour>
+      <div class="tour-item on">
+        <button class="tour-head" type="button" aria-controls="tour-1" aria-expanded="true"><b>Carica i materiali</b><span>Dispense, slide, foto degli appunti, registrazioni delle lezioni, esami passati.</span><i class="tour-bar" aria-hidden="true"></i></button>
+        <div class="tour-panel" id="tour-1">
+          <div class="mock" aria-hidden="true">
+            <div class="mock-top"><b>Materiali · Microeconomia</b><span class="badge good">3 pronti</span></div>
+            <div class="mock-drop">Trascina qui PDF, Word, slide o foto</div>
+            <div class="mock-file"><span class="mock-ico">PDF</span><b>Dispense Micro 2026.pdf</b><em class="badge brand">Dispense del docente</em></div>
+            <div class="mock-file"><span class="mock-ico">MP3</span><b>Lezione 4 · registrazione</b><em class="badge brand">Sbobine</em></div>
+            <div class="mock-file"><span class="mock-ico">JPG</span><b>Appunti a mano · 6 foto</b><em class="badge brand">Appunti</em></div>
+            <div class="mock-file"><span class="mock-ico">PDF</span><b>Appello giugno 2025.pdf</b><em class="badge warn">Esami passati</em></div>
+          </div>
+        </div>
       </div>
-      <div class="card flat step">
-        <div class="step-art art-module" aria-hidden="true"><span><b>Elasticità della domanda</b><em class="ok">dal docente</em></span><span><b>Monopolio</b><em class="check">da verificare</em></span></div>
-        <span class="step-n">2</span>
-        <h3>Ottieni argomenti, flashcard e quiz</h3>
-        <p class="muted">Ricavati dai tuoi materiali, con la fonte. Quello che non viene dai materiali è segnato a parte.</p>
+      <div class="tour-item">
+        <button class="tour-head" type="button" aria-controls="tour-2" aria-expanded="false"><b>Argomenti, flashcard e quiz</b><span>Ricavati dai tuoi materiali, con la fonte. Le frasi del docente restano come sono.</span><i class="tour-bar" aria-hidden="true"></i></button>
+        <div class="tour-panel" id="tour-2">
+          <div class="mock" aria-hidden="true">
+            <div class="mock-top"><b>Elasticità della domanda</b><span class="badge bad">Il docente ne parla per l'esame</span></div>
+            <div class="mock-q">Se la domanda è anelastica, un aumento del prezzo…</div>
+            <div class="mock-opt wrong"><span>A</span>riduce la spesa totale</div>
+            <div class="mock-opt right"><span>B</span>aumenta la spesa totale<em>Corretta</em></div>
+            <div class="mock-why"><b>Perché.</b> La quantità scende meno che in proporzione al prezzo.<small>Fonte: Dispense Micro 2026, cap. 4</small></div>
+          </div>
+        </div>
       </div>
-      <div class="card flat step">
-        <div class="step-art art-plan" aria-hidden="true"><i style="height:40%"></i><i style="height:55%"></i><i style="height:50%"></i><i style="height:75%"></i><i style="height:65%"></i><i style="height:90%"></i><span class="badge bad">esame</span></div>
-        <span class="step-n">3</span>
-        <h3>Segui il piano fino all'esame</h3>
-        <p class="muted">Ogni giorno sai cosa fare e quanto tempo serve: prima lettura, ripasso, simulazioni d'esame a tempo.</p>
+      <div class="tour-item">
+        <button class="tour-head" type="button" aria-controls="tour-3" aria-expanded="false"><b>Un piano fino all'appello</b><span>Ogni giorno sai cosa fare e quanto tempo serve. Se salti un giorno, il piano si adatta.</span><i class="tour-bar" aria-hidden="true"></i></button>
+        <div class="tour-panel" id="tour-3">
+          <div class="mock" aria-hidden="true">
+            <div class="mock-top"><b>Oggi · 50 minuti</b><span class="badge warn">esame tra 21 giorni</span></div>
+            <div class="mock-days"><span class="on">oggi</span><span>lun</span><span>mar</span><span>mer</span><span>gio</span><span>ven</span></div>
+            <div class="mock-task done"><i>✓</i><b>Flashcard del giorno</b><span>15′</span></div>
+            <div class="mock-task now"><i></i><b>Studia: Domanda, offerta ed equilibrio</b><span>35′</span></div>
+            <div class="mock-task"><i></i><b>Quiz: Elasticità</b><span>10′</span></div>
+            <div class="mock-meter"><span>Argomenti studiati</span><b>4 di 12</b><div class="bar"><div style="width:33%"></div></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="tour-item">
+        <button class="tour-head" type="button" aria-controls="tour-4" aria-expanded="false"><b>Simulazioni d'esame</b><span>Le prove degli anni passati, a tempo come all'appello, con la correzione.</span><i class="tour-bar" aria-hidden="true"></i></button>
+        <div class="tour-panel" id="tour-4">
+          <div class="mock" aria-hidden="true">
+            <div class="mock-top"><b>Appello giugno 2025</b><span class="mock-timer">42:17</span></div>
+            <div class="mock-q">Esercizio 2 · Un monopolista ha costo marginale costante pari a 10…</div>
+            <div class="mock-score"><b>26</b><span>/30</span><em class="badge good">superato</em></div>
+            <div class="mock-task done"><i>✓</i><b>Esercizio 1 · Equilibrio</b><span>8/8</span></div>
+            <div class="mock-task warn"><i>!</i><b>Esercizio 2 · Monopolio</b><span>5/8</span></div>
+            <div class="mock-why"><b>Da rivedere:</b> il ricavo marginale, con il commento della correzione.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-band">
+    <div class="wrap section">
+      <span class="kicker">Cosa ottieni</span>
+      <h2 class="section-title">Tutto per l'esame, dai tuoi materiali.</h2>
+      <p class="section-lead">Non modelli uguali per tutti: ogni cosa parte da quello che hai caricato tu.</p>
+      <div class="bento">
+        <article class="card flat tile wide">
+          <h3>Flashcard che tornano al momento giusto</h3>
+          <p class="muted small">Le rivedi quando stai per dimenticarle, fino al giorno dell'esame.</p>
+          <div class="tile-art art-card" aria-hidden="true">
+            <div class="mini-fc"><small>Domanda</small><b>Che cosa succede al prezzo se l'offerta aumenta?</b><small class="ans">Risposta</small><span>Scende, finché domanda e offerta tornano uguali.</span></div>
+            <div class="mini-grades"><span>Di nuovo<small>1 min</small></span><span>Difficile<small>1 g</small></span><span class="good">Bene<small>3 g</small></span><span>Facile<small>6 g</small></span></div>
+          </div>
+        </article>
+        <article class="card flat tile">
+          <h3>Quiz con la fonte</h3>
+          <p class="muted small">Ogni risposta dice da quale materiale viene.</p>
+          <div class="tile-art art-src" aria-hidden="true"><span class="badge good">dal docente</span><b>Fonte: Dispense, cap. 4</b><span class="badge warn">da verificare</span></div>
+        </article>
+        <article class="card flat tile">
+          <h3>Una dispensa da stampare</h3>
+          <p class="muted small">Gli argomenti in ordine, scritti a partire dai tuoi materiali.</p>
+          <div class="tile-art art-doc" aria-hidden="true"><b>Cap. 3 · Elasticità</b><i></i><i></i><i class="short"></i><i></i><i class="short"></i></div>
+        </article>
+        <article class="card flat tile">
+          <h3>Il piano nel tuo calendario</h3>
+          <p class="muted small">Le sessioni di studio su Google Calendar, Apple o Outlook.</p>
+          <div class="tile-art art-cal" aria-hidden="true"><span>lun<b>50′</b></span><span>mar<b>70′</b></span><span>mer<b>75′</b></span><span class="exam">sab<b>esame</b></span></div>
+        </article>
+        <article class="card flat tile">
+          <h3>Interrogazioni come all'orale</h3>
+          <p class="muted small">Le domande del docente, da ripetere ad alta voce o con i compagni.</p>
+          <div class="tile-art art-oral" aria-hidden="true"><span class="ask">Mi spieghi il monopolio con un grafico?</span><span class="you">Il monopolista sceglie la quantità dove…</span></div>
+        </article>
       </div>
     </div>
   </section>
@@ -234,7 +308,7 @@
   // e ciascuno compare quando entra in vista. Chi ha chiesto meno movimento li vede subito.
   (() => {
     if (!("IntersectionObserver" in window) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const groups = [".section > .kicker, .section > .section-title, .section > .section-lead", ".steps > *", ".methods > *", ".split > *", ".faq > details", ".cta-band"];
+    const groups = [".section > .kicker, .section > .section-title, .section > .section-lead", ".tour-item", ".bento > *", ".methods > *", ".split > *", ".faq > details", ".cta-band"];
     const els = [];
     for (const sel of groups) document.querySelectorAll(sel).forEach((el, i) => { el.style.setProperty("--i", String(Math.min(i, 5))); els.push(el); });
     const io = new IntersectionObserver((entries) => {
@@ -246,18 +320,50 @@
       io.observe(el);
     }
     document.documentElement.classList.add("reveal");
-
-    // illustrazioni dei tre passi: si animano (.play, CSS in landing.css) quando entrano in vista
-    const play = new IntersectionObserver((entries) => {
-      for (const e of entries) if (e.isIntersecting) { e.target.classList.replace("wait", "play"); play.unobserve(e.target); }
-    }, { rootMargin: "0px 0px -15% 0px" });
-    for (const art of document.querySelectorAll(".step-art")) {
-      if (art.getBoundingClientRect().top < innerHeight) continue; // già in vista: resta ferma
-      [...art.children].forEach((c, i) => c.style.setProperty("--n", String(i)));
-      art.querySelectorAll("em").forEach((c, i) => c.style.setProperty("--n", String(i)));
-      art.classList.add("wait");
-      play.observe(art);
-    }
+  })();
+</script>
+<script>
+  // «Come funziona» su computer: passi a sinistra, l'app a destra (CSS in landing.css, html.tour-on). I passi avanzano da
+  // soli solo mentre la sezione è in vista, si fermano al passaggio del mouse o del fuoco e per sempre al primo clic.
+  // Con «movimento ridotto» niente avanzamento e niente animazioni: si sceglie il passo col clic.
+  (() => {
+    const tour = document.querySelector("[data-tour]");
+    if (!tour) return;
+    const items = [...tour.querySelectorAll(".tour-item")];
+    const wide = matchMedia("(min-width: 821px)");
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let current = 0;
+    for (const mock of tour.querySelectorAll(".mock")) [...mock.children].forEach((c, i) => c.style.setProperty("--n", String(i)));
+    const show = (i, animate) => {
+      current = i;
+      items.forEach((it, k) => {
+        const on = k === i;
+        const head = it.querySelector(".tour-head");
+        const panel = it.querySelector(".tour-panel");
+        it.classList.toggle("on", on);
+        // sul telefono si vedono tutti i passi: niente «aperto/chiuso»
+        if (wide.matches) head.setAttribute("aria-expanded", String(on)); else head.removeAttribute("aria-expanded");
+        panel.inert = wide.matches && !on;
+        panel.classList.remove("play");
+        if (on && animate && !still) { void panel.offsetWidth; panel.classList.add("play"); }
+      });
+    };
+    document.documentElement.classList.add("tour-on");
+    show(0, false);
+    wide.addEventListener?.("change", () => show(current, false));
+    items.forEach((it, i) => it.querySelector(".tour-head").addEventListener("click", () => {
+      if (!wide.matches) return;
+      tour.classList.remove("auto");
+      tour.dataset.stopped = "";
+      show(i, true);
+    }));
+    tour.addEventListener("animationend", (e) => {
+      if (e.target.classList.contains("tour-bar") && tour.classList.contains("auto")) show((current + 1) % items.length, true);
+    });
+    if (still || !("IntersectionObserver" in window)) return;
+    new IntersectionObserver(([e]) => {
+      tour.classList.toggle("auto", e.isIntersecting && !("stopped" in tour.dataset));
+    }, { threshold: .35 }).observe(tour);
   })();
 </script>
 <script>/*HERO_PLAN*/</script>

@@ -59,9 +59,13 @@ Con JavaScript una riga invita a provarla («sposta la data dell'esame e cambia 
 Le domande in fondo rispondono anche a «Cosa mi serve per iniziare?» e «L'intelligenza artificiale può sbagliare?». Scorrendo, le sezioni entrano con una breve dissolvenza; chi ha chiesto
 meno movimento le vede subito, e ciò che è già in vista all'apertura non si nasconde mai.
 All'apertura la scheda del piano si compone (i giorni contano fino al valore, la barra delle fasi si riempie, entrano i giorni
-e le attività di oggi; se muovi il cursore durante il conteggio vale il tuo valore), e le illustrazioni dei tre passi si animano
-quando arrivano sullo schermo (i file cadono, gli argomenti ricevono il bollino, le barre del piano crescono). Solo CSS più
-poche righe di JavaScript, senza librerie; con «movimento ridotto» o senza JavaScript la pagina resta ferma.
+e le attività di oggi; se muovi il cursore durante il conteggio vale il tuo valore).
+«Come funziona» ha quattro passi (carica i materiali, argomenti flashcard e quiz, il piano, le simulazioni d'esame): su computer
+i passi a sinistra e a destra l'app ridisegnata in piccolo con i suoi colori e componenti; i passi avanzano da soli mentre la
+sezione è in vista (barra sotto il passo attivo), si fermano col mouse o il fuoco sopra e per sempre al primo clic. Sul telefono
+e senza JavaScript ogni passo ha la sua anteprima sotto. «Cosa ottieni» è una griglia di schede: flashcard con ripasso distribuito,
+quiz con la fonte, dispensa da stampare, piano nel calendario, interrogazioni. Solo CSS più poche righe di JavaScript, senza
+librerie; con «movimento ridotto» o senza JavaScript la pagina resta ferma.
 Sul telefono (sotto 680px), quando i pulsanti in cima escono dallo schermo, compare lo stesso invito fisso in basso; sparisce
 davanti all'invito finale e al piè di pagina, per non coprirli.
 Se un link delle email (conferma, recupero password) arriva alla radice invece che su `/app`, la landing lo inoltra all'app.
