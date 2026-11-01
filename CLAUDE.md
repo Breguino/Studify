@@ -152,7 +152,7 @@ che crea `dist/harness.html`: la pagina Claude con un `window.claude` finto.
 - **Abbonamenti (solo web)**: spenti finché su Vercel non c'è `BILLING=on` (guida in `docs/abbonamenti.md`). Piani e prezzi mostrati
   in `public/js/plans.js`, gli stessi per l'account (`web/gate.js`) e la landing. Nelle pagine statiche (landing, termini, privacy)
   le parti `<!--BILLING-->…<!--/BILLING-->` compaiono solo con gli abbonamenti accesi, `<!--NOBILLING-->…` solo con quelli spenti:
-  le toglie la build. Il pagamento avviene sempre sulle pagine di Stripe: la carta non passa mai da Studify.
+  le toglie la build. La pagina `/prezzi` esiste solo con gli abbonamenti accesi. Il pagamento avviene sempre sulle pagine di Stripe: la carta non passa mai da Studify.
 - **Asset da Figma**:
   - piccoli (illustrazioni, loghi): SVG in linea o data URI nel CSS, mai URL esterni;
   - grandi: chiedere prima, perché la pagina Claude è un unico file (oggi circa 2,8 MB).
@@ -214,6 +214,7 @@ public/js/views/   una vista per schermata (home, hub, quiz, flash, materials, c
 artifact/          versione pagina Claude: template.html, entry, generate (Claude via `sample`), backend (`db`), fake-claude (prove)
 web/               versione web: template.html, web.css, entry, auth, gate (accesso/account), claude.js, backend, termini/privacy,
                    landing (landing-plan.js: la scheda del piano in cima, con buildPlan dell'app),
+                   funzionalita.html e prezzi.html (pagine del sito; menu e piè di pagina li genera la build), site.js (script comuni),
                    offline.js (copia locale dello stato, testata)
                    e sw.js (service worker: installabile e offline)
 api/               funzioni Vercel /api/claude (_lib.js), /api/billing e /api/stripe-webhook (_billing.js, abbonamenti con Stripe): testate

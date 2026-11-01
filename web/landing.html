@@ -19,18 +19,7 @@
 <a class="skip" href="#contenuto">Vai al contenuto</a>
 
 <div class="hero-band on-hero">
-  <header class="topbar">
-    <a class="logo" href="/">Studify</a>
-    <nav class="row" aria-label="Sezioni">
-      <a class="btn ghost hide-sm" href="#come">Come funziona</a>
-      <a class="btn ghost hide-sm" href="#materiali">Materiali</a>
-<!--BILLING-->      <a class="btn ghost hide-sm" href="#prezzi">Prezzi</a>
-<!--/BILLING-->      <a class="btn ghost hide-sm" href="#domande">Domande</a>
-      <a class="btn ghost" href="/app?entra=accedi" data-guest>Accedi</a>
-      <a class="btn primary" href="/app?entra=registrati" data-guest>Inizia gratis</a>
-      <a class="btn primary" href="/app" data-member hidden>Apri Studify</a>
-    </nav>
-  </header>
+<!--NAV-->
 
   <section class="wrap hero">
     <div class="hero-text">
@@ -94,7 +83,7 @@
       <b>Funziona con i materiali che hai già</b>
       <ul class="chips">
         <li>Dispense del docente</li><li>Slide</li><li>Esami passati</li><li>Quiz Moodle</li><li>Esercitazioni</li>
-        <li>Registrazioni</li><li>Appunti a mano</li><li>Libri</li><li>Tutorati</li>
+        <li>Trascrizioni delle lezioni</li><li>Appunti a mano</li><li>Libri</li><li>Tutorati</li>
       </ul>
     </div>
   </section>
@@ -107,13 +96,13 @@
          ogni passo con la sua immagine sotto. Le immagini sono l'app ridisegnata in piccolo, non screenshot. -->
     <div class="tour" data-tour>
       <div class="tour-item on">
-        <button class="tour-head" type="button" aria-controls="tour-1" aria-expanded="true"><b>Carica i materiali</b><span>Dispense, slide, foto degli appunti, registrazioni delle lezioni, esami passati.</span><i class="tour-bar" aria-hidden="true"></i></button>
+        <button class="tour-head" type="button" aria-controls="tour-1" aria-expanded="true"><b>Carica i materiali</b><span>Dispense, slide, foto degli appunti, trascrizioni delle lezioni, esami passati.</span><i class="tour-bar" aria-hidden="true"></i></button>
         <div class="tour-panel" id="tour-1">
           <div class="mock" aria-hidden="true">
             <div class="mock-top"><b>Materiali · Microeconomia</b><span class="badge good">3 pronti</span></div>
             <div class="mock-drop">Trascina qui PDF, Word, slide o foto</div>
             <div class="mock-file"><span class="mock-ico">PDF</span><b>Dispense Micro 2026.pdf</b><em class="badge brand">Dispense del docente</em></div>
-            <div class="mock-file"><span class="mock-ico">MP3</span><b>Lezione 4 · registrazione</b><em class="badge brand">Sbobine</em></div>
+            <div class="mock-file"><span class="mock-ico">VTT</span><b>Lezione 4 · trascrizione</b><em class="badge brand">Sbobine</em></div>
             <div class="mock-file"><span class="mock-ico">JPG</span><b>Appunti a mano · 6 foto</b><em class="badge brand">Appunti</em></div>
             <div class="mock-file"><span class="mock-ico">PDF</span><b>Appello giugno 2025.pdf</b><em class="badge warn">Esami passati</em></div>
           </div>
@@ -237,7 +226,7 @@
     <h2 class="section-title">Inizia gratis. Passa a un piano quando ti serve.</h2>
     <p class="section-lead">Flashcard, quiz e piano di studio sono uguali in tutti i piani: cambia solo il credito di Claude al mese per generare moduli e dispense dai tuoi materiali.</p>
     <!--PRICES-->
-    <p class="muted small">Prezzi IVA inclusa. Rinnovo automatico, disdici quando vuoi dall'account. Pagamento sicuro con Stripe.</p>
+    <p class="muted small">Prezzi IVA inclusa. Rinnovo automatico, disdici quando vuoi dall'account. Pagamento sicuro con Stripe. <a href="/prezzi">Tutti i dettagli sui prezzi →</a></p>
   </section>
 <!--/BILLING-->  <section class="wrap section split no-line">
     <div>
@@ -278,94 +267,9 @@
   <a class="btn primary" href="/app" data-member hidden>Vai ai tuoi esami →</a>
 </div>
 
-<footer class="site-footer"><span>© Studify</span><a href="termini.html">Termini e condizioni</a><a href="privacy.html">Privacy</a><a href="mailto:info.studify@gmail.com">Contatti</a><span>Nessun cookie: né di profilazione, né di statistica</span></footer>
+<!--FOOTER-->
 
-<script>
-  // Chi ha già una sessione in questo browser vede «Apri Studify» al posto di «Inizia gratis».
-  try {
-    if (localStorage.getItem("studify-session")) {
-      for (const el of document.querySelectorAll("[data-guest]")) el.hidden = true;
-      for (const el of document.querySelectorAll("[data-member]")) el.hidden = false;
-    }
-  } catch { /* archivio del browser non disponibile: restano i pulsanti per gli ospiti */ }
-
-  // Telefono: il pulsante in basso compare quando quelli in cima sono usciti dallo schermo
-  // e sparisce davanti all'invito finale e al piè di pagina, per non coprirli.
-  (() => {
-    const bar = document.getElementById("sticky-cta");
-    const watched = [".hero-cta", ".cta-band", ".site-footer"].map((q) => document.querySelector(q));
-    if (!("IntersectionObserver" in window) || watched.includes(null)) return;
-    const seen = new Set();
-    const io = new IntersectionObserver((entries) => {
-      for (const e of entries) e.isIntersecting ? seen.add(e.target) : seen.delete(e.target);
-      bar.hidden = seen.size > 0;
-    });
-    watched.forEach((el) => io.observe(el));
-  })();
-</script>
-<script>
-  // Entrata delle sezioni allo scorrimento (CSS in landing.css): si marcano i blocchi sotto la prima schermata,
-  // e ciascuno compare quando entra in vista. Chi ha chiesto meno movimento li vede subito.
-  (() => {
-    if (!("IntersectionObserver" in window) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const groups = [".section > .kicker, .section > .section-title, .section > .section-lead", ".tour-item", ".bento > *", ".methods > *", ".split > *", ".faq > details", ".cta-band"];
-    const els = [];
-    for (const sel of groups) document.querySelectorAll(sel).forEach((el, i) => { el.style.setProperty("--i", String(Math.min(i, 5))); els.push(el); });
-    const io = new IntersectionObserver((entries) => {
-      for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
-    }, { rootMargin: "0px 0px -8% 0px" });
-    for (const el of els) {
-      if (el.getBoundingClientRect().top < innerHeight) continue; // già in vista: resta com'è
-      el.dataset.reveal = "";
-      io.observe(el);
-    }
-    document.documentElement.classList.add("reveal");
-  })();
-</script>
-<script>
-  // «Come funziona» su computer: passi a sinistra, l'app a destra (CSS in landing.css, html.tour-on). I passi avanzano da
-  // soli solo mentre la sezione è in vista, si fermano al passaggio del mouse o del fuoco e per sempre al primo clic.
-  // Con «movimento ridotto» niente avanzamento e niente animazioni: si sceglie il passo col clic.
-  (() => {
-    const tour = document.querySelector("[data-tour]");
-    if (!tour) return;
-    const items = [...tour.querySelectorAll(".tour-item")];
-    const wide = matchMedia("(min-width: 821px)");
-    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    let current = 0;
-    for (const mock of tour.querySelectorAll(".mock")) [...mock.children].forEach((c, i) => c.style.setProperty("--n", String(i)));
-    const show = (i, animate) => {
-      current = i;
-      items.forEach((it, k) => {
-        const on = k === i;
-        const head = it.querySelector(".tour-head");
-        const panel = it.querySelector(".tour-panel");
-        it.classList.toggle("on", on);
-        // sul telefono si vedono tutti i passi: niente «aperto/chiuso»
-        if (wide.matches) head.setAttribute("aria-expanded", String(on)); else head.removeAttribute("aria-expanded");
-        panel.inert = wide.matches && !on;
-        panel.classList.remove("play");
-        if (on && animate && !still) { void panel.offsetWidth; panel.classList.add("play"); }
-      });
-    };
-    document.documentElement.classList.add("tour-on");
-    show(0, false);
-    wide.addEventListener?.("change", () => show(current, false));
-    items.forEach((it, i) => it.querySelector(".tour-head").addEventListener("click", () => {
-      if (!wide.matches) return;
-      tour.classList.remove("auto");
-      tour.dataset.stopped = "";
-      show(i, true);
-    }));
-    tour.addEventListener("animationend", (e) => {
-      if (e.target.classList.contains("tour-bar") && tour.classList.contains("auto")) show((current + 1) % items.length, true);
-    });
-    if (still || !("IntersectionObserver" in window)) return;
-    new IntersectionObserver(([e]) => {
-      tour.classList.toggle("auto", e.isIntersecting && !("stopped" in tour.dataset));
-    }, { threshold: .35 }).observe(tour);
-  })();
-</script>
+<script>/*SITE_JS*/</script>
 <script>/*HERO_PLAN*/</script>
 </body>
 </html>

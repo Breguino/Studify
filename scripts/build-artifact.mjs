@@ -103,6 +103,8 @@ if (web) {
   const PAGES = {
     "/": { title: "Studify — prepara gli esami con i tuoi materiali", description: "Appunti, dispense, slide, esami passati e quiz del docente diventano argomenti, flashcard, quiz e un piano di studio fino all'appello. Gratis, nel browser." },
     "/app": { title: "Studify — i tuoi esami", description: "Accedi a Studify per studiare con i tuoi materiali del corso." },
+    "/funzionalita": { title: "Funzionalità — Studify", description: "Cosa fa Studify con i tuoi materiali: argomenti e flashcard con la fonte, quiz, piano di studio fino all'appello, simulazioni con le prove vere, dispensa, orale e libretto." },
+    "/prezzi": { title: "Prezzi — Studify", description: "Studify è gratis. Con Base o Pro hai più credito di Claude ogni mese per generare moduli e dispense dai tuoi materiali. IVA inclusa, disdici quando vuoi." },
     "/termini.html": { title: "Termini e condizioni — Studify", description: "Termini e condizioni d'uso di Studify." },
     "/privacy.html": { title: "Informativa privacy — Studify", description: "Informativa privacy di Studify (art. 13 GDPR)." },
     "/404.html": { title: "Pagina non trovata — Studify", description: "Questa pagina di Studify non esiste." },
@@ -130,7 +132,8 @@ if (web) {
   await writeFile(join(OUT, "sw.js"), (await readFile(join(ROOT, "web/sw.js"), "utf8")).replace("/*VERSION*/", swVersion).replace("/*ASSETS*/[]", JSON.stringify(webAssets)));
   await writeFile(join(OUT, "robots.txt"), `User-agent: *\nAllow: /\nDisallow: /app\nDisallow: /api/\n\nSitemap: ${SITE}/sitemap.xml\n`);
   const today = new Date().toISOString().slice(0, 10);
-  await writeFile(join(OUT, "sitemap.xml"), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${["/", "/termini.html", "/privacy.html"].map((p) => `  <url><loc>${SITE}${p}</loc><lastmod>${today}</lastmod></url>`).join("\n")}\n</urlset>\n`);
+  const sitePages = ["/", "/funzionalita", ...(billing ? ["/prezzi"] : []), "/termini.html", "/privacy.html"];
+  await writeFile(join(OUT, "sitemap.xml"), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitePages.map((p) => `  <url><loc>${SITE}${p}</loc><lastmod>${today}</lastmod></url>`).join("\n")}\n</urlset>\n`);
   await writeFile(join(OUT, "app.html"), withHead(body, "/app")); // servita su /app (vercel.json)
   // landing su /: statica e leggera (niente JS dell'app né KaTeX), con i token e le classi di styles.css
   const landingCss = `${figtreeCss}\n${await readFile(join(ROOT, "public/styles.css"), "utf8")}\n${await readFile(join(ROOT, "web/web.css"), "utf8")}\n${await readFile(join(ROOT, "web/landing.css"), "utf8")}`;
@@ -140,8 +143,29 @@ if (web) {
     stdin: { contents: `import { mountHeroPlan } from "./web/landing-plan.js"; const r = document.getElementById("hero-plan"); if (r) mountHeroPlan(r, ${JSON.stringify(demoTopics)});`, resolveDir: ROOT },
     bundle: true, minify: true, format: "iife", target: "es2020", write: false, legalComments: "none",
   })).outputFiles[0].text.replace(/<\/script/gi, "<\\/script");
-  const landing = (await readFile(join(ROOT, "web/landing.html"), "utf8")).replace("/*CSS*/", () => landingCss).replace("/*HERO_PLAN*/", () => heroPlan);
-  await writeFile(join(OUT, "index.html"), withHead(landing, "/"));
+  // pagine pubbliche (home, funzionalità, prezzi): stesso menu e piè di pagina, la voce della pagina in cui sei è segnata
+  const siteJs = (await readFile(join(ROOT, "web/site.js"), "utf8")).replace(/<\/script/gi, "<\\/script");
+  const navLinks = (path) => [["/funzionalita", "Funzionalità"], ...(billing ? [["/prezzi", "Prezzi"]] : []), ["/#domande", "Domande"]]
+    .map(([href, text]) => `<a class="btn ghost" href="${href}"${href === path ? ' aria-current="page"' : ""}>${text}</a>`);
+  const nav = (path) => `<header class="topbar">
+    <a class="logo" href="/">Studify</a>
+    <nav class="row site-nav" aria-label="Sito">
+      <span class="row hide-sm">${navLinks(path).join("")}</span>
+      <a class="btn ghost hide-sm" href="/app?entra=accedi" data-guest>Accedi</a>
+      <a class="btn primary" href="/app?entra=registrati" data-guest>Inizia gratis</a>
+      <a class="btn primary" href="/app" data-member hidden>Apri Studify</a>
+      <details class="site-menu show-sm"><summary class="btn ghost">Menu</summary>
+        <div class="site-menu-panel">${navLinks(path).join("")}<a class="btn ghost" href="/app?entra=accedi" data-guest>Accedi</a></div>
+      </details>
+    </nav>
+  </header>`;
+  const footer = `<footer class="site-footer"><span>© Studify</span><a href="/funzionalita">Funzionalità</a>${billing ? '<a href="/prezzi">Prezzi</a>' : ""}<a href="termini.html">Termini e condizioni</a><a href="privacy.html">Privacy</a><a href="mailto:info.studify@gmail.com">Contatti</a><span>Nessun cookie: né di profilazione, né di statistica</span></footer>`;
+  const sitePage = (html, path) => withHead(html.replace("/*CSS*/", () => landingCss).replace("<!--NAV-->", () => nav(path)).replace("<!--FOOTER-->", () => footer).replace("/*SITE_JS*/", () => siteJs), path);
+  const landing = sitePage((await readFile(join(ROOT, "web/landing.html"), "utf8")).replace("/*HERO_PLAN*/", () => heroPlan), "/");
+  await writeFile(join(OUT, "index.html"), landing);
+  await writeFile(join(OUT, "funzionalita.html"), sitePage(await readFile(join(ROOT, "web/funzionalita.html"), "utf8"), "/funzionalita"));
+  // la pagina dei prezzi esiste solo con gli abbonamenti accesi (spenti, Studify è gratis e basta la home)
+  if (billing) await writeFile(join(OUT, "prezzi.html"), sitePage(await readFile(join(ROOT, "web/prezzi.html"), "utf8"), "/prezzi"));
   // pagine legali e pagina 404 (Vercel la serve per ogni indirizzo che non esiste): autonome, stesso stile essenziale
   for (const page of ["termini.html", "privacy.html", "404.html"]) await writeFile(join(OUT, page), withHead((await readFile(join(ROOT, "web", page), "utf8")).replace("/*FONT*/", () => figtreeCss), `/${page}`));
   console.log("dist-web/app.html", (body.length / 1024).toFixed(0), "KB · index.html (landing)", (landing.length / 1024).toFixed(0), "KB");

@@ -52,6 +52,12 @@ node scripts/make-assets.mjs   # rigenera web/assets/ (anteprima social e icone)
 
 **Landing** (`web/landing.html`, `web/landing.css`): pagina statica su `/` (circa 45 KB compressa, senza il codice dell'app),
 con un'unica azione principale «Inizia gratis» → `/app?entra=registrati`. Chi ha già una sessione nel browser vede «Apri Studify».
+**Pagine del sito**: oltre alla home, `/funzionalita` (`web/funzionalita.html`: una sezione per ogni parte dell'app, con l'anteprima
+accanto e i link per saltare alla sezione) e `/prezzi` (`web/prezzi.html`: i piani, la tabella di confronto, cosa succede quando
+il credito finisce, le domande sul pagamento; esiste solo con `BILLING=on`). Il menu in alto e il piè di pagina sono gli stessi
+ovunque e li genera la build (`scripts/build-artifact.mjs`), con la voce della pagina segnata; sul telefono le voci stanno in
+«Menu». Gli script comuni (pulsanti per chi ha già l'account, invito fisso sul telefono, entrate allo scorrimento, «Come funziona»)
+sono in `web/site.js`, inserito in ogni pagina. `vercel.json` serve `/funzionalita` e `/prezzi` senza `.html`; la sitemap le elenca.
 La scheda in cima è un **piano vero**: scegli fra quanti giorni c'è l'esame (5–60) e quante ore al giorno, e vedi le fasi,
 i prossimi giorni con le date di oggi e la sessione di oggi. Li calcola `buildPlan`, lo stesso dell'app, con gli argomenti
 dell'esame demo (`web/landing-plan.js`, provato in `test/landing.test.js`; la build lo incorpora nella pagina, circa 3 KB compressi).
