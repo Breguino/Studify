@@ -3,11 +3,15 @@
 // e vanno tenuti uguali. Il credito in dollari è il tetto di spesa per Claude (api/_billing.js lo applica): scelto perché
 // ogni piano resti in attivo anche se il credito si usa tutto (prezzo senza IVA e commissioni di Stripe > credito).
 
+// `files`: spazio online per PDF e foto, in byte (lo applica il database: files_quota in supabase/schema.sql, da tenere uguale).
+const GB = 1024 ** 3;
 export const PLANS = {
-  free: { id: "free", name: "Gratis", month: 0, year: 0, credit: 1, pitch: "Per provare Studify con un esame." },
-  base: { id: "base", name: "Base", month: 4.99, year: 49, credit: 3, pitch: "Per un semestre con qualche esame." },
-  pro: { id: "pro", name: "Pro", month: 9.99, year: 99, credit: 5, pitch: "Per chi prepara molti esami o carica tanti materiali." },
+  free: { id: "free", name: "Gratis", month: 0, year: 0, credit: 1, files: 0, pitch: "Per provare Studify con un esame." },
+  base: { id: "base", name: "Base", month: 4.99, year: 49, credit: 3, files: GB, pitch: "Per un semestre con qualche esame." },
+  pro: { id: "pro", name: "Pro", month: 9.99, year: 99, credit: 5, files: 5 * GB, pitch: "Per chi prepara molti esami o carica tanti materiali." },
 };
+/** Spazio online del piano: «1 GB», «5 GB», o null se il piano non ne ha. */
+export const filesSpace = (plan) => (PLANS[plan]?.files ? `${Math.round(PLANS[plan].files / GB)} GB` : null);
 export const PAID = ["base", "pro"];
 
 /** Valore di BILLING su Vercel → abbonamenti accesi? «on», ma anche «On», «true», «1», «sì»: un errore di battitura non li spegne. */

@@ -1,10 +1,13 @@
 // Versione web: lo stato (esami, modulo, progressi) è sincronizzato su Supabase con lo stesso codice della pagina Claude;
-// i file caricati (PDF, foto) restano in questo browser (IndexedDB), non vengono inviati a nessun server.
+// i file caricati (PDF, foto) stanno in questo browser (IndexedDB) e, con i piani a pagamento, anche online, in un
+// archivio privato (web/files.js): un altro dispositivo li scarica la prima volta che servono.
 // Una copia dello stato resta anche qui, per studiare senza connessione (web/offline.js).
 import { cloud } from "../artifact/backend.js";
 import { toast } from "../public/js/ui.js";
 import { withLocalCopy } from "./offline.js";
 import { conflictMessage } from "../public/js/merge.js";
+import { PLANS } from "../public/js/plans.js";
+import { bytesLabel, referencedFiles, withOnlineFiles } from "./files.js";
 
 const DB = "studify-web-files";
 let db = null;
@@ -56,16 +59,50 @@ const synced = withLocalCopy({
 });
 globalThis.addEventListener?.("online", () => synced.retry()); // nelle prove in Node non ci sono eventi del browser
 
+const files = withOnlineFiles({
+  remote: async () => (await window.claude?.use?.("user"))?.id?.().then((id) => (id ? window.claude.use("files") : null)),
+  local: {
+    get: (id) => safe(() => tx("readonly", (s) => s.get(id)), () => mem.get(id)),
+    put: (id, data) => safe(() => tx("readwrite", (s) => s.put(data, id)), () => mem.set(id, data)),
+    has: (id) => safe(() => tx("readonly", (s) => s.getKey(id)), () => (mem.has(id) ? id : undefined)).then((k) => k !== undefined),
+    del: (id) => safe(() => tx("readwrite", (s) => s.delete(id)), () => mem.delete(id)),
+  },
+  formOf: (id) => referencedFiles(lastState).get(id) ?? "blob",
+  notify: (what, u) => toast(what === "quota"
+    ? `Lo spazio online per PDF e foto è pieno (${bytesLabel(u?.quota ?? 0)} del piano ${PLANS[u?.plan]?.name ?? ""}): i file nuovi restano solo su questo dispositivo.`
+    : "Un file supera i 50 MB: resta solo su questo dispositivo, online non ci sta.", "info"),
+});
+let lastState = null; // per rimettere online i file che mancano quando torna la rete
+const syncFiles = (state) => {
+  lastState = state ?? lastState;
+  if (lastState) setTimeout(() => files.sync(lastState), 3000); // dopo il primo disegno: non rallenta l'apertura
+};
+globalThis.addEventListener?.("online", () => syncFiles());
+
+/** Il messaggio quando un file non c'è né qui né online. */
+export function missingFileMessage(title, online) {
+  const name = `«${title || "Questo file"}»`;
+  return online
+    ? `${name} non è né in questo browser né online: aprilo una volta dal dispositivo dove l'hai caricato, così va online da solo. Oppure caricalo di nuovo qui con «Carica di nuovo» nei materiali.`
+    : null; // senza spazio online: il messaggio di sempre (public/js/files.js)
+}
+
 export const backend = {
   ...cloud,
   name: "supabase",
   noPersistMessage: "Non riesco a raggiungere l'archivio online: le modifiche non verranno salvate. Controlla la connessione e ricarica la pagina.",
-  init: () => synced.init(),
-  write: (state) => synced.write(state),
+  init: async () => {
+    const r = await synced.init();
+    syncFiles(r?.state);
+    return r;
+  },
+  write: (state) => ((lastState = state), synced.write(state)),
   stage: (state) => synced.stage(state), // copia locale subito, a ogni modifica (store.save)
   refresh: () => synced.refresh(), // tornando sull'app: il lavoro fatto intanto su un altro dispositivo
-  putFile: (id, data) => safe(() => tx("readwrite", (s) => s.put(data, id)), () => mem.set(id, data)),
-  getFile: (id) => safe(() => tx("readonly", (s) => s.get(id)), () => mem.get(id)),
-  hasFile: (id) => safe(() => tx("readonly", (s) => s.getKey(id)), () => (mem.has(id) ? id : undefined)).then((k) => k !== undefined),
-  delFile: (id) => safe(() => tx("readwrite", (s) => s.delete(id)), () => mem.delete(id)),
+  putFile: (id, data) => files.put(id, data),
+  getFile: (id) => files.get(id),
+  hasFile: (id) => files.has(id),
+  delFile: (id) => files.del(id),
+  missingFileMessage: (title) => missingFileMessage(title, (files.lastUsage()?.quota ?? 0) > 0),
+  files, // spazio online (account, materiali)
 };

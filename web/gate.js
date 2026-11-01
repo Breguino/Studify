@@ -1,15 +1,16 @@
 // Schermata d'accesso della versione web (accesso, registrazione, password dimenticata, nuova password)
 // e finestra «Account» (consumo di Claude, cambio password, uscita, eliminazione dell'account).
 import { h, toast } from "../public/js/ui.js";
-import { clearLocalFiles } from "./backend.js";
-import { activePlan, euro, INTERVALS, PAID, planLine, PLANS, yearSaving } from "../public/js/plans.js";
+import { backend, clearLocalFiles } from "./backend.js";
+import { bytesLabel } from "./files.js";
+import { activePlan, euro, filesSpace, INTERVALS, PAID, planLine, PLANS, yearSaving } from "../public/js/plans.js";
 import { billingUrl, creditUsage, rpc } from "./claude.js";
 
-export const TERMS_VERSION = "2026-10-05";
-export const PRIVACY_VERSION = "2026-10-13";
+export const TERMS_VERSION = "2026-11-01";
+export const PRIVACY_VERSION = "2026-11-01";
 const MIN_PASSWORD = 8;
 // Che cosa è cambiato nell'informativa dall'ultima versione: lo vede una volta chi si era iscritto prima.
-const PRIVACY_CHANGES = "Per farti studiare anche senza connessione, ora una copia dei tuoi dati di studio (esami, piano, progressi) resta anche in questo browser, oltre che online. All'uscita dall'account viene cancellata, insieme ai file.";
+const PRIVACY_CHANGES = "Con un abbonamento Base o Pro, i PDF e le foto che carichi vanno anche online (Supabase, Unione europea), in un archivio privato del tuo account: così li ritrovi su tutti i tuoi dispositivi. Con il piano Gratis restano solo in questo browser, come prima.";
 
 /** L'informativa è cambiata dopo quella accettata (o già vista) da questo account? Solo per chi si è registrato con il consenso. */
 export const privacyOutdated = (meta = {}, current = PRIVACY_VERSION) =>
@@ -271,7 +272,7 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
       h("div", { class: "modal card stack", role: "dialog", "aria-modal": "true", "aria-labelledby": "privacy-news" },
         h("h2", { id: "privacy-news", style: { margin: 0 } }, "Abbiamo aggiornato l'informativa privacy"),
         h("p", { style: { margin: 0 } }, PRIVACY_CHANGES),
-        h("p", { class: "small muted", style: { margin: 0 } }, "Non cambia nient'altro: stessi dati online, stessi fornitori."),
+        h("p", { class: "small muted", style: { margin: 0 } }, "Non cambia nient'altro: stessi fornitori, stessi scopi."),
         h("div", { class: "row" },
           h("button", { class: "btn primary", onclick: done }, "Ho capito"),
           h("a", { class: "btn", href: "privacy.html", target: "_blank", rel: "noopener" }, "Leggi l'informativa"))));
@@ -366,7 +367,7 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
       return h("div", { class: "card flat plan" },
         h("b", {}, p.name),
         h("p", { class: "plan-price" }, euro(p[interval]), h("small", {}, ` ${INTERVALS[interval]}`)),
-        h("p", { class: "small muted" }, `${p.pitch} Credito di Claude ${p.credit / PLANS.free.credit} volte quello del piano Gratis.`),
+        h("p", { class: "small muted" }, `${p.pitch} Credito di Claude ${p.credit / PLANS.free.credit} volte quello del piano Gratis, ${filesSpace(id)} online per PDF e foto.`),
         btn);
     }));
     const pick = (v, label) => {
@@ -390,6 +391,7 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
     let paidActive = false; // abbonamento che si rinnova: l'account non si elimina finché non è disdetto
     const planSlot = h("div", { hidden: true });
     const usage = h("p", { class: "muted" }, "Consumo di Claude: …");
+    const space = h("p", { class: "muted", hidden: true });
     const onKey = (e) => e.key === "Escape" && done();
     const done = () => (dlg.remove(), document.removeEventListener("keydown", onKey), previous?.focus?.());
     document.addEventListener("keydown", onKey); // anche se il fuoco è uscito dalla finestra
@@ -417,6 +419,11 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
         if (del.querySelector("input").value.trim().toUpperCase() !== "ELIMINA") return toast("Scrivi ELIMINA per confermare.", "error");
         if (paidActive) return toast("Prima disdici l'abbonamento da «Gestisci abbonamento»: eliminando l'account il pagamento non si fermerebbe da solo.", "error");
         try {
+          await (await window.claude?.use?.("files"))?.removeAll(); // PDF e foto online: il database non li cancella da solo
+        } catch {
+          return toast("Non riesco a cancellare i PDF e le foto salvati online: controlla la connessione e riprova. L'account non è stato eliminato.", "error");
+        }
+        try {
           await beforeLeave({ save: false });
           await rpc({ url, key, auth }, "delete_my_account");
           await clearLocalFiles();
@@ -432,6 +439,7 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
         h("div", { class: "row between" }, h("h2", { id: "acct-title", style: { margin: 0 } }, "Account"), h("button", { class: "btn ghost small", onclick: done, "aria-label": "Chiudi" }, "✕")),
         h("p", { style: { margin: 0 } }, h("b", {}, auth.user?.email ?? "")),
         usage,
+        space,
         planSlot,
         h("div", { class: "row" },
           passToggle,
@@ -442,6 +450,13 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
         h("details", {}, h("summary", { class: "small" }, "Elimina l'account"), del)));
     document.body.append(dlg);
     dlg.querySelector("button")?.focus();
+    backend.files.usage().then((u) => {
+      if (!u || (!u.quota && !u.used)) return;
+      space.textContent = u.quota
+        ? `Spazio online per PDF e foto: ${bytesLabel(u.used)} di ${bytesLabel(u.quota)}.`
+        : `PDF e foto online: ${bytesLabel(u.used)}. Con il piano Gratis restano leggibili, ma i file nuovi restano solo su questo dispositivo.`;
+      space.hidden = false;
+    }).catch(() => {});
     try {
       const info = await creditUsage({ url, key, auth });
       ({ spent, limit } = info);

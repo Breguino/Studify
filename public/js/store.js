@@ -61,7 +61,7 @@ export const hasFile = async (id) => (backend.hasFile ? backend.hasFile(id) : (a
 /** Un file che deve esserci: se manca (caricato su un altro dispositivo) un errore che dice che cosa fare. */
 export async function requireFile(id, title) {
   const data = id ? await backend.getFile(id) : null;
-  if (data == null) throw new MissingFileError(title);
+  if (data == null) throw new MissingFileError(title, backend.missingFileMessage?.(title));
   return data;
 }
 /** Materiali (di tutti gli esami) che usano il file `id`, tranne `except` (un materiale o un esame). */

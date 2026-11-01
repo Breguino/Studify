@@ -252,6 +252,8 @@ create policy "files: caricamento nello spazio del piano" on storage.objects for
   with check (bucket_id = 'files' and (storage.foldername(name))[1] = (select auth.uid())::text and public.files_room());
 -- La sostituzione non controlla lo spazio: cambia un file che c'è già (al più 50 MB in più). E se Storage aggiorna i dati del
 -- file dopo averlo caricato, il controllo farebbe fallire proprio il caricamento che porta al limite.
+-- Nel progetto c'è anche la regola di prima, «files: sostituzione nello spazio del piano»: non conta più (le regole si
+-- sommano, basta che una lo permetta) e si può togliere a mano dall'editor SQL.
 create policy "files: sostituzione propria" on storage.objects for update to authenticated
   using (bucket_id = 'files' and (storage.foldername(name))[1] = (select auth.uid())::text)
   with check (bucket_id = 'files' and (storage.foldername(name))[1] = (select auth.uid())::text);

@@ -737,7 +737,10 @@ function formulaRow(exam, m) {
   } });
   const go = async () => {
     const data = m.pdfFileId ? await store.getFile(m.pdfFileId) : null;
-    if (!data) return picker.click(); // dopo una ricarica il PDF non c'è più: lo si riseleziona
+    if (!data) { // il PDF non è in questo browser (pagina Claude dopo una ricarica, o un altro dispositivo): lo si riseleziona
+      core.filesHint?.().then((hint) => hint && toast(hint, "info")).catch(() => {}); // versione web: come averlo ovunque
+      return picker.click();
+    }
     transcribe(exam, m, r, data);
   };
   return h("div", { class: "stack", style: { gap: "4px" } },
@@ -875,10 +878,11 @@ export function materialsTab(exam, { first = false } = {}) {
         toast(file.size === m.size ? `«${m.title}» è di nuovo in questo browser.` : `«${m.title}» caricato, ma non sembra lo stesso file di prima (dimensione diversa): controlla le pagine scelte.`, "ok");
         core.rerender();
       } });
-      slot.replaceChildren(
-        h("span", {}, h("b", {}, "Il PDF è su un altro dispositivo. "), "Il materiale c'è, ma il file è rimasto nel browser dove l'hai caricato: per usarlo da qui, caricalo di nuovo."),
-        h("label", { class: "btn small" }, input, "Carica di nuovo"));
+      const text = h("span", {}, h("b", {}, "Il PDF è su un altro dispositivo. "), "Il materiale c'è, ma il file è rimasto nel browser dove l'hai caricato: per usarlo da qui, caricalo di nuovo.");
+      slot.replaceChildren(text, h("label", { class: "btn small" }, input, "Carica di nuovo"));
       slot.hidden = false;
+      // versione web: con i file online il PDF arriva da solo, oppure l'abbonamento che lo permette
+      core.filesHint?.().then((hint) => hint && text.append(" ", hint)).catch(() => {});
     });
     return slot;
   };

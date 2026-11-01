@@ -1,5 +1,6 @@
-// File dell'utente (PDF, foto): restano solo nel browser dove sono stati caricati (nella pagina Claude, solo finché resta
-// aperta). Gli esami invece si sincronizzano: su un altro dispositivo un materiale c'è, ma il suo file no. Testi puri, testati.
+// File dell'utente (PDF, foto): restano nel browser dove sono stati caricati (nella pagina Claude, solo finché resta
+// aperta; nella versione web con un piano a pagamento anche online, web/files.js). Gli esami invece si sincronizzano:
+// su un altro dispositivo un materiale c'è, ma il suo file può mancare. Testi puri, testati.
 
 /** Che cosa dire quando serve un file che in questo browser non c'è. */
 export const missingFileMessage = (title) =>
@@ -7,8 +8,9 @@ export const missingFileMessage = (title) =>
   "Continua dal dispositivo dove l'hai aggiunto, oppure caricalo di nuovo qui con «Carica di nuovo» nei materiali.";
 
 export class MissingFileError extends Error {
-  constructor(title) {
-    super(missingFileMessage(title));
+  /** `message`: il testo della piattaforma, se ne ha uno suo (versione web con i file online). */
+  constructor(title, message = null) {
+    super(message || missingFileMessage(title));
     this.name = "MissingFileError";
   }
 }
