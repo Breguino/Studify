@@ -1,4 +1,4 @@
--- Schema del progetto Supabase «studify» (versione web). Le parti 1-3 e 5 sono già applicate;
+-- Schema del progetto Supabase «studify» (versione web). Le parti 1-3, 5 e 6 sono già applicate;
 -- la parte 4 (eliminazione dell'account) va eseguita a mano nell'editor SQL di Supabase.
 
 -- 1. Documenti dell'app (stesso modello della capability `db` delle pagine Claude): ognuno vede solo i propri.
@@ -196,3 +196,64 @@ returns void language sql security definer set search_path = '' as $$
 $$;
 revoke all on function public.billing_upsert(uuid, text, text, text, timestamptz, boolean, text, text, timestamptz) from public, anon, authenticated;
 grant execute on function public.billing_upsert(uuid, text, text, text, timestamptz, boolean, text, text, timestamptz) to service_role;
+
+-- 6. PDF e foto online (solo con i piani a pagamento): bucket privato «files», un file per oggetto in <id utente>/<id file>.
+--    Ognuno legge, sostituisce e cancella solo la propria cartella. Si carica solo se lo spazio usato è sotto quello del
+--    piano (Gratis 0, Base 1 GB, Pro 5 GB, come public/js/plans.js): il controllo guarda lo spazio prima del caricamento,
+--    quindi si può sforare al massimo di un file (50 MB, il limite del bucket). Finito l'abbonamento i file restano
+--    leggibili e cancellabili, ma non se ne aggiungono altri. Le righe di storage.objects non si cancellano in SQL
+--    (protect_delete di Supabase): i file si tolgono dall'API di Storage, anche prima di eliminare l'account (web/gate.js).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('files', 'files', false, 52428800, array['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do nothing;
+
+-- Piano in uso, come activePlan() in public/js/plans.js: attivo, in prova o con il pagamento da ritentare, entro 3 giorni
+-- dalla fine del periodo.
+create or replace function public.my_plan()
+returns text language sql stable security definer set search_path = '' as $$
+  select coalesce((
+    select plan from public.subscriptions
+    where user_id = (select auth.uid()) and status in ('active', 'trialing', 'past_due')
+      and (current_period_end is null or current_period_end + interval '3 days' > now())
+  ), 'free')
+$$;
+create or replace function public.files_quota(p_plan text)
+returns bigint language sql immutable set search_path = '' as $$
+  select (case p_plan when 'pro' then 5368709120 when 'base' then 1073741824 else 0 end)::bigint
+$$;
+create or replace function public.files_used()
+returns bigint language sql stable security definer set search_path = '' as $$
+  select coalesce(sum((metadata ->> 'size')::bigint), 0)::bigint from storage.objects
+  where bucket_id = 'files' and (storage.foldername(name))[1] = (select auth.uid())::text
+$$;
+create or replace function public.files_room()
+returns boolean language sql stable security definer set search_path = '' as $$
+  select public.files_used() < public.files_quota(public.my_plan())
+$$;
+-- Per l'app: spazio usato, spazio del piano e piano.
+create or replace function public.files_usage()
+returns table (used bigint, quota bigint, plan text) language sql stable security definer set search_path = '' as $$
+  select public.files_used(), public.files_quota(public.my_plan()), public.my_plan()
+$$;
+revoke all on function public.my_plan() from public, anon;
+revoke all on function public.files_quota(text) from public, anon;
+revoke all on function public.files_used() from public, anon;
+revoke all on function public.files_room() from public, anon;
+revoke all on function public.files_usage() from public, anon;
+grant execute on function public.my_plan() to authenticated;
+grant execute on function public.files_quota(text) to authenticated;
+grant execute on function public.files_used() to authenticated;
+grant execute on function public.files_room() to authenticated;
+grant execute on function public.files_usage() to authenticated;
+
+create policy "files: lettura propria" on storage.objects for select to authenticated
+  using (bucket_id = 'files' and (storage.foldername(name))[1] = (select auth.uid())::text);
+create policy "files: caricamento nello spazio del piano" on storage.objects for insert to authenticated
+  with check (bucket_id = 'files' and (storage.foldername(name))[1] = (select auth.uid())::text and public.files_room());
+-- La sostituzione non controlla lo spazio: cambia un file che c'è già (al più 50 MB in più). E se Storage aggiorna i dati del
+-- file dopo averlo caricato, il controllo farebbe fallire proprio il caricamento che porta al limite.
+create policy "files: sostituzione propria" on storage.objects for update to authenticated
+  using (bucket_id = 'files' and (storage.foldername(name))[1] = (select auth.uid())::text)
+  with check (bucket_id = 'files' and (storage.foldername(name))[1] = (select auth.uid())::text);
+create policy "files: cancellazione propria" on storage.objects for delete to authenticated
+  using (bucket_id = 'files' and (storage.foldername(name))[1] = (select auth.uid())::text);
