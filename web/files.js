@@ -58,6 +58,15 @@ export async function fromDownload(blob, form) {
   return blob;
 }
 
+/** Titolo del materiale che usa ogni file (per i messaggi): Map id → titolo. */
+export function fileTitles(state) {
+  const out = new Map();
+  for (const e of state?.exams ?? []) for (const m of e.materials ?? []) {
+    for (const id of [m.fileId, m.pdfFileId, ...(m.imageIds ?? [])]) if (id && !out.has(id)) out.set(id, m.title || m.fileName || "");
+  }
+  return out;
+}
+
 /** File che i materiali usano, con la forma in cui l'app li tiene: Map id → "base64" | "bytes" | "blob". */
 export function referencedFiles(state) {
   const ids = new Map();
@@ -92,14 +101,14 @@ export function planSync({ referenced, remote, localSize, used, quota, now }) {
   return { upload, remove };
 }
 
-/** «850 KB», «12 MB», «1 GB», «1,5 GB». */
+/** «850 KB», «12 MB», «1 GB», «1,5 GB», con uno spazio che non va a capo. */
 export function bytesLabel(n) {
   const units = [["GB", 1024 ** 3], ["MB", 1024 ** 2], ["KB", 1024]];
   for (const [u, size] of units) if (n >= size) {
     const v = n / size;
-    return `${(v >= 10 || Number.isInteger(v) ? Math.round(v) : Math.round(v * 10) / 10).toString().replace(".", ",")} ${u}`;
+    return `${(v >= 10 || Number.isInteger(v) ? Math.round(v) : Math.round(v * 10) / 10).toString().replace(".", ",")}\u00a0${u}`; // «1 GB» non va a capo
   }
-  return `${n} byte`;
+  return `${n}\u00a0byte`;
 }
 
 /**
@@ -189,6 +198,7 @@ export function createFiles({ url, key, auth, fetchFn = (...a) => fetch(...a), c
 /**
  * Il browser come prima, più la copia online. `remote()`: l'archivio online (createFiles) o null senza accesso;
  * `formOf(id)`: la forma in cui l'app tiene quel file (referencedFiles), per restituire un file scaricato uguale;
+ * `status()` dopo `sync`: i file che non vanno online, per dirlo invece di saltarli in silenzio;
  * `local`: { get, put, has, del } di IndexedDB; `notify("quota", usage) | notify("too_large")`: un avviso, una volta
  * sola per sessione. Caricamenti e cancellazioni online vanno uno alla volta e non bloccano mai l'app: se falliscono
  * (senza rete) li recupera `sync(state)`, all'apertura e quando torna la rete.
@@ -197,6 +207,8 @@ export function withOnlineFiles({ remote, local, notify = () => {}, now = () => 
   let usage = null; // { used, quota, plan }: l'ultimo letto
   let listed = null; // { at, map }: i file online, riletti al più ogni minuto
   let queue = Promise.resolve();
+  // file dei materiali che online non ci sono: troppo grandi (> 50 MB, restano qui) o non in questo browser (sono altrove)
+  let status = { tooLarge: new Set(), elsewhere: new Set(), checked: false };
   const said = new Set();
   const once = (what, arg) => !said.has(what) && (said.add(what), notify(what, arg));
   const serial = (fn) => (queue = queue.then(fn).catch(() => {}));
@@ -229,7 +241,10 @@ export function withOnlineFiles({ remote, local, notify = () => {}, now = () => 
       if (e?.code === "quota") {
         await readUsage(f);
         once("quota", usage);
-      } else if (e?.code === "too_large") once("too_large");
+      } else if (e?.code === "too_large") {
+        status.tooLarge.add(id);
+        once("too_large", [id]);
+      }
       return e?.code === "too_large" || e?.code === "type"; // quel file no, gli altri sì
     }
   }
@@ -290,6 +305,15 @@ export function withOnlineFiles({ remote, local, notify = () => {}, now = () => 
           if (size != null) sizes.set(id, size);
         }
         const { upload, remove } = planSync({ referenced, remote: map, localSize: (id) => sizes.get(id) ?? null, used: u.used, quota: u.quota, now: now() });
+        if (u.quota > 0) {
+          const missing = [...referenced.keys()].filter((id) => !map.has(id));
+          status = {
+            tooLarge: new Set(missing.filter((id) => sizes.get(id) > MAX_FILE_BYTES)),
+            elsewhere: new Set(missing.filter((id) => !sizes.has(id))),
+            checked: true,
+          };
+          if (status.tooLarge.size) once("too_large", [...status.tooLarge]);
+        }
         if (u.quota > 0 && sizes.size > upload.length && u.used + upload.reduce((s, id) => s + sizes.get(id), 0) >= u.quota) once("quota", u);
         for (const id of upload) {
           const data = await local.get(id).catch(() => null);
@@ -308,6 +332,8 @@ export function withOnlineFiles({ remote, local, notify = () => {}, now = () => 
     },
     /** L'ultimo spazio letto, senza richieste (per i messaggi). */
     lastUsage: () => usage,
+    /** Dopo `sync`: { tooLarge, elsewhere } (id dei file), `checked` false se non c'è ancora stato un controllo. */
+    status: () => ({ tooLarge: [...status.tooLarge], elsewhere: [...status.elsewhere], checked: status.checked }),
     idle: () => queue,
   };
 }

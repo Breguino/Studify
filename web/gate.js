@@ -391,7 +391,7 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
     let paidActive = false; // abbonamento che si rinnova: l'account non si elimina finché non è disdetto
     const planSlot = h("div", { hidden: true });
     const usage = h("p", { class: "muted" }, "Consumo di Claude: …");
-    const space = h("p", { class: "muted", hidden: true });
+    const space = h("p", { class: "muted stack", style: { gap: "4px" }, hidden: true });
     const onKey = (e) => e.key === "Escape" && done();
     const done = () => (dlg.remove(), document.removeEventListener("keydown", onKey), previous?.focus?.());
     document.addEventListener("keydown", onKey); // anche se il fuoco è uscito dalla finestra
@@ -452,9 +452,10 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
     dlg.querySelector("button")?.focus();
     backend.files.usage().then((u) => {
       if (!u || (!u.quota && !u.used)) return;
-      space.textContent = u.quota
+      space.replaceChildren(u.quota
         ? `Spazio online per PDF e foto: ${bytesLabel(u.used)} di ${bytesLabel(u.quota)}.`
-        : `PDF e foto online: ${bytesLabel(u.used)}. Con il piano Gratis restano leggibili, ma i file nuovi restano solo su questo dispositivo.`;
+        : `PDF e foto online: ${bytesLabel(u.used)}. Con il piano Gratis restano leggibili, ma i file nuovi restano solo su questo dispositivo.`,
+      ...(u.quota ? backend.filesStatus() : []).map((line) => h("span", { class: "small file-status" }, line)));
       space.hidden = false;
     }).catch(() => {});
     try {

@@ -7,7 +7,7 @@ import { toast } from "../public/js/ui.js";
 import { withLocalCopy } from "./offline.js";
 import { conflictMessage } from "../public/js/merge.js";
 import { PLANS } from "../public/js/plans.js";
-import { bytesLabel, referencedFiles, withOnlineFiles } from "./files.js";
+import { bytesLabel, fileTitles, MAX_FILE_BYTES, referencedFiles, withOnlineFiles } from "./files.js";
 
 const DB = "studify-web-files";
 let db = null;
@@ -68,9 +68,9 @@ const files = withOnlineFiles({
     del: (id) => safe(() => tx("readwrite", (s) => s.delete(id)), () => mem.delete(id)),
   },
   formOf: (id) => referencedFiles(lastState).get(id) ?? "blob",
-  notify: (what, u) => toast(what === "quota"
-    ? `Lo spazio online per PDF e foto è pieno (${bytesLabel(u?.quota ?? 0)} del piano ${PLANS[u?.plan]?.name ?? ""}): i file nuovi restano solo su questo dispositivo.`
-    : "Un file supera i 50 MB: resta solo su questo dispositivo, online non ci sta.", "info"),
+  notify: (what, arg) => toast(what === "quota"
+    ? `Lo spazio online per PDF e foto è pieno (${bytesLabel(arg?.quota ?? 0)} del piano ${PLANS[arg?.plan]?.name ?? ""}): i file nuovi restano solo su questo dispositivo.`
+    : tooLargeMessage(names(arg)), "info"),
 });
 let lastState = null; // per rimettere online i file che mancano quando torna la rete
 const syncFiles = (state) => {
@@ -78,6 +78,32 @@ const syncFiles = (state) => {
   if (lastState) setTimeout(() => files.sync(lastState), 3000); // dopo il primo disegno: non rallenta l'apertura
 };
 globalThis.addEventListener?.("online", () => syncFiles());
+
+const names = (ids = []) => {
+  const titles = fileTitles(lastState);
+  return [...new Set(ids.map((id) => titles.get(id)).filter(Boolean))];
+};
+const quoted = (list) => list.map((t) => `«${t}»`).join(", ");
+const LIMIT = bytesLabel(MAX_FILE_BYTES);
+
+/** Avviso per i file oltre il limite del bucket: restano su questo dispositivo, e lo si dice invece di tacerlo. */
+export function tooLargeMessage(titles) {
+  if (!titles.length) return `Un file supera i ${LIMIT}: resta solo su questo dispositivo, online non ci sta.`;
+  return titles.length === 1
+    ? `${quoted(titles)} supera i ${LIMIT}: resta solo su questo dispositivo, online non ci sta. Per averlo altrove, dividilo in parti più piccole.`
+    : `${quoted(titles)} superano i ${LIMIT}: restano solo su questo dispositivo, online non ci stanno. Per averli altrove, dividili in parti più piccole.`;
+}
+
+/** Righe per l'account: i file dei materiali che non sono online e perché ([] se sono tutti online o non si sa ancora). */
+export function filesStatusLines({ tooLarge = [], elsewhere = [] }, titles) {
+  const list = (ids) => [...new Set(ids.map((id) => titles.get(id)).filter(Boolean))];
+  const lines = [];
+  const big = list(tooLarge);
+  const away = list(elsewhere);
+  if (big.length) lines.push(`Solo su questo dispositivo, perché superano i ${LIMIT}: ${quoted(big)}.`);
+  if (away.length) lines.push(`Non ancora online: ${quoted(away)}. Apri Studify una volta dal dispositivo dove li hai caricati e vanno online da soli.`);
+  return lines;
+}
 
 /** Il messaggio quando un file non c'è né qui né online. */
 export function missingFileMessage(title, online) {
@@ -97,7 +123,7 @@ export const backend = {
     return r;
   },
   write: (state) => ((lastState = state), synced.write(state)),
-  stage: (state) => synced.stage(state), // copia locale subito, a ogni modifica (store.save)
+  stage: (state) => ((lastState = state), synced.stage(state)), // copia locale subito, a ogni modifica (store.save); lo stato vivo serve ai nomi dei file negli avvisi
   refresh: () => synced.refresh(), // tornando sull'app: il lavoro fatto intanto su un altro dispositivo
   putFile: (id, data) => files.put(id, data),
   getFile: (id) => files.get(id),
@@ -105,4 +131,5 @@ export const backend = {
   delFile: (id) => files.del(id),
   missingFileMessage: (title) => missingFileMessage(title, (files.lastUsage()?.quota ?? 0) > 0),
   files, // spazio online (account, materiali)
+  filesStatus: () => filesStatusLines(files.status(), fileTitles(lastState)),
 };

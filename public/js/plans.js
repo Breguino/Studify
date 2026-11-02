@@ -11,7 +11,7 @@ export const PLANS = {
   pro: { id: "pro", name: "Pro", month: 9.99, year: 99, credit: 5, files: 5 * GB, pitch: "Per chi prepara molti esami o carica tanti materiali." },
 };
 /** Spazio online del piano: «1 GB», «5 GB», o null se il piano non ne ha. */
-export const filesSpace = (plan) => (PLANS[plan]?.files ? `${Math.round(PLANS[plan].files / GB)} GB` : null);
+export const filesSpace = (plan) => (PLANS[plan]?.files ? `${Math.round(PLANS[plan].files / GB)}\u00a0GB` : null); // non va a capo
 export const PAID = ["base", "pro"];
 
 /** Valore di BILLING su Vercel → abbonamenti accesi? «on», ma anche «On», «true», «1», «sì»: un errore di battitura non li spegne. */
