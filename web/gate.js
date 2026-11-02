@@ -354,7 +354,7 @@ export function createGate({ auth, url, key, beforeLeave = async () => {} }) {
       }
       return box;
     }
-    let interval = "year";
+    let interval = "month"; // il periodo più breve: l'annuale (impegno più lungo e più caro) lo sceglie chi lo vuole, non lo si preseleziona
     const cards = h("div", { class: "plans" });
     const consent = h("input", { type: "checkbox", name: "start-now", onchange: () => (need.hidden = true) });
     const need = h("p", { class: "small consent-need", role: "alert", hidden: true }, "Spunta questa conferma per continuare al pagamento.");
