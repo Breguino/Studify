@@ -2,8 +2,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { base64Bytes, byteSize, bytesLabel, createFiles, fromDownload, MAX_FILE_BYTES, ORPHAN_AGE_MS, planSync, referencedFiles, sniffType, uploadBody, withOnlineFiles } from "../web/files.js";
-import { missingFileMessage } from "../web/backend.js";
+import { base64Bytes, byteSize, bytesLabel, createFiles, fileTitles, fromDownload, MAX_FILE_BYTES, ORPHAN_AGE_MS, planSync, referencedFiles, sniffType, uploadBody, withOnlineFiles } from "../web/files.js";
+import { filesStatusLines, missingFileMessage, tooLargeMessage } from "../web/backend.js";
 import { filesSpace, PLANS } from "../public/js/plans.js";
 
 const b64 = (s) => Buffer.from(s).toString("base64");
@@ -60,13 +60,13 @@ test("piani: spazio online uguale a quello del database", () => {
   assert.equal(Number(m[1]), PLANS.pro.files);
   assert.equal(Number(m[2]), PLANS.base.files);
   assert.equal(PLANS.free.files, 0);
-  assert.equal(filesSpace("base"), "1 GB");
-  assert.equal(filesSpace("pro"), "5 GB");
+  assert.equal(filesSpace("base"), "1\u00a0GB");
+  assert.equal(filesSpace("pro"), "5\u00a0GB");
   assert.equal(filesSpace("free"), null);
-  assert.equal(bytesLabel(1024 ** 3), "1 GB");
-  assert.equal(bytesLabel(1.5 * 1024 ** 2), "1,5 MB");
-  assert.equal(bytesLabel(120 * 1024 ** 2), "120 MB");
-  assert.equal(bytesLabel(0), "0 byte");
+  assert.equal(bytesLabel(1024 ** 3), "1\u00a0GB", "«1 GB» non va a capo");
+  assert.equal(bytesLabel(1.5 * 1024 ** 2), "1,5\u00a0MB");
+  assert.equal(bytesLabel(120 * 1024 ** 2), "120\u00a0MB");
+  assert.equal(bytesLabel(0), "0\u00a0byte");
 });
 
 /* ----------------------- archivio online (HTTP finto) ----------------------- */
@@ -245,4 +245,30 @@ test("senza rete i file del browser funzionano come prima", async () => {
 test("messaggio del file mancante: con lo spazio online dice come farlo arrivare", () => {
   assert.match(missingFileMessage("Dispensa", true), /«Dispensa» non è né in questo browser né online.*dispositivo dove l'hai caricato/);
   assert.equal(missingFileMessage("Dispensa", false), null, "senza spazio online resta il messaggio di sempre");
+});
+
+test("file oltre i 50 MB: non va online, ma lo si dice, una volta, con il nome del materiale", async () => {
+  const big = new Uint8Array(MAX_FILE_BYTES + 1);
+  big.set(Buffer.from("%PDF"));
+  const s = setup({ local: { libro: big, p1: PDF } });
+  const state = { exams: [{ materials: [{ kind: "notes", title: "Manuale intero", pdfFileId: "libro" }, { kind: "pdf", title: "Slide", fileId: "p1" }, { kind: "pdf", title: "Appunti di Marta", fileId: "altrove" }] }] };
+  await s.files.sync(state);
+  assert.deepEqual([...s.sb.objects.keys()], ["u1/p1"], "gli altri file vanno online lo stesso");
+  assert.deepEqual(s.files.status(), { tooLarge: ["libro"], elsewhere: ["altrove"], checked: true });
+  assert.deepEqual(s.notes, [["too_large", undefined]]);
+  await s.files.sync(state);
+  assert.equal(s.notes.length, 1, "l'avviso non si ripete a ogni apertura della sessione");
+  const lines = filesStatusLines(s.files.status(), fileTitles(state));
+  assert.match(lines[0], /^Solo su questo dispositivo, perché superano i 50\sMB: «Manuale intero»\.$/);
+  assert.match(lines[1], /^Non ancora online: «Appunti di Marta»\. Apri Studify una volta dal dispositivo dove li hai caricati/);
+  assert.match(tooLargeMessage(["Manuale intero"]), /^«Manuale intero» supera i 50\sMB: resta solo su questo dispositivo/);
+  assert.match(tooLargeMessage(["A", "B"]), /^«A», «B» superano i 50\sMB/);
+  assert.match(tooLargeMessage([]), /^Un file supera i 50\sMB/);
+});
+
+test("piano Gratis: nessun elenco di file «non online» (non devono esserlo)", async () => {
+  const s = setup({ quota: 0, local: { p1: PDF } });
+  await s.files.sync({ exams: [{ materials: [{ kind: "pdf", title: "Slide", fileId: "p1" }] }] });
+  assert.deepEqual(s.files.status(), { tooLarge: [], elsewhere: [], checked: false });
+  assert.deepEqual(filesStatusLines(s.files.status(), new Map()), []);
 });
