@@ -4,6 +4,7 @@ import demo from "../public/demo/module.json";
 import { core } from "../public/js/core.js";
 import { boot } from "../public/js/app.js";
 import { flush } from "../public/js/store.js";
+import { backend } from "./backend.js";
 import { hasText, plainLines } from "../public/js/pdf-table.js";
 import { pdfImages, readPdf } from "../artifact/pdf-text.js";
 import { createAuth } from "./auth.js";
@@ -40,6 +41,11 @@ core.credit = async () => {
   return credit.value;
 };
 core.creditChanged = () => (credit = null); // dopo una richiesta a Claude il consumo è cambiato
+// PDF e foto online (web/files.js): che cosa dire accanto a un file che su questo dispositivo manca
+core.filesHint = async () => {
+  if (((await backend.files.usage())?.quota ?? 0) > 0) return "Con il tuo piano PDF e foto vanno online da soli: apri Studify una volta dal dispositivo dove l'hai caricato e qui arriva.";
+  return (await core.credit().catch(() => null))?.billing ? "Con Base o Pro PDF e foto ti seguono su ogni dispositivo (Account → Abbonamento)." : null;
+};
 core.pdfText = async (file) => {
   const { pages, numPages } = await readPdf(await file.arrayBuffer(), { maxPages: 1000 });
   return { text: hasText(pages) ? pages.map((p) => plainLines([p]).join("\n")).join("\f") : "", pages: numPages };

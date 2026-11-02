@@ -1,5 +1,7 @@
 // `window.claude` per la versione web: le stesse capability usate dalla pagina Claude (sample, db, user),
 // ma servite da Supabase (dati) e dalla funzione /api/claude (Claude con il credito di Studify).
+// In più `files`: PDF e foto online con i piani a pagamento (web/files.js).
+import { createFiles } from "./files.js";
 
 export const LIMITS = { maxPromptBytes: 262_144, images: { maxCount: 3, maxInputBytes: 3_000_000, mediaTypes: ["image/jpeg", "image/png", "image/webp"] } };
 
@@ -195,6 +197,7 @@ export function installClaude({ ready, auth, url, key }) {
   const caps = {
     sample: createSample({ auth }),
     db: createDb({ url, key, auth, closed: () => closed }),
+    files: createFiles({ url, key, auth, closed: () => closed }),
     user: { id: async () => auth.user?.id ?? null, isOwner: async () => true },
   };
   window.claude = {

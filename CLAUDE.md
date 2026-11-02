@@ -142,7 +142,9 @@ che crea `dist/harness.html`: la pagina Claude con un `window.claude` finto.
   - Google Fonts o i CDN riceverebbero l'IP di chi visita, un problema di GDPR.
   La versione web ha anche una CSP restrittiva in `vercel.json`, con `connect-src` limitato all'origine e a Supabase.
 - **Favicon**: SVG in data URI in `public/index.html` e `web/template.html`.
-- **File dell'utente** (PDF, foto): IndexedDB nel browser, mai sul server. Le pagine di PDF diventano immagini JPEG (canvas → Blob).
+- **File dell'utente** (PDF, foto): IndexedDB nel browser. Solo nella versione web con un piano a pagamento anche online,
+  nel bucket privato `files` di Supabase (`web/files.js`; spazio per piano in `plans.js` e `files_quota` nello schema, da tenere uguali).
+  Le pagine di PDF diventano immagini JPEG (canvas → Blob).
   Possono mancare (esame aperto da un altro dispositivo): una vista che legge un file usa `store.requireFile(id, titolo)`,
   che dà un `MissingFileError` con il messaggio giusto, e non `getFile` seguito da un errore generico.
   Per cancellare un file usa `store.delFile(id, materialeOEsame)`: lo cancella solo se nessun altro materiale lo usa
@@ -215,7 +217,7 @@ artifact/          versione pagina Claude: template.html, entry, generate (Claud
 web/               versione web: template.html, web.css, entry, auth, gate (accesso/account), claude.js, backend, termini/privacy,
                    landing (landing-plan.js: la scheda del piano in cima, con buildPlan dell'app),
                    funzionalita.html e prezzi.html (pagine del sito; menu e piè di pagina li genera la build), site.js (script comuni),
-                   offline.js (copia locale dello stato, testata)
+                   offline.js (copia locale dello stato, testata), files.js (PDF e foto online con i piani a pagamento, testato)
                    e sw.js (service worker: installabile e offline)
 api/               funzioni Vercel /api/claude (_lib.js), /api/billing e /api/stripe-webhook (_billing.js, abbonamenti con Stripe): testate
 server/            server Node senza dipendenze (versione locale con chiave API)

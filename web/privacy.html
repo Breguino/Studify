@@ -32,7 +32,7 @@ th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom
 <header><div><a href="./">Studify</a></div></header>
 <main>
 <h1>Informativa sul trattamento dei dati personali</h1>
-<p class="meta">Ai sensi dell'art. 13 del Regolamento (UE) 2016/679 («GDPR») · versione del 13 ottobre 2026</p>
+<p class="meta">Ai sensi dell'art. 13 del Regolamento (UE) 2016/679 («GDPR») · versione del 1° novembre 2026</p>
 <p class="draft"><b>Bozza da verificare.</b> Questo testo è un modello preparato senza consulenza legale: prima di aprire Studify al pubblico va fatto rivedere da un avvocato, e vanno completate le parti tra parentesi quadre.</p>
 
 <h2>1. Titolare del trattamento</h2>
@@ -44,7 +44,8 @@ th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom
 <tr><td><b>Account</b>: email, password (conservata solo in forma cifrata, non leggibile), date di registrazione e di accesso</td><td>Supabase, server nell'Unione europea (Francoforte)</td></tr>
 <tr><td><b>Consenso</b>: versione dei termini e dell'informativa accettate, data, dichiarazione di maggiore età</td><td>Supabase (UE)</td></tr>
 <tr><td><b>Dati di studio</b>: esami, date d'appello, testi dei materiali, moduli generati (argomenti, flashcard, domande), progressi, piano, libretto (esami e voti), note</td><td>Supabase (UE)</td></tr>
-<tr><td><b>File caricati</b> (PDF, foto di appunti)</td><td>Solo nel tuo browser, su questo dispositivo: non vengono salvati sui nostri server</td></tr>
+<!--NOBILLING--><tr><td><b>File caricati</b> (PDF, foto di appunti)</td><td>Solo nel tuo browser, su questo dispositivo: non vengono salvati sui nostri server</td></tr><!--/NOBILLING-->
+<!--BILLING--><tr><td><b>File caricati</b> (PDF, foto di appunti)</td><td>Nel tuo browser. Con un abbonamento Base o Pro anche su Supabase (UE), in un archivio privato che vede solo il tuo account, per ritrovarli su tutti i tuoi dispositivi. Con il piano Gratis restano solo nel browser</td></tr><!--/BILLING-->
 <tr><td><b>Richieste all'intelligenza artificiale</b>: il testo dei materiali e, quando lo chiedi, le immagini di alcune pagine, inviati a Claude per generare i contenuti</td><td>Transitano dal nostro server (Vercel) e sono elaborati da Anthropic (Stati Uniti)</td></tr>
 <tr><td><b>Consumo</b>: numero di richieste, token e costo stimato al mese</td><td>Supabase (UE)</td></tr>
 <!--BILLING--><tr><td><b>Abbonamento</b>, se lo sottoscrivi: piano, stato, scadenza, codice cliente di Stripe. I dati della carta e di fatturazione li inserisci sulla pagina di Stripe e restano a Stripe</td><td>Supabase (UE) per il piano; Stripe per i pagamenti</td></tr><!--/BILLING-->
@@ -65,7 +66,7 @@ th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom
 <h2>4. A chi li comunichiamo</h2>
 <p>Ai fornitori che ci permettono di far funzionare Studify, nominati responsabili del trattamento (art. 28 GDPR):</p>
 <ul>
-<li><b>Supabase Inc.</b> — database e autenticazione, con server nell'UE;</li>
+<li><b>Supabase Inc.</b> — database e autenticazione<!--BILLING-->, e archivio di PDF e foto per chi ha un abbonamento<!--/BILLING-->, con server nell'UE;</li>
 <li><b>Vercel Inc.</b> — pubblicazione del sito, statistiche di visita e funzione che inoltra le richieste a Claude;</li>
 <!--BILLING--><li><b>Stripe Payments Europe Ltd</b> (Irlanda) — pagamento degli abbonamenti. Per i dati di pagamento Stripe opera anche come titolare autonomo, secondo la propria informativa (stripe.com/it/privacy) [DA VERIFICARE];</li><!--/BILLING-->
 <li><b>Anthropic PBC</b> — elaborazione con il modello Claude. Per i clienti commerciali dell'API, come Studify, Anthropic agisce come responsabile del trattamento: per impostazione predefinita non usa i dati inviati per addestrare i modelli e li cancella entro 30 giorni (salvo obblighi di legge o verifiche sul rispetto delle sue regole d'uso).</li>
@@ -73,7 +74,7 @@ th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom
 <p><b>Trasferimenti fuori dall'UE.</b> Vercel e Anthropic hanno sede negli Stati Uniti. Vercel è certificata secondo il Data Privacy Framework UE-USA e il suo accordo sul trattamento dei dati prevede anche le clausole contrattuali standard della Commissione europea (decisione 2021/914); per Anthropic il trasferimento si basa sulle clausole contrattuali standard incluse nel suo accordo sul trattamento dei dati, parte delle condizioni commerciali.</p>
 
 <h2>5. Per quanto tempo</h2>
-<p>Account, dati di studio, consenso e consumo: finché l'account esiste. Quando lo elimini vengono cancellati subito dal database; restano ancora per al massimo 7 giorni nelle copie di sicurezza giornaliere di Supabase, che poi vengono sostituite. Il testo inviato a Claude viene cancellato da Anthropic entro 30 giorni (vedi sopra); i registri tecnici di Vercel seguono i tempi di Vercel.<!--BILLING--> I dati dei pagamenti e delle ricevute si conservano per il tempo richiesto dalle norme fiscali (di regola 10 anni) [DA VERIFICARE CON IL COMMERCIALISTA].<!--/BILLING--></p>
+<p>Account, dati di studio, consenso e consumo: finché l'account esiste. Quando lo elimini vengono cancellati subito dal database; restano ancora per al massimo 7 giorni nelle copie di sicurezza giornaliere di Supabase, che poi vengono sostituite. Il testo inviato a Claude viene cancellato da Anthropic entro 30 giorni (vedi sopra); i registri tecnici di Vercel seguono i tempi di Vercel.<!--BILLING--> PDF e foto online: finché li usa un materiale. Quando elimini il materiale vengono cancellati dall'archivio online entro un giorno, quando elimini l'account subito. Se l'abbonamento finisce restano leggibili e cancellabili, ma non se ne aggiungono altri. I dati dei pagamenti e delle ricevute si conservano per il tempo richiesto dalle norme fiscali (di regola 10 anni) [DA VERIFICARE CON IL COMMERCIALISTA].<!--/BILLING--></p>
 
 <h2>6. Archiviazione nel browser</h2>
 <p>Studify non usa cookie: né di profilazione, né di statistica. Usa solo l'archiviazione del browser strettamente necessaria al servizio: la sessione d'accesso e un promemoria per proporti «Accedi» invece di «Registrati» (localStorage); i file che carichi e una copia dei tuoi dati di studio, per usare Studify anche senza connessione (IndexedDB); i file dell'app stessa, per aprirla offline (cache del service worker, senza dati personali). Le statistiche di visita funzionano senza salvare nulla sul tuo dispositivo. Per questo non è richiesto un banner per il consenso ai cookie (art. 122 del Codice privacy e linee guida del Garante del 10 giugno 2021). All'uscita dall'account i file e la copia dei dati salvati nel browser vengono cancellati.</p>

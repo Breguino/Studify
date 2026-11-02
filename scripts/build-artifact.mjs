@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { euro, isBillingOn, PAID, PLANS, yearSaving } from "../public/js/plans.js";
+import { euro, filesSpace, isBillingOn, PAID, PLANS, yearSaving } from "../public/js/plans.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const harness = process.argv.includes("--harness");
@@ -119,7 +119,7 @@ if (web) {
   const priceCards = () => `<div class="plans landing-plans">${["free", ...PAID].map((id) => {
     const p = PLANS[id];
     const price = p.month ? `<p class="plan-price">${euro(p.month)}<small> al mese</small></p><p class="small muted">oppure ${euro(p.year)} all'anno (${yearSaving(id)} mesi gratis)</p>` : `<p class="plan-price">0 €</p><p class="small muted">per sempre</p>`;
-    const credit = id === "free" ? "Credito di Claude di base, ogni mese" : `Credito di Claude ${p.credit / PLANS.free.credit} volte il piano Gratis`;
+    const credit = id === "free" ? "Credito di Claude di base, ogni mese. PDF e foto nel browser dove li carichi" : `Credito di Claude ${p.credit / PLANS.free.credit} volte il piano Gratis, ${filesSpace(id)} online per PDF e foto`;
     const cta = id === "free" ? `<a class="btn" href="/app?entra=registrati">Inizia gratis</a>` : `<a class="btn${id === "pro" ? " primary" : ""}" href="/app?entra=registrati&amp;abbonamento=scegli">Scegli ${p.name}</a>`;
     return `<div class="card flat plan${id === "pro" ? " plan-top" : ""}"><b>${p.name}</b>${price}<p class="small">${p.pitch}</p><p class="small muted">${credit}</p>${cta}</div>`;
   }).join("")}</div>`;

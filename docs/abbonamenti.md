@@ -4,11 +4,13 @@ Il codice c'è già: piani Gratis, Base e Pro (mensile e annuale), pagamento su 
 che cambia col piano. **Finché su Vercel non metti `BILLING=on`, il sito resta com'è oggi:** tutto gratis, credito di 3 $
 al mese, nessun prezzo nella landing.
 
-| Piano | Mensile | Annuale | Credito di Claude al mese |
-|---|---|---|---|
-| Gratis | 0 € | — | 1 $ (con gli abbonamenti accesi: un modulo intero costa circa 0,55-0,70 $) |
-| Base | 4,99 € | 49 € | 3 $ |
-| Pro | 9,99 € | 99 € | 5 $ |
+| Piano | Mensile | Annuale | Credito di Claude al mese | PDF e foto online |
+|---|---|---|---|---|
+| Gratis | 0 € | — | 1 $ (con gli abbonamenti accesi: un modulo intero costa circa 0,55-0,70 $) | — (restano nel browser) |
+| Base | 4,99 € | 49 € | 3 $ | 1 GB |
+| Pro | 9,99 € | 99 € | 5 $ | 5 GB |
+
+Lo spazio online sta in `public/js/plans.js` (`files`) e nel database (`files_quota`, parte 6 di `supabase/schema.sql`): **devono coincidere** (lo controlla `test/files-sync.test.js`).
 
 I prezzi mostrati stanno in `public/js/plans.js`; quelli addebitati sono i «Price» che crei su Stripe: **devono coincidere**.
 
