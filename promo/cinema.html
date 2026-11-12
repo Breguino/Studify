@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Studify — video promo con riprese (9:16)</title>
+<style>
+/* Livello grafico della versione «con riprese» del video promo: scritte, telefono con le schermate vere dell'app e chiusura,
+   su fondo trasparente. Sotto ci vanno le riprese di archivio, montate da promo/cinema.mjs, che poi unisce i due livelli.
+   Come promo.html, ogni fotogramma lo disegna render(t). I tempi delle scene qui e in cinema.mjs (CUTS) devono coincidere. */
+@font-face { font-family: "Figtree Variable"; font-weight: 300 900; font-display: block;
+  src: url("../node_modules/@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2") format("woff2-variations"); }
+:root { --hero: #1e1b4b; --hero-ink: #fff; --hero-muted: #d9dbf5; --hero-faint: #b9bce6; --hero-learn: #a5a0ee; --bg: #f4f5f9; }
+* { box-sizing: border-box; margin: 0; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: transparent; }
+body { font-family: "Figtree Variable", system-ui, sans-serif; color: var(--hero-ink); position: relative; -webkit-font-smoothing: antialiased; }
+body.preview { background: #333 linear-gradient(160deg, #6b5a48, #1c1a17); } /* aperto a mano: un fondo al posto delle riprese */
+.abs { position: absolute; left: 0; top: 0; will-change: transform, opacity; }
+.full { width: 1080px; height: 1920px; }
+/* velo scuro in basso, per leggere le scritte sulle riprese; velo indaco intero dietro il telefono e la chiusura */
+#shade { background: linear-gradient(to top, rgba(10, 8, 34, .88) 0%, rgba(10, 8, 34, .66) 28%, rgba(10, 8, 34, .2) 48%, rgba(10, 8, 34, 0) 60%); }
+#tint { background: radial-gradient(120% 80% at 30% 20%, rgba(67, 56, 202, .5), rgba(30, 27, 75, 0) 70%), rgba(30, 27, 75, .8); }
+#black { background: #000; }
+
+/* scritte sulle riprese: nel terzo basso, sopra la zona che le app coprono (in basso 400 px) */
+.line { width: 1080px; padding: 0 90px 0 90px; top: 1060px; font-size: 92px; font-weight: 800; letter-spacing: -.03em; line-height: 1.07; text-wrap: balance;
+  text-shadow: 0 2px 30px rgba(5, 4, 30, .55); }
+.line em { font-style: normal; color: var(--hero-learn); }
+.line small { display: block; margin-bottom: 18px; font-size: 40px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--hero-faint); }
+.line .n { font-size: 250px; font-weight: 900; letter-spacing: -.05em; line-height: .9; display: block; margin-left: -8px; font-variant-numeric: tabular-nums; }
+
+/* didascalie sopra il telefono */
+.cap { width: 1080px; padding: 0 90px; top: 250px; }
+.cap h2 { font-size: 82px; font-weight: 800; letter-spacing: -.03em; line-height: 1.07; text-wrap: balance; }
+.cap h2 em { font-style: normal; color: var(--hero-learn); }
+.cap p { margin-top: 18px; font-size: 42px; font-weight: 600; color: var(--hero-muted); }
+
+#phone { left: 136px; top: 556px; width: 808px; height: 1700px; border-radius: 76px; background: #0c0b22; padding: 14px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, .14), 0 50px 120px rgba(5, 4, 30, .6); }
+#screen { position: relative; width: 780px; height: 1672px; border-radius: 62px; overflow: hidden; background: var(--bg); }
+#screen img { position: absolute; left: 0; top: 0; width: 780px; will-change: transform; }
+#screen .layer { position: absolute; inset: 0; background: var(--bg); will-change: opacity; }
+#screen img.bar { z-index: 5; box-shadow: 0 1px 0 rgba(20, 24, 40, .06); }
+#tap { z-index: 9; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; background: rgba(67, 56, 202, .22); border: 5px solid rgba(67, 56, 202, .55); }
+
+#cta { width: 1080px; top: 0; height: 1920px; display: grid; align-content: center; justify-items: center; text-align: center; padding: 0 90px; }
+#cta .mark { width: 208px; height: 208px; border-radius: 60px; background: #fff; display: grid; place-items: center; box-shadow: 0 30px 80px rgba(5, 4, 30, .5); }
+#cta .mark svg { width: 208px; height: 208px; }
+#cta .name { margin-top: 44px; font-size: 150px; font-weight: 900; letter-spacing: -.04em; line-height: 1; }
+#cta .say { margin-top: 30px; font-size: 58px; font-weight: 700; line-height: 1.2; color: var(--hero-muted); text-wrap: balance; }
+#cta .btn { margin-top: 70px; padding: 34px 76px; border-radius: 40px; background: #fff; color: var(--hero); font-size: 64px; font-weight: 800; letter-spacing: -.02em; }
+#cta .bio { margin-top: 34px; font-size: 44px; font-weight: 700; color: var(--hero-faint); }
+</style>
+</head>
+<body>
+<div class="abs full" id="shade"></div>
+<div class="abs full" id="tint"></div>
+
+<div class="abs line" id="l1"><small>Prossimo appello</small><span class="n">21</span>giorni all'esame.</div>
+<div class="abs line" id="l2">E non sai<br>da dove <em>iniziare?</em></div>
+<div class="abs line" id="l3">Libri, slide,<br><em>appunti sparsi.</em></div>
+<div class="abs line" id="l4">Ogni giorno sai<br><em>cosa studiare.</em></div>
+<div class="abs line" id="l5">E all'appello arrivi<br><em>con un piano.</em></div>
+
+<div class="abs cap" id="cap1"><h2>Carica i tuoi <em>appunti.</em></h2><p>PDF, slide, foto, sbobine.</p></div>
+<div class="abs cap" id="cap2"><h2>Diventano argomenti, <em>flashcard e quiz.</em></h2></div>
+<div class="abs cap" id="cap3"><h2>Con un piano <em>giorno per giorno</em> fino all'esame.</h2></div>
+<div class="abs cap" id="cap4"><h2>E ti metti alla prova <em>prima dell'appello.</em></h2></div>
+
+<div class="abs" id="phone"><div id="screen">
+  <img class="bar" id="bar" src="img/header.png" alt="">
+  <div class="layer" id="s-materials"><img src="img/materials.png" alt=""></div>
+  <div class="layer" id="s-module"><img src="img/module.png" alt=""></div>
+  <div class="layer" id="s-home"><img src="img/home.png" alt=""></div>
+  <div class="layer" id="s-quiz-a"><img src="img/quiz-a.png" alt=""></div>
+  <div class="layer" id="s-quiz-c"><img src="img/quiz-c.png" alt=""></div>
+  <div class="abs" id="tap"></div>
+</div></div>
+
+<div class="abs" id="cta">
+  <div class="mark"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M9.5 21l6.5-11.2 6.5 11.2z" fill="none" stroke="#1e1b4b" stroke-width="2.6" stroke-linejoin="round"/></svg></div>
+  <div class="name">Studify</div>
+  <div class="say">Prepara l'esame<br>con i tuoi appunti.</div>
+  <div class="btn">Inizia gratis</div>
+  <div class="bio">Link in bio</div>
+</div>
+<div class="abs full" id="black"></div>
+
+<script src="img/meta.js"></script>
+<script>
+const DURATION = 24; // secondi
+// I tagli tra le riprese (uguali a CUTS in cinema.mjs): volto, scrivania, evidenziatori, [app], studio, università, chiusura.
+const T = { desk: 3.0, pens: 4.5, app: 6.0, study: 17.5, campus: 19.5, cta: 21.75 };
+const APP = { materials: [T.app, 8.8], module: [8.8, 11.6], home: [11.6, 14.4], quiz: [14.4, T.study] };
+const K = 2, BAR = 65; // un punto dell'app = 2 px del video; altezza della barra dell'app in punti
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const out3 = (x) => 1 - (1 - x) ** 3;
+const io = (x) => (x < 0.5 ? 4 * x ** 3 : 1 - (-2 * x + 2) ** 3 / 2);
+const lerp = (a, b, x) => a + (b - a) * x;
+const set = (el, { o = 1, x = 0, y = 0, s = 1 }) => { el.style.opacity = o; el.style.transform = `translate(${x}px, ${y}px) scale(${s})`; el.style.visibility = o <= 0.001 ? "hidden" : "visible"; };
+/** Scritta che entra dopo `a` salendo, e sparisce di colpo al taglio `b` (con `soft`, in dissolvenza). */
+const line = (t, a, b, soft = 0) => ({ o: t >= b ? 0 : Math.min(prog(t, a, a + 0.35), soft ? 1 - prog(t, b - soft, b) : 1), y: lerp(46, 0, out3(prog(t, a, a + 0.45))) });
+const inOut = (t, a, b, d = 0.4) => ({ o: Math.min(prog(t, a, a + d), 1 - prog(t, b - d * 0.7, b)), y: lerp(50, 0, out3(prog(t, a, a + d))) - 30 * io(prog(t, b - d * 0.7, b)) });
+
+const M = window.META;
+const quizTap = Math.max(BAR, M.quizRight.y - 392);
+const quizEnd = Math.max(quizTap, M.quizVerdictY - 352);
+const moduleFrom = M.moduleTopicY - 91;
+const TAPS = [
+  { t: 7.7, ...M.pickFiles, scroll: 0 },        // «Scegli i file»
+  { t: 15.55, ...M.quizRight, scroll: quizTap }, // la risposta giusta
+];
+
+function render(t) {
+  // apertura dal nero
+  set($("black"), { o: 1 - prog(t, 0, 0.35) });
+
+  // veli: scuro in basso sulle riprese, indaco intero dietro il telefono e la chiusura
+  const appIn = t < T.study ? prog(t, T.app, T.app + 0.4) : 0; // resta fino al taglio: poi la ripresa torna nitida di colpo
+  const ctaIn = io(prog(t, T.cta, T.cta + 0.7));
+  set($("tint"), { o: Math.max(appIn, ctaIn) });
+  set($("shade"), { o: t < T.app ? 1 : t >= T.study ? 1 - ctaIn : 0 });
+
+  // scritte sulle riprese
+  set($("l1"), line(t, 0.3, 1.75, 0.2));
+  set($("l2"), line(t, 1.75, T.desk));
+  set($("l3"), line(t, T.desk + 0.1, T.app, 0.25));
+  set($("l4"), line(t, T.study + 0.15, T.campus));
+  set($("l5"), line(t, T.campus + 0.15, T.cta + 0.3, 0.4));
+
+  // didascalie sopra il telefono
+  const caps = [["cap1", APP.materials], ["cap2", APP.module], ["cap3", APP.home], ["cap4", APP.quiz]];
+  for (const [id, [a, b]] of caps) set($(id), inOut(t, a + 0.2, Math.min(b + 0.02, T.study - 0.08))); // l'ultima sparisce prima del taglio
+
+  // telefono: sale dopo il taglio, scende prima del successivo
+  const up = out3(prog(t, T.app + 0.05, T.app + 0.75));
+  const down = io(prog(t, T.study - 0.5, T.study));
+  set($("phone"), { o: t < T.app || t >= T.study ? 0 : 1, y: lerp(1500, 0, up) + 1500 * down });
+
+  const fade = (a, d = 0.22) => prog(t, a, a + d);
+  const show = (id, o, scroll) => { const el = $(id); el.style.opacity = o; el.style.visibility = o <= 0.001 ? "hidden" : "visible"; el.firstElementChild.style.transform = `translateY(${-scroll * K}px)`; };
+  const [d0] = APP.module, [h0] = APP.home, [q0] = APP.quiz;
+  show("s-materials", 1, 0);
+  show("s-module", fade(d0), lerp(moduleFrom, moduleFrom + 330, io(prog(t, d0 + 0.5, d0 + 2.5))));
+  show("s-home", fade(h0), lerp(0, 150, io(prog(t, h0 + 0.9, h0 + 2.4))));
+  show("s-quiz-a", fade(q0), lerp(BAR, quizTap, io(prog(t, q0 + 0.35, q0 + 0.85))));
+  show("s-quiz-c", fade(15.67, 0.16), lerp(quizTap, quizEnd, io(prog(t, 16.0, 16.7))));
+  $("bar").style.opacity = t < q0 ? 1 : 1 - fade(q0);
+  $("bar").style.visibility = t < q0 + 0.3 ? "visible" : "hidden";
+
+  let tap = { o: 0 };
+  for (const k of TAPS) {
+    const p = prog(t, k.t - 0.12, k.t + 0.38);
+    if (p > 0 && p < 1) tap = { o: p < 0.3 ? p / 0.3 : 1 - (p - 0.3) / 0.7, x: k.x * K, y: (k.y - k.scroll) * K, s: lerp(0.55, 1.15, out3(p)) };
+  }
+  set($("tap"), tap);
+
+  // chiusura
+  set($("cta"), { o: prog(t, T.cta + 0.3, T.cta + 0.6) });
+  [...$("cta").children].forEach((el, i) => { const p = out3(prog(t, T.cta + 0.4 + i * 0.13, T.cta + 0.9 + i * 0.13)); el.style.opacity = p; el.style.transform = `translateY(${lerp(50, 0, p)}px) scale(${i === 0 ? lerp(0.7, 1, p) : 1})`; });
+}
+window.render = render;
+window.DURATION = DURATION;
+window.ready = Promise.all([document.fonts.ready, ...[...document.images].map((i) => i.decode().catch(() => {}))]).then(() => render(0));
+if (!navigator.webdriver) { document.body.classList.add("preview"); const t0 = performance.now(); (function loop() { render(((performance.now() - t0) / 1000) % DURATION); requestAnimationFrame(loop); })(); }
+</script>
+</body>
+</html>

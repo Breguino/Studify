@@ -548,6 +548,13 @@ Un solo aggancio: `node promo/render.mjs b`.
   dell'app. Aperto nel browser dopo la cattura, va da solo.
 - `promo/render.mjs` disegna i fotogrammi uno a uno e li passa a ffmpeg.
 
+**Versione con riprese** (`npm run promo:cinema` → `promo/out/studify-promo-cinema.mp4`, 24 fotogrammi al secondo): persone
+vere in apertura e in chiusura, l'app al centro sopra la ripresa sfocata. `promo/cinema.mjs` scarica le clip in `promo/stock/`,
+le ritaglia in verticale con la stessa resa di colore e ci mette sopra il livello grafico di `promo/cinema.html`.
+Le clip sono di Mixkit, con la «Stock Video Free License» (post sui social e pubblicità, senza attribuzione). Su Mixkit
+molte altre clip sono invece «solo per uso personale»: prima di aggiungerne una va controllata la licenza sulla sua pagina.
+Le persone riprese sono comparse: nessuna frase va messa loro in bocca, né vanno presentate come utenti di Studify.
+
 Servono Playwright (con Chromium) e ffmpeg, che non sono dipendenze del progetto. Il video non ha musica (solo una traccia
 muta): si aggiunge dall'app, dove i brani hanno la licenza. Schermate e video non entrano nel repository.
 Regole per i testi: solo ciò che l'app fa davvero, niente numeri di utenti né promesse sui voti.
