@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Studify — video promo «conto alla rovescia» (9:16)</title>
+<style>
+/* Livello grafico del montaggio «countdown» (vedi promo/cinema.mjs): il conto alla rovescia verso l'esame resta in alto per
+   tutto il video; a ogni tappa prima si vedono le persone, poi sale il telefono con la schermata vera dell'app.
+   Fondo trasparente: sotto ci sono le riprese. I tempi qui (T) e i tagli in cinema.mjs (MONTAGES.countdown) devono coincidere. */
+@font-face { font-family: "Figtree Variable"; font-weight: 300 900; font-display: block;
+  src: url("../node_modules/@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2") format("woff2-variations"); }
+:root { --hero: #1e1b4b; --hero-ink: #fff; --hero-muted: #d9dbf5; --hero-faint: #b9bce6; --hero-learn: #a5a0ee; --bg: #f4f5f9; }
+* { box-sizing: border-box; margin: 0; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: transparent; }
+body { font-family: "Figtree Variable", system-ui, sans-serif; color: var(--hero-ink); position: relative; -webkit-font-smoothing: antialiased; }
+body.preview { background: #333 linear-gradient(160deg, #6b5a48, #1c1a17); } /* aperto a mano: un fondo al posto delle riprese */
+.abs { position: absolute; left: 0; top: 0; will-change: transform, opacity; }
+.full { width: 1080px; height: 1920px; }
+/* velo scuro in alto, dove stanno conto e didascalia; velo intero quando c'è il telefono; indaco per la chiusura */
+#shade { background: linear-gradient(to bottom, rgba(10, 8, 34, .86) 0%, rgba(10, 8, 34, .7) 22%, rgba(10, 8, 34, .25) 40%, rgba(10, 8, 34, 0) 52%); }
+#dim { background: rgba(10, 8, 34, .58); }
+#tint { background: radial-gradient(120% 80% at 30% 20%, rgba(67, 56, 202, .5), rgba(30, 27, 75, 0) 70%), rgba(30, 27, 75, .82); }
+#black { background: #000; }
+
+/* conto alla rovescia e didascalia: sotto i 250 px che le app coprono in alto */
+#count { left: 90px; top: 236px; display: flex; align-items: flex-end; gap: 22px; text-shadow: 0 2px 30px rgba(5, 4, 30, .5); }
+#count .n { font-size: 200px; font-weight: 900; letter-spacing: -.05em; line-height: .84; font-variant-numeric: tabular-nums; }
+#count .n.word { font-size: 150px; letter-spacing: -.04em; line-height: .98; }
+#count .u { font-size: 40px; font-weight: 700; line-height: 1.15; color: var(--hero-muted); padding-bottom: 6px; }
+.cap { left: 90px; top: 430px; width: 900px; font-size: 66px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; text-wrap: balance; text-shadow: 0 2px 30px rgba(5, 4, 30, .5); }
+.cap em { font-style: normal; color: var(--hero-learn); }
+
+#phone { left: 136px; top: 640px; width: 808px; height: 1700px; border-radius: 76px; background: #0c0b22; padding: 14px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, .14), 0 50px 120px rgba(5, 4, 30, .6); }
+#screen { position: relative; width: 780px; height: 1672px; border-radius: 62px; overflow: hidden; background: var(--bg); }
+#screen img { position: absolute; left: 0; top: 0; width: 780px; will-change: transform; }
+#screen .layer { position: absolute; inset: 0; background: var(--bg); will-change: opacity; }
+#screen img.bar { z-index: 5; box-shadow: 0 1px 0 rgba(20, 24, 40, .06); }
+#tap { z-index: 9; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; background: rgba(67, 56, 202, .22); border: 5px solid rgba(67, 56, 202, .55); }
+
+#cta { width: 1080px; top: 0; height: 1920px; display: grid; align-content: center; justify-items: center; text-align: center; padding: 0 90px; }
+#cta .mark { width: 208px; height: 208px; border-radius: 60px; background: #fff; display: grid; place-items: center; box-shadow: 0 30px 80px rgba(5, 4, 30, .5); }
+#cta .mark svg { width: 208px; height: 208px; }
+#cta .name { margin-top: 44px; font-size: 150px; font-weight: 900; letter-spacing: -.04em; line-height: 1; }
+#cta .say { margin-top: 30px; font-size: 58px; font-weight: 700; line-height: 1.2; color: var(--hero-muted); text-wrap: balance; }
+#cta .btn { margin-top: 70px; padding: 34px 76px; border-radius: 40px; background: #fff; color: var(--hero); font-size: 64px; font-weight: 800; letter-spacing: -.02em; }
+#cta .bio { margin-top: 34px; font-size: 44px; font-weight: 700; color: var(--hero-faint); }
+</style>
+</head>
+<body>
+<div class="abs full" id="shade"></div>
+<div class="abs full" id="dim"></div>
+<div class="abs full" id="tint"></div>
+
+<div class="abs" id="count"><div class="n" id="n"></div><div class="u" id="u"></div></div>
+<div class="abs cap" id="c0">E non sai da dove <em>iniziare.</em></div>
+<div class="abs cap" id="c1">Carichi gli appunti. <em>Il piano è pronto.</em></div>
+<div class="abs cap" id="c2">Ripassi <em>al momento giusto.</em></div>
+<div class="abs cap" id="c3">Ti metti <em>alla prova.</em></div>
+<div class="abs cap" id="c4">Solo un <em>ripasso leggero.</em></div>
+<div class="abs cap" id="c5">E arrivi <em>con un piano.</em></div>
+
+<div class="abs" id="phone"><div id="screen">
+  <img class="bar" id="bar" src="img/header.png" alt="">
+  <div class="layer" id="s-materials"><img src="img/materials.png" alt=""></div>
+  <div class="layer" id="s-home"><img src="img/home.png" alt=""></div>
+  <div class="layer" id="s-flash-a"><img src="img/flash-a.png" alt=""></div>
+  <div class="layer" id="s-flash-b"><img src="img/flash-b.png" alt=""></div>
+  <div class="layer" id="s-quiz-a"><img src="img/quiz-a.png" alt=""></div>
+  <div class="layer" id="s-quiz-c"><img src="img/quiz-c.png" alt=""></div>
+  <div class="abs" id="tap"></div>
+</div></div>
+
+<div class="abs" id="cta">
+  <div class="mark"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M9.5 21l6.5-11.2 6.5 11.2z" fill="none" stroke="#1e1b4b" stroke-width="2.6" stroke-linejoin="round"/></svg></div>
+  <div class="name">Studify</div>
+  <div class="say">Prepara l'esame<br>con i tuoi appunti.</div>
+  <div class="btn">Inizia gratis</div>
+  <div class="bio">Link in bio</div>
+</div>
+<div class="abs full" id="black"></div>
+
+<script src="img/meta.js"></script>
+<script>
+const DURATION = 24; // secondi
+// Le tappe: quando comincia la ripresa (il taglio), quando sale il telefono (null: solo persone), i giorni che mancano.
+const STAGES = [
+  { at: 0, days: 21, cap: "c0" },
+  { at: 2.5, phone: 3.75, days: 21, cap: "c1" },
+  { at: 7, phone: 8.25, days: 14, cap: "c2" },
+  { at: 11, phone: 12.25, days: 7, cap: "c3" },
+  { at: 15.25, days: 1, cap: "c4" },
+  { at: 17.5, days: 0, cap: "c5" },
+];
+const T = { cta: 20, end: DURATION }; // alle 20 s la ripresa dell'ingresso, su cui arriva la chiusura
+const K = 2, BAR = 65; // un punto dell'app = 2 px del video; altezza della barra dell'app in punti
+const LOW = 423; // un pulsante da toccare sta al più a 423 punti dall'alto dello schermo: più in basso lo coprono i comandi delle app
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const out3 = (x) => 1 - (1 - x) ** 3;
+const io = (x) => (x < 0.5 ? 4 * x ** 3 : 1 - (-2 * x + 2) ** 3 / 2);
+const lerp = (a, b, x) => a + (b - a) * x;
+const set = (el, { o = 1, x = 0, y = 0, s = 1 }) => { el.style.opacity = o; el.style.transform = `translate(${x}px, ${y}px) scale(${s})`; el.style.visibility = o <= 0.001 ? "hidden" : "visible"; };
+
+const M = window.META;
+const under = (y) => Math.max(BAR, y - LOW); // scorrimento che porta sotto il dito un pulsante alla quota y
+const pickScroll = Math.max(0, M.pickFiles.y - LOW + 62); // un po' più su: la barra dell'app copre per intero la riga delle schede
+const flashShow = under(M.flashShow.y), flashGood = under(M.flashGood.y);
+const quizTap = under(M.quizRight.y + 30), quizEnd = Math.max(quizTap, M.quizVerdictY - 330);
+const [, A, B, C] = STAGES;
+const TAPS = [
+  { t: A.phone + 1.25, ...M.pickFiles, scroll: pickScroll }, // «Scegli i file»
+  { t: B.phone + 0.95, ...M.flashShow, scroll: flashShow },  // «Mostra risposta»
+  { t: B.phone + 2.05, ...M.flashGood, scroll: flashGood },  // «Bene»
+  { t: C.phone + 1.25, ...M.quizRight, scroll: quizTap },    // la risposta giusta
+];
+
+function render(t) {
+  set($("black"), { o: 1 - prog(t, 0, 0.35) });
+  const i = STAGES.findLastIndex((s) => t >= s.at);
+  const stage = STAGES[i], next = STAGES[i + 1]?.at ?? T.cta;
+  const ctaIn = io(prog(t, T.cta + 0.2, T.cta + 0.9));
+
+  // conto alla rovescia: a ogni taglio i giorni scendono in fretta fino al nuovo valore; il giorno dell'esame diventa «Oggi»
+  const from = STAGES[i - 1]?.days ?? 26;
+  const days = Math.round(lerp(from, stage.days, Math.floor(prog(t, stage.at + 0.05, stage.at + 0.45) * 6) / 6));
+  const today = stage.days === 0 && days === 0;
+  $("n").textContent = today ? "Oggi" : `−${days}`;
+  $("n").classList.toggle("word", today);
+  $("u").innerHTML = today ? "è il giorno<br>dell'esame." : days === 1 ? "giorno<br>all'esame." : "giorni<br>all'esame."; // testo fisso di questo file
+  set($("count"), { o: Math.min(prog(t, 0.25, 0.55), 1 - ctaIn), s: 1 + 0.06 * (1 - out3(prog(t, stage.at, stage.at + 0.4))) });
+  $("count").style.transformOrigin = "left bottom";
+
+  // didascalia della tappa: entra poco dopo il taglio, esce di colpo al taglio dopo
+  STAGES.forEach((s, k) => {
+    const a = s.at + (k === 0 ? 1.0 : 0.3);
+    set($(s.cap), k !== i ? { o: 0 } : { o: Math.min(prog(t, a, a + 0.3), 1 - ctaIn), y: lerp(36, 0, out3(prog(t, a, a + 0.4))) });
+  });
+
+  // telefono: sale a metà tappa, scende appena prima del taglio
+  const hasPhone = stage.phone != null;
+  const up = hasPhone ? out3(prog(t, stage.phone, stage.phone + 0.6)) : 0;
+  const down = hasPhone ? io(prog(t, next - 0.4, next - 0.02)) : 0;
+  set($("phone"), { o: hasPhone && t >= stage.phone ? 1 : 0, y: lerp(1400, 0, up) + 1400 * down });
+  set($("dim"), { o: hasPhone ? Math.min(prog(t, stage.phone, stage.phone + 0.4), 1 - down) : 0 });
+  set($("shade"), { o: 1 - ctaIn });
+  set($("tint"), { o: ctaIn });
+
+  const fade = (a, d = 0.2) => prog(t, a, a + d);
+  const show = (id, o, scroll) => { const el = $(id); el.style.opacity = o; el.style.visibility = o <= 0.001 ? "hidden" : "visible"; el.firstElementChild.style.transform = `translateY(${-scroll * K}px)`; };
+  // −21: materiali, poi la home con il piano e «21 giorni all'appello»
+  show("s-materials", i === 1 ? 1 : 0, pickScroll);
+  show("s-home", i === 1 ? fade(A.phone + 1.55) : 0, lerp(0, 60, io(prog(t, A.phone + 1.9, A.phone + 3.0))));
+  $("bar").style.visibility = i === 1 ? "visible" : "hidden";
+  // −14: flashcard, risposta, voto
+  show("s-flash-a", i === 2 ? 1 : 0, flashShow);
+  show("s-flash-b", i === 2 ? fade(B.phone + 1.07, 0.16) : 0, lerp(flashShow, flashGood, io(prog(t, B.phone + 1.2, B.phone + 1.7))));
+  // −7: quiz, risposta giusta, spiegazione
+  show("s-quiz-a", i === 3 ? 1 : 0, lerp(BAR, quizTap, io(prog(t, C.phone + 0.5, C.phone + 0.95))));
+  show("s-quiz-c", i === 3 ? fade(C.phone + 1.37, 0.16) : 0, lerp(quizTap, quizEnd, io(prog(t, C.phone + 1.6, C.phone + 2.2))));
+
+  let tap = { o: 0 };
+  for (const k of TAPS) {
+    const p = prog(t, k.t - 0.12, k.t + 0.38);
+    if (p > 0 && p < 1) tap = { o: p < 0.3 ? p / 0.3 : 1 - (p - 0.3) / 0.7, x: k.x * K, y: (k.y - k.scroll) * K, s: lerp(0.55, 1.15, out3(p)) };
+  }
+  set($("tap"), tap);
+
+  // chiusura
+  set($("cta"), { o: prog(t, T.cta + 0.5, T.cta + 0.8) });
+  [...$("cta").children].forEach((el, k) => { const p = out3(prog(t, T.cta + 0.6 + k * 0.13, T.cta + 1.1 + k * 0.13)); el.style.opacity = p; el.style.transform = `translateY(${lerp(50, 0, p)}px) scale(${k === 0 ? lerp(0.7, 1, p) : 1})`; });
+}
+window.render = render;
+window.DURATION = DURATION;
+window.ready = Promise.all([document.fonts.ready, ...[...document.images].map((i) => i.decode().catch(() => {}))]).then(() => render(0));
+if (!navigator.webdriver) { document.body.classList.add("preview"); const t0 = performance.now(); (function loop() { render(((performance.now() - t0) / 1000) % DURATION); requestAnimationFrame(loop); })(); }
+</script>
+</body>
+</html>

@@ -548,9 +548,11 @@ Un solo aggancio: `node promo/render.mjs b`.
   dell'app. Aperto nel browser dopo la cattura, va da solo.
 - `promo/render.mjs` disegna i fotogrammi uno a uno e li passa a ffmpeg.
 
-**Versione con riprese** (`npm run promo:cinema` → `promo/out/studify-promo-cinema.mp4`, 24 fotogrammi al secondo): persone
-vere in apertura e in chiusura, l'app al centro sopra la ripresa sfocata. `promo/cinema.mjs` scarica le clip in `promo/stock/`,
-le ritaglia in verticale con la stessa resa di colore e ci mette sopra il livello grafico di `promo/cinema.html`.
+**Versioni con riprese** (`npm run promo:cinema`, 24 fotogrammi al secondo), con persone vere. Sono due montaggi:
+`studify-promo-cinema.mp4` (persone in apertura e in chiusura, l'app al centro sopra la ripresa sfocata) e
+`studify-promo-countdown.mp4` (il conto alla rovescia verso l'esame, −21, −14, −7, −1, «Oggi», con persone per tutto il video
+e il telefono che sale a ogni tappa). Uno solo: `node promo/cinema.mjs countdown`. `promo/cinema.mjs` scarica le clip in
+`promo/stock/`, le ritaglia in verticale con la stessa resa di colore e ci mette sopra il livello grafico (`promo/<nome>.html`).
 Le clip sono di Mixkit, con la «Stock Video Free License» (post sui social e pubblicità, senza attribuzione). Su Mixkit
 molte altre clip sono invece «solo per uso personale»: prima di aggiungerne una va controllata la licenza sulla sua pagina.
 Le persone riprese sono comparse: nessuna frase va messa loro in bocca, né vanno presentate come utenti di Studify.

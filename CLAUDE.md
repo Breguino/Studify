@@ -227,7 +227,7 @@ scripts/           build-artifact.mjs
 test/              node --test (+ fixtures/)
 demo/              demo guidata (Artifact a parte, React + Tailwind): non fa parte delle tre versioni
 promo/             video promo verticali per Instagram e TikTok: capture.mjs fotografa l'app vera; promo.html + render.mjs fanno la
-                   versione grafica (`npm run promo`), cinema.html + cinema.mjs quella con riprese di archivio (`npm run promo:cinema`).
+                   versione grafica (`npm run promo`), cinema.mjs monta quelle con riprese di archivio (`npm run promo:cinema`; livelli grafici in cinema.html e countdown.html).
                    Schermate, riprese e video (promo/img/, promo/stock/, promo/out/) restano fuori dal repository
 ```
 
