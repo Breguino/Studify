@@ -557,6 +557,14 @@ Le clip sono di Mixkit, con la «Stock Video Free License» (post sui social e p
 molte altre clip sono invece «solo per uso personale»: prima di aggiungerne una va controllata la licenza sulla sua pagina.
 Le persone riprese sono comparse: nessuna frase va messa loro in bocca, né vanno presentate come utenti di Studify.
 
+**Storia con voce narrante** (`npm run promo:story` → `promo/out/studify-promo-storia.mp4`, circa un minuto): Luca, uno
+studente inventato, ha l'esame tra 21 giorni, rilegge tutto senza ricordare niente, cambia metodo con Studify. La voce è
+sintetica (Piper, voce italiana «Paola», addestrata su registrazioni con licenza CC0), una frase alla volta: dalla durata di
+ogni frase vengono i tagli delle riprese, i sottotitoli impressi (su TikTok molti guardano senza audio) e le schermate
+dell'app. Volume a −14 LUFS. Le riprese sono quasi tutte dello stesso servizio di Mixkit, così il protagonista resta lo
+stesso ragazzo. Il testo sta in `promo/story.mjs` (`LINES`): per cambiarlo basta riscrivere le frasi e rilanciare.
+Servono anche Piper e la voce: le istruzioni sono in cima a `promo/story.mjs`.
+
 Servono Playwright (con Chromium) e ffmpeg, che non sono dipendenze del progetto. Il video non ha musica (solo una traccia
 muta): si aggiunge dall'app, dove i brani hanno la licenza. Schermate e video non entrano nel repository.
 Regole per i testi: solo ciò che l'app fa davvero, niente numeri di utenti né promesse sui voti.
