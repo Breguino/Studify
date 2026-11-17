@@ -59,7 +59,8 @@ test("piani: piano in uso dalla riga dell'abbonamento", () => {
 
 test("piani: frase per l'account (rinnovo, disdetta, pagamento non riuscito)", () => {
   assert.equal(planLine(null), "Piano Gratis.");
-  assert.match(planLine(paid({ current_period_end: "2026-11-12T10:00:00Z" })), /^Piano Pro annuale · si rinnova il 12 novembre 2026\.$/);
+  // «oggi» fissato: con Date.now() la data del rinnovo, una volta passata, faceva diventare il piano Gratis
+  assert.match(planLine(paid({ current_period_end: "2026-11-12T10:00:00Z" }), Date.parse("2026-11-01T00:00:00Z")), /^Piano Pro annuale · si rinnova il 12 novembre 2026\.$/);
   assert.match(planLine(paid({ cancel_at_period_end: true })), /termina il/);
   assert.match(planLine(paid({ status: "past_due" })), /pagamento non riuscito/);
 });
