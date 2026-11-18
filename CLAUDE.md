@@ -140,7 +140,9 @@ che crea `dist/harness.html`: la pagina Claude con un `window.claude` finto.
 - **Niente CDN né risorse esterne**, per due motivi:
   - la pagina Claude non può caricarle;
   - Google Fonts o i CDN riceverebbero l'IP di chi visita, un problema di GDPR.
-  La versione web ha anche una CSP restrittiva in `vercel.json`, con `connect-src` limitato all'origine e a Supabase.
+  La versione web ha anche una CSP restrittiva in `vercel.json`, con `connect-src` limitato all'origine e a Supabase
+  e `script-src` senza `'unsafe-inline'`: nelle pagine del sito niente `<script>` in linea né `onclick="…"` (la build
+  mette il codice in `/js/<nome>-<hash>.js`, `scriptFile` in `scripts/build-artifact.mjs`).
 - **Favicon**: SVG in data URI in `public/index.html` e `web/template.html`.
 - **File dell'utente** (PDF, foto): IndexedDB nel browser. Solo nella versione web con un piano a pagamento anche online,
   nel bucket privato `files` di Supabase (`web/files.js`; spazio per piano in `plans.js` e `files_quota` nello schema, da tenere uguali).

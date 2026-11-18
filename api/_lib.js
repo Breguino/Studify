@@ -224,7 +224,11 @@ export function createHandler({ env, anthropic, fetchFn = fetch, log = console.e
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       res.setHeader("Cache-Control", "no-store");
-      const out = { limits: { user: limits(env).user }, configured: Boolean(env.ANTHROPIC_API_KEY && env.SUPABASE_SERVICE_ROLE_KEY), model, billing: billingOn(env), plan: "free", setup: billingSetup(env) };
+      // Risposta pubblica ridotta al necessario: il modello in uso non serve a nessuno; la configurazione degli abbonamenti
+      // (setup: che chiavi ci sono, mai i valori) solo finché Stripe è in prova, per la verifica di docs/abbonamenti.md.
+      // Con la chiave vera non si mostra: non serve dire a chiunque come è configurato il servizio.
+      const setup = billingSetup(env);
+      const out = { limits: { user: limits(env).user }, configured: Boolean(env.ANTHROPIC_API_KEY && env.SUPABASE_SERVICE_ROLE_KEY), billing: billingOn(env), plan: "free", ...(setup.stripeKey === "live" ? {} : { setup }) };
       const token = /^Bearer (.+)$/.exec(req.headers?.authorization ?? "")?.[1];
       if (token && env.SUPABASE_URL && await getUser(env, token, fetchFn).catch(() => null)) {
         const { plan, limit, sub } = await userPlan(env, token, fetchFn);

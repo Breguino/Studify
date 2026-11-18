@@ -166,7 +166,7 @@ test("handler: GET restituisce il limite mensile e se la chiave è configurata (
   const res = fakeRes();
   await createHandler({ env: ENV, anthropic: fakeAnthropic(), fetchFn: fakeSupabase().fetchFn })(fakeReq({ method: "GET", token: null }), res);
   const { setup, ...rest } = JSON.parse(res.chunks.join(""));
-  assert.deepEqual(rest, { limits: { user: 3 }, configured: true, model: "claude-sonnet-5-5", billing: false, plan: "free" });
+  assert.deepEqual(rest, { limits: { user: 3 }, configured: true, billing: false, plan: "free" }, "senza il modello in uso: non serve a nessuno");
   assert.equal(setup.billing, "assente");
   const res2 = fakeRes();
   await createHandler({ env: { ...ENV, ANTHROPIC_API_KEY: "" }, anthropic: null, fetchFn: fakeSupabase().fetchFn })(fakeReq({ method: "GET", token: null }), res2);
