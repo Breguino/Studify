@@ -5,3 +5,7 @@ node_modules/
 dist/
 dist-web/
 .vercel/
+promo/img/
+promo/out/
+promo/stock/
+promo/voice/

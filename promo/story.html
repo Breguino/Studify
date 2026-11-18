@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Studify — video promo «storia» con voce narrante (9:16)</title>
+<style>
+/* Livello grafico del video «storia» (promo/story.mjs): sottotitoli della voce, telefono con le schermate vere dell'app e
+   chiusura, su fondo trasparente. I tempi non stanno qui: li scrive story.mjs in img/story.js, misurando la voce.
+   Sottotitoli: sulle riprese nel terzo basso, con il telefono in alto; mai nei 250 px in alto né nei 400 in basso, che le
+   app coprono, né nei 150 a destra, dove TikTok mette i pulsanti. */
+@font-face { font-family: "Figtree Variable"; font-weight: 300 900; font-display: block;
+  src: url("../node_modules/@fontsource-variable/figtree/files/figtree-latin-wght-normal.woff2") format("woff2-variations"); }
+:root { --hero: #1e1b4b; --hero-ink: #fff; --hero-muted: #d9dbf5; --hero-faint: #b9bce6; --hero-learn: #a5a0ee; --bg: #f4f5f9; }
+* { box-sizing: border-box; margin: 0; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: transparent; }
+body { font-family: "Figtree Variable", system-ui, sans-serif; color: var(--hero-ink); position: relative; -webkit-font-smoothing: antialiased; }
+body.preview { background: #333 linear-gradient(160deg, #6b5a48, #1c1a17); }
+.abs { position: absolute; left: 0; top: 0; will-change: transform, opacity; }
+.full { width: 1080px; height: 1920px; }
+#shade { background: linear-gradient(to top, rgba(10, 8, 34, .55) 0%, rgba(10, 8, 34, .5) 25%, rgba(10, 8, 34, .12) 45%, rgba(10, 8, 34, 0) 58%); }
+#dim { background: linear-gradient(to bottom, rgba(10, 8, 34, .75), rgba(10, 8, 34, .35) 40%, rgba(10, 8, 34, .2)); }
+#tint { background: radial-gradient(120% 80% at 30% 20%, rgba(67, 56, 202, .5), rgba(30, 27, 75, 0) 70%), rgba(30, 27, 75, .84); }
+#black { background: #000; }
+
+#sub { left: 80px; width: 850px; text-align: left; font-size: 78px; font-weight: 850; letter-spacing: -.025em; line-height: 1.08; text-wrap: balance;
+  text-shadow: 0 3px 2px rgba(5, 4, 30, .35), 0 4px 40px rgba(5, 4, 30, .7); }
+#sub em { font-style: normal; color: var(--hero-learn); }
+#sub.top { font-size: 66px; }
+
+#phone { left: 136px; top: 600px; width: 808px; height: 1700px; border-radius: 76px; background: #0c0b22; padding: 14px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, .14), 0 50px 120px rgba(5, 4, 30, .6); }
+#screen { position: relative; width: 780px; height: 1672px; border-radius: 62px; overflow: hidden; background: var(--bg); }
+#screen img { position: absolute; left: 0; top: 0; width: 780px; will-change: transform; }
+#screen .layer { position: absolute; inset: 0; background: var(--bg); will-change: opacity; }
+#screen img.bar { z-index: 5; box-shadow: 0 1px 0 rgba(20, 24, 40, .06); }
+#tap { z-index: 9; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; background: rgba(67, 56, 202, .22); border: 5px solid rgba(67, 56, 202, .55); }
+
+#cta { width: 1080px; top: 0; height: 1920px; display: grid; align-content: center; justify-items: center; text-align: center; padding: 0 90px; }
+#cta .mark { width: 208px; height: 208px; border-radius: 60px; background: #fff; display: grid; place-items: center; box-shadow: 0 30px 80px rgba(5, 4, 30, .5); }
+#cta .mark svg { width: 208px; height: 208px; }
+#cta .name { margin-top: 44px; font-size: 150px; font-weight: 900; letter-spacing: -.04em; line-height: 1; }
+#cta .say { margin-top: 30px; font-size: 58px; font-weight: 700; line-height: 1.2; color: var(--hero-muted); text-wrap: balance; }
+#cta .btn { margin-top: 70px; padding: 34px 76px; border-radius: 40px; background: #fff; color: var(--hero); font-size: 64px; font-weight: 800; letter-spacing: -.02em; }
+#cta .bio { margin-top: 34px; font-size: 44px; font-weight: 700; color: var(--hero-faint); }
+</style>
+</head>
+<body>
+<div class="abs full" id="shade"></div>
+<div class="abs full" id="dim"></div>
+<div class="abs full" id="tint"></div>
+
+<div class="abs" id="phone"><div id="screen">
+  <img class="bar" id="bar" src="img/header.png" alt="">
+  <div class="layer" id="s-materials"><img src="img/materials.png" alt=""></div>
+  <div class="layer" id="s-module"><img src="img/module.png" alt=""></div>
+  <div class="layer" id="s-home"><img src="img/home.png" alt=""></div>
+  <div class="layer" id="s-flash-a"><img src="img/flash-a.png" alt=""></div>
+  <div class="layer" id="s-flash-b"><img src="img/flash-b.png" alt=""></div>
+  <div class="layer" id="s-quiz-a"><img src="img/quiz-a.png" alt=""></div>
+  <div class="layer" id="s-quiz-c"><img src="img/quiz-c.png" alt=""></div>
+  <div class="abs" id="tap"></div>
+</div></div>
+
+<div class="abs" id="sub"></div>
+
+<div class="abs" id="cta">
+  <div class="mark"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M9.5 21l6.5-11.2 6.5 11.2z" fill="none" stroke="#1e1b4b" stroke-width="2.6" stroke-linejoin="round"/></svg></div>
+  <div class="name">Studify</div>
+  <div class="say">Prepara l'esame<br>con i tuoi appunti.</div>
+  <div class="btn">Inizia gratis</div>
+  <div class="bio">Link in bio</div>
+</div>
+<div class="abs full" id="black"></div>
+
+<script src="img/meta.js"></script>
+<script src="img/story.js"></script>
+<script>
+const S = window.STORY, M = window.META;
+const DURATION = S.duration;
+const K = 2, BAR = 65, LOW = 423; // un punto dell'app = 2 px; barra dell'app; quota massima di un pulsante da toccare
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const out3 = (x) => 1 - (1 - x) ** 3;
+const io = (x) => (x < 0.5 ? 4 * x ** 3 : 1 - (-2 * x + 2) ** 3 / 2);
+const lerp = (a, b, x) => a + (b - a) * x;
+const set = (el, { o = 1, x = 0, y = 0, s = 1 }) => { el.style.opacity = o; el.style.transform = `translate(${x}px, ${y}px) scale(${s})`; el.style.visibility = o <= 0.001 ? "hidden" : "visible"; };
+
+// Sottotitoli: ogni frase in pezzi di poche parole, con i tempi divisi in proporzione alle lettere.
+// (Piper non dà i tempi delle singole parole: è una stima, che con una voce regolare cade vicina.)
+const CHUNKS = [];
+// parole dopo cui non si va a capo: «rilegge e | sottolinea» si legge male
+const WEAK = new Set("e ed o a ad al alla ai agli di del della dei degli da dal dalla in nel nella su sul sulla sui con per tra fra il lo la i gli le un uno una non che come si mi ti ci è sa ha".split(" "));
+function pieces(text) {
+  const segs = text.match(/[^,.:]+[,.:]?/g).map((x) => x.trim()).filter(Boolean); // prima la punteggiatura
+  const out = [];
+  for (const seg of segs) {
+    const words = seg.split(" ");
+    const n = Math.ceil(seg.length / 26);
+    if (n <= 1) { out.push(seg); continue; }
+    // n pezzi di lunghezza simile, spostando ogni taglio dopo una parola «forte»
+    let from = 0;
+    for (let k = 1; k < n; k++) {
+      const target = (seg.length * k) / n;
+      let best = -1, bestCost = Infinity, pos = 0;
+      for (let i = 0; i < words.length - 1; i++) {
+        pos += words[i].length + 1;
+        if (i < from) continue;
+        const cost = Math.abs(pos - target) + (WEAK.has(words[i].toLowerCase()) ? 40 : 0);
+        if (cost < bestCost) { bestCost = cost; best = i; }
+      }
+      out.push(words.slice(from, best + 1).join(" "));
+      from = best + 1;
+    }
+    out.push(words.slice(from).join(" "));
+  }
+  return out;
+}
+for (const l of S.lines) {
+  const parts = pieces(l.text);
+  const total = parts.reduce((n, p) => n + p.length, 0);
+  let t = l.start;
+  for (const p of parts) { const d = (l.end - l.start) * (p.length / total); CHUNKS.push({ text: p, start: t, end: t + d, line: l }); t += d; }
+}
+const escape = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+const emph = (s) => escape(s).replace(/Studify/g, "<em>Studify</em>"); // testo fisso di story.mjs
+
+// Telefono: dalla prima all'ultima frase con `app`
+const appLines = S.lines.filter((l) => l.app);
+const appScene = S.scenes.find((s) => s.key === "app");
+const ctaScene = S.scenes.find((s) => s.key === "cta");
+const L = Object.fromEntries(appLines.map((l) => [l.app, l]));
+const under = (y) => Math.max(BAR, y - LOW);
+const pickScroll = Math.max(0, M.pickFiles.y - LOW + 62);
+const flashShow = under(M.flashShow.y), flashGood = under(M.flashGood.y);
+const quizTap = under(M.quizRight.y + 30), quizEnd = Math.max(quizTap, M.quizVerdictY - 330);
+const moduleFrom = M.moduleTopicY - 91;
+const TAPS = [
+  { t: L.materials.start + 1.0, ...M.pickFiles, scroll: pickScroll },
+  { t: L.flash.start + 0.7, ...M.flashShow, scroll: flashShow },
+  { t: L.flash.start + 2.0, ...M.flashGood, scroll: flashGood },
+  { t: L.quiz.start + 0.7, ...M.quizRight, scroll: quizTap },
+];
+
+function render(t) {
+  set($("black"), { o: 1 - prog(t, 0, 0.4) });
+  const inApp = t >= appScene.start && t < appScene.end;
+  const ctaIn = io(prog(t, ctaScene.start, ctaScene.start + 0.6));
+
+  // telefono
+  const up = out3(prog(t, appScene.start, appScene.start + 0.6));
+  const down = io(prog(t, appScene.end - 0.45, appScene.end - 0.02));
+  set($("phone"), { o: inApp ? 1 : 0, y: lerp(1400, 0, up) + 1400 * down });
+  set($("dim"), { o: inApp ? Math.min(prog(t, appScene.start, appScene.start + 0.4), 1 - down) : 0 });
+  set($("shade"), { o: inApp ? 0 : 1 - ctaIn });
+  set($("tint"), { o: ctaIn });
+
+  const fade = (a, d = 0.2) => prog(t, a, a + d);
+  const show = (id, o, scroll) => { const el = $(id); el.style.opacity = o; el.style.visibility = o <= 0.001 ? "hidden" : "visible"; el.firstElementChild.style.transform = `translateY(${-scroll * K}px)`; };
+  const span = (l) => [l.start - 0.15, l.end]; // la schermata cambia con la frase
+  const [m0] = span(L.materials), [d0, d1] = span(L.module), [h0, h1] = span(L.home), [f0] = span(L.flash), [q0] = span(L.quiz);
+  show("s-materials", 1, pickScroll);
+  show("s-module", fade(d0), lerp(moduleFrom, moduleFrom + 380, io(prog(t, d0 + 0.5, d1))));
+  show("s-home", fade(h0), lerp(0, 160, io(prog(t, h0 + 0.8, h1))));
+  show("s-flash-a", fade(f0), flashShow);
+  show("s-flash-b", fade(L.flash.start + 0.82, 0.16), lerp(flashShow, flashGood, io(prog(t, L.flash.start + 0.95, L.flash.start + 1.5))));
+  show("s-quiz-a", fade(q0), quizTap);
+  show("s-quiz-c", fade(L.quiz.start + 0.82, 0.16), lerp(quizTap, quizEnd, io(prog(t, L.quiz.start + 1.05, L.quiz.start + 1.8))));
+  $("bar").style.visibility = t >= m0 && t < f0 ? "visible" : "hidden";
+
+  let tap = { o: 0 };
+  for (const k of TAPS) {
+    const p = prog(t, k.t - 0.12, k.t + 0.38);
+    if (p > 0 && p < 1) tap = { o: p < 0.3 ? p / 0.3 : 1 - (p - 0.3) / 0.7, x: k.x * K, y: (k.y - k.scroll) * K, s: lerp(0.55, 1.15, out3(p)) };
+  }
+  set($("tap"), tap);
+
+  // sottotitolo: il pezzo in corso (resta fino al pezzo dopo, se la pausa è breve), mai sulla chiusura
+  const c = CHUNKS.findLast((x) => t >= x.start - 0.05);
+  const next = c && CHUNKS[CHUNKS.indexOf(c) + 1];
+  const visible = c && t < Math.min(c.end + 0.6, next ? next.start : Infinity) && t < ctaScene.start;
+  const sub = $("sub");
+  if (visible) {
+    if (sub.dataset.text !== c.text) { sub.innerHTML = emph(c.text); sub.dataset.text = c.text; }
+    const top = inApp;
+    sub.classList.toggle("top", top);
+    sub.style.top = top ? "300px" : "1080px";
+    const p = out3(prog(t, c.start - 0.05, c.start + 0.12));
+    set(sub, { o: p, y: lerp(18, 0, p), s: lerp(0.96, 1, p) });
+  } else set(sub, { o: 0 });
+
+  // chiusura
+  set($("cta"), { o: prog(t, ctaScene.start + 0.2, ctaScene.start + 0.5) });
+  [...$("cta").children].forEach((el, k) => { const p = out3(prog(t, ctaScene.start + 0.25 + k * 0.13, ctaScene.start + 0.75 + k * 0.13)); el.style.opacity = p; el.style.transform = `translateY(${lerp(50, 0, p)}px) scale(${k === 0 ? lerp(0.7, 1, p) : 1})`; });
+}
+window.render = render;
+window.DURATION = DURATION;
+window.ready = Promise.all([document.fonts.ready, ...[...document.images].map((i) => i.decode().catch(() => {}))]).then(() => render(0));
+if (!navigator.webdriver) { document.body.classList.add("preview"); const t0 = performance.now(); (function loop() { render(((performance.now() - t0) / 1000) % DURATION); requestAnimationFrame(loop); })(); }
+</script>
+</body>
+</html>

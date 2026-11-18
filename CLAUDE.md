@@ -226,6 +226,10 @@ supabase/          schema.sql
 scripts/           build-artifact.mjs
 test/              node --test (+ fixtures/)
 demo/              demo guidata (Artifact a parte, React + Tailwind): non fa parte delle tre versioni
+promo/             video promo verticali per Instagram e TikTok: capture.mjs fotografa l'app vera; promo.html + render.mjs fanno la
+                   versione grafica (`npm run promo`), cinema.mjs monta quelle con riprese di archivio (`npm run promo:cinema`; livelli grafici in cinema.html e countdown.html);
+                   story.mjs + story.html il racconto da un minuto con voce narrante sintetica (`npm run promo:story`, serve Piper).
+                   Schermate, riprese, voce e video (promo/img/, promo/stock/, promo/voice/, promo/out/) restano fuori dal repository
 ```
 
 Le funzionalità seguono lo schema «logica pura in `public/js/<tema>.js` (testata in `test/<tema>.test.js`) più vista in `public/js/views/`».

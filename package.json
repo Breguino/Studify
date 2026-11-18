@@ -14,7 +14,10 @@
     "test": "node --test test/*.test.js",
     "build:artifact": "node scripts/build-artifact.mjs",
     "build:harness": "node scripts/build-artifact.mjs --harness",
-    "build:web": "node scripts/build-artifact.mjs --web"
+    "build:web": "node scripts/build-artifact.mjs --web",
+    "promo": "node promo/capture.mjs && node promo/render.mjs",
+    "promo:cinema": "node promo/capture.mjs && node promo/cinema.mjs",
+    "promo:story": "node promo/capture.mjs && node promo/story.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

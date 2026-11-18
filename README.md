@@ -536,6 +536,39 @@ test/             node --test: logica pura + client AI con SDK simulato
 demo/             demo guidata (pagina a parte, React + Tailwind): non fa parte dell'app, vedi demo/README.md
 ```
 
+## Video promo (Instagram e TikTok)
+
+`npm run promo` crea in `promo/out/` tre video verticali (1080×1920, 24 secondi, MP4), uguali tranne che nell'aggancio dei
+primi secondi (`a`: «21 giorni all'esame», `b`: «200 pagine da sapere», `c`: «Rileggere non basta»), ciascuno con la copertina.
+Un solo aggancio: `node promo/render.mjs b`.
+
+- `promo/capture.mjs` avvia il server con l'AI simulata, crea l'esame demo e fotografa le schermate vere dell'app a misura di
+  telefono, con le posizioni dei pulsanti da toccare. Toglie «(demo)» dal nome dell'esame e nasconde l'etichetta «AI: demo».
+- `promo/promo.html` è il montaggio: sette scene, didascalie dentro la zona che le due app non coprono, colori e carattere
+  dell'app. Aperto nel browser dopo la cattura, va da solo.
+- `promo/render.mjs` disegna i fotogrammi uno a uno e li passa a ffmpeg.
+
+**Versioni con riprese** (`npm run promo:cinema`, 24 fotogrammi al secondo), con persone vere. Sono due montaggi:
+`studify-promo-cinema.mp4` (persone in apertura e in chiusura, l'app al centro sopra la ripresa sfocata) e
+`studify-promo-countdown.mp4` (il conto alla rovescia verso l'esame, −21, −14, −7, −1, «Oggi», con persone per tutto il video
+e il telefono che sale a ogni tappa). Uno solo: `node promo/cinema.mjs countdown`. `promo/cinema.mjs` scarica le clip in
+`promo/stock/`, le ritaglia in verticale con la stessa resa di colore e ci mette sopra il livello grafico (`promo/<nome>.html`).
+Le clip sono di Mixkit, con la «Stock Video Free License» (post sui social e pubblicità, senza attribuzione). Su Mixkit
+molte altre clip sono invece «solo per uso personale»: prima di aggiungerne una va controllata la licenza sulla sua pagina.
+Le persone riprese sono comparse: nessuna frase va messa loro in bocca, né vanno presentate come utenti di Studify.
+
+**Storia con voce narrante** (`npm run promo:story` → `promo/out/studify-promo-storia.mp4`, circa un minuto): Luca, uno
+studente inventato, ha l'esame tra 21 giorni, rilegge tutto senza ricordare niente, cambia metodo con Studify. La voce è
+sintetica (Piper, voce italiana «Paola», addestrata su registrazioni con licenza CC0), una frase alla volta: dalla durata di
+ogni frase vengono i tagli delle riprese, i sottotitoli impressi (su TikTok molti guardano senza audio) e le schermate
+dell'app. Volume a −14 LUFS. Le riprese sono quasi tutte dello stesso servizio di Mixkit, così il protagonista resta lo
+stesso ragazzo. Il testo sta in `promo/story.mjs` (`LINES`): per cambiarlo basta riscrivere le frasi e rilanciare.
+Servono anche Piper e la voce: le istruzioni sono in cima a `promo/story.mjs`.
+
+Servono Playwright (con Chromium) e ffmpeg, che non sono dipendenze del progetto. Il video non ha musica (solo una traccia
+muta): si aggiunge dall'app, dove i brani hanno la licenza. Schermate e video non entrano nel repository.
+Regole per i testi: solo ciò che l'app fa davvero, niente numeri di utenti né promesse sui voti.
+
 ## Idee per dopo
 
 Import da Notion/Drive, OCR di foto degli appunti, calendario con più esami in competizione per il tempo,
