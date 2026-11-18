@@ -71,13 +71,20 @@ const body = web
 if (web) {
   const OUT = join(ROOT, "dist-web");
   await mkdir(OUT, { recursive: true });
+  // Niente script scritti dentro le pagine: la Content-Security-Policy (vercel.json) li vieta, così uno script iniettato
+  // non partirebbe. Ogni script è un file in /js/ con l'impronta nel nome (cache lunga, come i moduli dell'app).
+  const scriptFile = async (name, code) => {
+    const file = `${name}-${createHash("sha256").update(code).digest("hex").slice(0, 10)}.js`;
+    await writeFile(join(OUT, "js", file), code);
+    return `/js/${file}`;
+  };
   // indirizzo pubblico per anteprime social, sitemap e canonical (Vercel lo fornisce durante la build)
   const SITE = (process.env.STUDIFY_SITE_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "https://studify-beta-dun.vercel.app")).replace(/\/$/, "");
   // Statistiche di visita: Vercel Web Analytics (senza cookie, script dallo stesso dominio). Solo nelle build su Vercel;
   // STUDIFY_ANALYTICS=off le spegne, STUDIFY_ANALYTICS=/percorso/script.js usa il percorso mostrato nella dashboard.
   const A = process.env.STUDIFY_ANALYTICS ?? (process.env.VERCEL ? "/_vercel/insights/script.js" : "off");
   const analytics = A === "off" ? [] : [
-    "<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>",
+    `<script src="${await scriptFile("va", "window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };")}"></script>`,
     `<script defer src="${A}"></script>`,
   ];
   const esc = (t) => t.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
@@ -142,9 +149,10 @@ if (web) {
   const heroPlan = (await build({
     stdin: { contents: `import { mountHeroPlan } from "./web/landing-plan.js"; const r = document.getElementById("hero-plan"); if (r) mountHeroPlan(r, ${JSON.stringify(demoTopics)});`, resolveDir: ROOT },
     bundle: true, minify: true, format: "iife", target: "es2020", write: false, legalComments: "none",
-  })).outputFiles[0].text.replace(/<\/script/gi, "<\\/script");
+  })).outputFiles[0].text;
   // pagine pubbliche (home, funzionalità, prezzi): stesso menu e piè di pagina, la voce della pagina in cui sei è segnata
-  const siteJs = (await readFile(join(ROOT, "web/site.js"), "utf8")).replace(/<\/script/gi, "<\\/script");
+  const siteJs = await scriptFile("site", await readFile(join(ROOT, "web/site.js"), "utf8"));
+  const emailLinks = await scriptFile("email-links", await readFile(join(ROOT, "web/email-links.js"), "utf8"));
   const navLinks = (path) => [["/funzionalita", "Funzionalità"], ...(billing ? [["/prezzi", "Prezzi"]] : []), ["/#domande", "Domande"]]
     .map(([href, text]) => `<a class="btn ghost" href="${href}"${href === path ? ' aria-current="page"' : ""}>${text}</a>`);
   const nav = (path) => `<header class="topbar">
@@ -160,8 +168,9 @@ if (web) {
     </nav>
   </header>`;
   const footer = `<footer class="site-footer"><span>© Studify</span><a href="/funzionalita">Funzionalità</a>${billing ? '<a href="/prezzi">Prezzi</a>' : ""}<a href="termini.html">Termini e condizioni</a><a href="privacy.html">Privacy</a><a href="mailto:info.studify@gmail.com">Contatti</a><span>Nessun cookie: né di profilazione, né di statistica</span></footer>`;
-  const sitePage = (html, path) => withHead(html.replace("/*CSS*/", () => landingCss).replace("<!--NAV-->", () => nav(path)).replace("<!--FOOTER-->", () => footer).replace("/*SITE_JS*/", () => siteJs), path);
-  const landing = sitePage((await readFile(join(ROOT, "web/landing.html"), "utf8")).replace("/*HERO_PLAN*/", () => heroPlan), "/");
+  const sitePage = (html, path) => withHead(html.replace("/*CSS*/", () => landingCss).replace("<!--NAV-->", () => nav(path)).replace("<!--FOOTER-->", () => footer).replace(/<script>\/\*SITE_JS\*\/<\/script>/, () => `<script src="${siteJs}"></script>`).replace(/<script>\/\*EMAIL_LINKS\*\/<\/script>/, () => `<script src="${emailLinks}"></script>`), path);
+  const heroPlanSrc = await scriptFile("hero-plan", heroPlan);
+  const landing = sitePage((await readFile(join(ROOT, "web/landing.html"), "utf8")).replace(/<script>\/\*HERO_PLAN\*\/<\/script>/, () => `<script src="${heroPlanSrc}"></script>`), "/");
   await writeFile(join(OUT, "index.html"), landing);
   await writeFile(join(OUT, "funzionalita.html"), sitePage(await readFile(join(ROOT, "web/funzionalita.html"), "utf8"), "/funzionalita"));
   // la pagina dei prezzi esiste solo con gli abbonamenti accesi (spenti, Studify è gratis e basta la home)

@@ -141,7 +141,7 @@ Il server email predefinito di Supabase invia pochissime email l'ora: per un uso
 una scaletta in `docs/prova-con-uno-studente.md`.
 
 `vercel.json` imposta build, cartella `dist-web`, regione della funzione (Francoforte, `fra1`, accanto al database), la rotta `/app`,
-durata massima (300 s), intestazioni di sicurezza (CSP, niente iframe) e cache lunga per `/js/`.
+durata massima (300 s), intestazioni di sicurezza (CSP senza script in linea, niente iframe) e cache lunga per `/js/`.
 Prove: `test/web.test.js` (funzione, accesso, `sample`, `db`, controlli di registrazione).
 
 ## Come funziona

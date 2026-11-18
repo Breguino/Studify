@@ -49,6 +49,8 @@ I prezzi mostrati stanno in `public/js/plans.js`; quelli addebitati sono i «Pri
    **Controllo:** apri `https://<il tuo sito>/api/claude`. In `setup` vedi che cosa trova il sito, senza i valori:
    `billing` deve essere `"on"` (vale anche `On`, `true`, `1`), `stripeKey` `"test"`, `webhookSecret` `true`, `prices` vuoto
    (altrimenti elenca i prezzi che mancano), `serviceKey` `true`. Le variabili valgono solo dopo un *Redeploy*.
+   `setup` compare solo con la chiave di prova di Stripe: con quella vera (`sk_live_`) la risposta pubblica non dice più
+   come è configurato il sito.
 6. **Prova.** Apri l'app → *Account* → scegli Base o Pro → spunta la conferma → paga con la carta di test
    `4242 4242 4242 4242`, una data futura qualsiasi e un CVC qualsiasi. Tornato nell'app, l'account deve dire
    «Piano Base mensile · si rinnova il …», e «Gestisci abbonamento» deve aprire il portale di Stripe.

@@ -302,6 +302,10 @@ test("diagnosi degli abbonamenti in GET /api/claude: solo presente/assente, mai 
   const b = res.body;
   assert.deepEqual(b.setup, { billing: "on", stripeKey: "test", webhookSecret: true, prices: [], serviceKey: true });
   assert.ok(!/SEGRETO|price_|whsec_|sk_test_|"service"/.test(JSON.stringify(b)), "nessun valore delle variabili esce dal server");
+  const live = fakeRes();
+  await createHandler({ env: { ...ENV, STRIPE_SECRET_KEY: "sk_live_SEGRETO", STRIPE_WEBHOOK_SECRET: "whsec_SEGRETO" }, anthropic: null, fetchFn: fakeNet().fetchFn })(req({ method: "GET", token: null }), live);
+  assert.equal(live.body.setup, undefined, "con la chiave vera di Stripe la configurazione non si mostra");
+  assert.equal(live.body.model, undefined);
 });
 
 test("credito: variabili scritte male non tolgono il limite (mai NaN)", () => {
